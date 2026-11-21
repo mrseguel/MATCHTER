@@ -19,7 +19,7 @@ app.get('/api/professionals/:id', async (req,res)=>{
  res.json(item)
 })
 app.post('/api/interactions', async (req,res)=>{
- const {professionalId,type}=req.body||{}
+ const {clientUserId,professionalId,type}=req.body||{}
  if(!professionalId||!['like','favorite','pass'].includes(type))return res.status(400).json({message:'professionalId y tipo de interacción válidos son obligatorios'})
  const professional=await repository.getProfessional(professionalId)
  if(!professional)return res.status(404).json({message:'Profesional no encontrado'})
