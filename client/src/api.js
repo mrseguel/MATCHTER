@@ -13,4 +13,4 @@ export const createInteraction = (body) => api('/interactions', { method: 'POST'
 export const getProjects = () => api('/projects')
 export const createProject = (body) => api('/projects', { method: 'POST', body: JSON.stringify(body) })
 export const createPrivateRequest = (body) => api('/requests', { method: 'POST', body: JSON.stringify(body) })
-export const updatePrivateRequest = (id, status, recipientId) => api(`/requests/${id}`, { method: 'PATCH', body: JSON.stringify({ status, recipientId }) })
+export const updatePrivateRequest = (id, status, actorId, actorRole) => api(`/requests/${id}`, { method: 'PATCH', body: JSON.stringify({ status, actorId, actorRole }) })

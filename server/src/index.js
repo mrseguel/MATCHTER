@@ -31,42 +31,35 @@ app.post('/api/interactions', async (req, res) => {
 
 app.get('/api/projects', async (req, res) => res.json(await repository.listProjects({ category: req.query.category, search: req.query.search })))
 app.post('/api/projects', async (req, res) => {
-  const { title, description, category, zone, budget, ownerId, ownerName, visibility = 'public', area = '', timeline = '' } = req.body || {}
+  const { id, title, description, category, zone, budget, ownerId, ownerName, visibility = 'public', area = '', timeline = '' } = req.body || {}
   if (!title?.trim() || !description?.trim() || !category || !zone?.trim() || !Number.isFinite(Number(budget)) || Number(budget) < 1 || !ownerId) {
     return res.status(400).json({ message: 'Título, descripción, especialidad, ubicación, presupuesto y ownerId son obligatorios' })
   }
   if (visibility !== 'public') return res.status(400).json({ message: 'La demo solo publica proyectos en el flujo público' })
-  return res.status(201).json(await repository.createProject({ title: title.trim(), description: description.trim(), category, zone: zone.trim(), budget: Number(budget), ownerId, ownerName, visibility, area, timeline }))
+  const project = await repository.createProject({ id, title: title.trim(), description: description.trim(), category, zone: zone.trim(), budget: Number(budget), ownerId, ownerName, visibility, area, timeline })
+  if (project.conflict) return res.status(409).json({ message: 'El proyecto ya existe' })
+  return res.status(201).json(project)
 })
 
-app.get('/api/requests', async (req, res) => res.json(await repository.listPrivateRequests({ clientUserId: req.query.clientUserId, recipientId: req.query.recipientId })))
+app.get('/api/requests', async (req, res) => res.json(await repository.listPrivateRequests({ clientUserId: req.query.clientUserId, recipientId: req.query.recipientId, participantId: req.query.participantId })))
 app.post('/api/requests', async (req, res) => {
-  const { id, clientUserId, recipientId, message, projectTitle, zone, clientName } = req.body || {}
-  if (!clientUserId || !recipientId || !message?.trim() || !projectTitle?.trim()) {
-    return res.status(400).json({ message: 'clientUserId, destinatario, mensaje y proyecto son obligatorios' })
-  }
-  const professional = await repository.getProfessional(recipientId)
-  if (!professional) return res.status(404).json({ message: 'Destinatario no encontrado' })
-  return res.status(201).json(await repository.createPrivateRequest({
-    clientUserId,
-    id,
-    recipientId: String(recipientId),
-    providerName: professional.name,
-    clientName: clientName || 'Cliente de demostración',
-    message: message.trim(),
-    projectTitle: projectTitle.trim(),
-    zone: zone || 'Temuco',
-  }))
+  const request = await repository.createPrivateRequest(req.body || {})
+  if (request.invalid) return res.status(400).json({ message: 'La solicitud está incompleta o contiene un tipo no válido' })
+  if (request.forbidden) return res.status(403).json({ message: 'El destinatario o la identidad del solicitante no corresponden' })
+  if (request.notFound) return res.status(404).json({ message: request.message })
+  if (request.conflict) return res.status(409).json({ message: 'Ya existe una solicitud o Match para este proyecto y estos perfiles' })
+  return res.status(201).json(request)
 })
 app.patch('/api/requests/:id', async (req, res) => {
-  const { status, recipientId } = req.body || {}
-  if (!['accepted', 'rejected'].includes(status) || !recipientId) {
-    return res.status(400).json({ message: 'Estado y destinatario válidos son obligatorios' })
+  const { status, actorId, actorRole } = req.body || {}
+  if (!['accepted', 'rejected'].includes(status) || !actorId || !actorRole) {
+    return res.status(400).json({ message: 'Estado e identidad del destinatario son obligatorios' })
   }
-  const request = await repository.updatePrivateRequest(req.params.id, status, String(recipientId))
+  const request = await repository.updatePrivateRequest(req.params.id, status, String(actorId), actorRole)
   if (!request) return res.status(404).json({ message: 'Solicitud no encontrada' })
   if (request.forbidden) return res.status(403).json({ message: 'Solo el destinatario puede responder esta solicitud' })
   if (request.conflict) return res.status(409).json({ message: 'La solicitud ya fue respondida' })
+  if (request.invalid) return res.status(400).json({ message: 'Estado no válido' })
   return res.json(request)
 })
 

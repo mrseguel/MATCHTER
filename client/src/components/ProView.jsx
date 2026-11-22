@@ -11,8 +11,8 @@ export function ProView({p,onBack,act,onPrivateRequest}){
   <div className="card row sp"><div><b style=${{fontSize:26}}>⭐ ${p.r}</b> / 5<div className="mut">(${p.n} evaluaciones)</div></div><div><b>🛡️ 0 Reclamos</b><div className="mut">Resueltos</div></div></div>
   <h3>Historial de Clientes y Empresas</h3>
   ${[['🏢','Constructora Araucanía Ltda.','29/09/2022'],['👤','Particular - Sector Poniente','12/09/2023']].map(([i,t,d])=>html`<div key=${t} className="card row"><span style=${{fontSize:26}}>${i}</span><div style=${{flex:1}}><b>${t}</b><div className="mut">${d} · Verificación</div></div><span style=${{color:'#2563eb'}}>✔</span></div>`)}
-  <button className="btn out" style=${{marginTop:8}} onClick=${()=>{onPrivateRequest(p);onBack()}}>ENVIAR SOLICITUD PRIVADA ›</button>
-  <p className="mut" style=${{textAlign:'center',marginTop:7}}>No genera un Match hasta que el destinatario la acepte.</p>
-  <button className="btn" style=${{marginTop:8}} onClick=${()=>{act(p,'like');onBack()}}>ME INTERESA ›</button>
+  <button className="btn out" style=${{marginTop:8}} onClick=${()=>onPrivateRequest(p)}>ENVIAR SOLICITUD PRIVADA ›</button>
+  <p className="mut" style=${{textAlign:'center',marginTop:7}}>Ambas acciones envían una solicitud pendiente. No generan un Match antes de la aceptación.</p>
+  <button className="btn" style=${{marginTop:8}} onClick=${()=>onPrivateRequest(p)}>ME INTERESA ›</button>
  <//>`;
 }

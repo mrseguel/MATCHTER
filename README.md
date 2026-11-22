@@ -32,12 +32,11 @@ El desarrollo usa datos en memoria para que los cambios se conserven durante la 
 
 Las solicitudes privadas comienzan en estado pendiente. El endpoint de respuesta verifica que quien acepta o rechaza sea el destinatario indicado por el cliente demo. Aún no hay autenticación de usuario; no expongas esta API de memoria como servicio con datos reales.
 
-## Endpoints disponibles
-- `GET /api/health`
-- `GET /api/dashboard`
-- `GET /api/professionals?category=Electricidad&search=tablero`
-- `GET /api/professionals/:id`
-- `POST /api/interactions` `{ "professionalId":"p1", "type":"like" }`
+## Pruebas
+- `npm run test -w client`: reglas de construcción de solicitudes, roles destinatarios, resolución de aceptación/rechazo y deduplicación.
+- `npm run test -w server`: reglas de persistencia en memoria, validación del propietario, permisos, aceptación, rechazo y duplicados.
+
+La demo no tiene autenticación ni pruebas de navegador end-to-end. La API valida la identidad declarada del perfil de demostración; esa comprobación no reemplaza autenticación/autorización real para Beta.
 
 ## Datos de prueba
 Los nombres, fotos externas, empresas, calificaciones, conversaciones, estados de verificación y montos son ficticios. Wallet, firma/aceptación de acuerdos, evidencia, mediación y pagos solo actualizan estado de demostración: no transfieren dinero, suben archivos ni crean contratos legales.
@@ -53,7 +52,7 @@ Este repositorio es un prototipo, no un sistema listo para recibir datos reales 
 - Reseñas solo después de contratos verificables; reglas de denuncia y apelación.
 - El pago condicionado debe ser provisto por un proveedor habilitado y una estructura legal/financiera revisada. No custodiar fondos directamente ni prometer escrow propio. En la wallet solo guardar tokens del proveedor y marca/últimos cuatro dígitos; nunca PAN ni CVV.
 - Definir contratos, alcance, materiales incluidos/excluidos, hitos, aceptación, plazos, cambios, cancelaciones y resolución de controversias.
-- Añadir pruebas unitarias/integración/e2e y pipeline CI/CD.
+- Ampliar pruebas de integración/e2e y pipeline CI/CD.
 
 ## Evolución a Beta
 La capa de repositorio y el esquema Prisma contemplan proyectos, solicitudes privadas, matches e interacciones. Para Beta se debe implementar autenticación y autorización real, persistencia PostgreSQL/Neon, migraciones revisadas, chat y almacenamiento, y un proveedor de pagos habilitado. Ninguna base Neon se conecta ni migra desde esta demo.

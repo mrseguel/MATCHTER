@@ -3,13 +3,13 @@ import { html } from '../lib/html.js'
 
 const CLP = value => `$${Number(value || 0).toLocaleString('es-CL')} CLP`
 
-export function Projects({ role, projects, requests, onCreate, onInterest }) {
+export function Projects({ role, projects, requests, clientId, providerId, onCreate, onInterest }) {
   const [showForm, setShowForm] = useState(false)
   const [query, setQuery] = useState('')
   const [category, setCategory] = useState('Todas')
-  const ownRequests = requests.filter(request => request.clientId === 'demo-client')
+  const ownRequests = requests.filter(request => request.senderRole === 'Cliente' && String(request.senderId) === String(clientId))
   const visible = projects.filter(project => project.visibility === 'public'
-    && project.ownerId !== 'demo-client'
+    && String(project.ownerId) !== String(clientId)
     && (category === 'Todas' || project.category === category)
     && `${project.title} ${project.category} ${project.zone}`.toLowerCase().includes(query.toLowerCase()))
 
@@ -44,18 +44,18 @@ export function Projects({ role, projects, requests, onCreate, onInterest }) {
     </form>`}
     <div className="card"><h3>Solicitudes privadas enviadas</h3>${ownRequests.length === 0
       ? html`<p className="mut">Todavía no has enviado solicitudes privadas.</p>`
-      : ownRequests.map(request => html`<div className="request-row" key=${request.id}><div><b>${request.providerName}</b><div className="mut">${request.message}</div></div><span className=${`tag ${request.status === 'accepted' ? 'g' : request.status === 'rejected' ? 'r' : ''}`}>${request.status === 'pending' ? 'Pendiente de aceptación' : request.status === 'accepted' ? 'Aceptada · Match creado' : 'No aceptada'}</span></div>`)
+      : ownRequests.map(request => html`<div className="request-row" key=${request.id}><div><b>${request.providerName}</b><div className="mut">${request.projectTitle} · ${request.description}</div></div><span className=${`tag ${request.status === 'accepted' ? 'g' : request.status === 'rejected' ? 'r' : ''}`}>${request.status === 'pending' ? 'Pendiente de aceptación' : request.status === 'accepted' ? 'Aceptada · Match creado' : 'No aceptada'}</span></div>`)
     }</div>
     <h3>Publicaciones de la sesión</h3>
     ${projects.filter(project => project.ownerId === 'demo-client').map(project => html`<div className="card project-card" key=${project.id}><b>${project.title}</b><span className="tag">Público</span><p className="mut">${project.category} · ${project.zone} · ${CLP(project.budget)}</p><p>${project.description}</p></div>`)}
   </div>`
 
   return html`<div>
-    <h2>Proyectos públicos</h2><p className="mut">Explora encargos publicados y expresa interés. Al hacerlo se crea una conexión de demostración.</p>
+    <h2>Proyectos públicos</h2><p className="mut">Explora encargos y envía una solicitud al cliente. El Match solo se crea si el cliente la acepta.</p>
     <div className="project-filters"><input value=${query} onChange=${event => setQuery(event.target.value)} placeholder="Buscar proyecto o comuna" aria-label="Buscar proyecto" /><select value=${category} onChange=${event => setCategory(event.target.value)} aria-label="Filtrar por especialidad"><option>Todas</option><option>Obra gruesa</option><option>Electricidad</option><option>Gasfitería</option><option>Carpintería</option><option>Pintura</option><option>Remodelación</option></select></div>
     ${visible.length ? visible.map(project => html`<article className="card public-project" key=${project.id}>
       <div className="project-photo" style=${{ backgroundImage: `url(${project.photo || ''})` }} role="img" aria-label=${`Foto referencial: ${project.title}`}></div>
-      <div className="project-content"><div className="row sp"><span className="tag">${project.category}</span><b>${CLP(project.budget)}</b></div><h3>${project.title}</h3><p>${project.description}</p><div className="mut">${project.ownerName} · ${project.zone} · ${project.area || 'Superficie por definir'}</div><div className="row sp project-action"><span className="mut">${project.timeline || 'Plazo a coordinar'}</span><button className="btn sm" onClick=${() => onInterest(project)}>Me interesa</button></div></div>
+      <div className="project-content"><div className="row sp"><span className="tag">${project.category}</span><b>${CLP(project.budget)}</b></div><h3>${project.title}</h3><p>${project.description}</p><div className="mut">${project.ownerName} · ${project.zone} · ${project.area || 'Superficie por definir'}</div><div className="row sp project-action"><span className="mut">${project.timeline || 'Plazo a coordinar'}</span><button className="btn sm" disabled=${requests.some(request => request.requestKind === 'project_interest' && String(request.projectId) === String(project.id) && String(request.providerId) === String(providerId))} onClick=${() => onInterest(project)}>${requests.some(request => request.requestKind === 'project_interest' && String(request.projectId) === String(project.id) && String(request.providerId) === String(providerId)) ? 'Solicitud enviada' : 'Me interesa'}</button></div></div>
     </article>`)
     : html`<div className="card"><p className="mut">No hay proyectos con estos filtros. Cambia la búsqueda o revisa más tarde.</p></div>`}
   </div>`

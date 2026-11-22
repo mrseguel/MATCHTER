@@ -13,6 +13,7 @@ enum ClaimStatus { NEW OPEN IN_REVIEW CLOSED }
 enum ProjectVisibility { PUBLIC PRIVATE }
 enum ProjectStatus { OPEN IN_PROGRESS COMPLETED CANCELLED }
 enum PrivateRequestStatus { PENDING ACCEPTED REJECTED CANCELLED }
+enum PrivateRequestKind { PROFILE_INVITATION PROJECT_INTEREST }
 model User {
   id String @id @default(cuid())
   email String @unique
@@ -162,22 +163,36 @@ model Project {
 
 model PrivateRequest {
   id String @id @default(cuid())
+  requestKind PrivateRequestKind
   projectId String?
   clientUserId String
+  providerUserId String
+  senderUserId String
+  senderRole AccountRole
   recipientUserId String
+  recipientRole AccountRole
+  projectTitle String
+  description String
+  specifications String
+  location String
+  budget Decimal? @db.Decimal(14,2)
+  antecedents String?
   message String
+  dedupeKey String @unique
   status PrivateRequestStatus @default(PENDING)
   acceptedAt DateTime?
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
   @@index([recipientUserId, status])
   @@index([clientUserId, createdAt])
+  @@index([providerUserId, createdAt])
 }
 
 model MarketplaceMatch {
   id String @id @default(cuid())
   projectId String?
   privateRequestId String? @unique
+  dedupeKey String @unique
   clientUserId String
   providerUserId String
   createdAt DateTime @default(now())

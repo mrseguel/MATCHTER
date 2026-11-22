@@ -15,6 +15,12 @@ export const DEMO_CLIENT = {
   sus: false,
 }
 
+export const DEMO_CLIENTS = [
+  DEMO_CLIENT,
+  { ...DEMO_CLIENT, id: 'client-rodrigo', name: 'Rodrigo A.', e: 'RA', loc: 'Temuco · Pueblo Nuevo', bio: 'Cliente de demostración con un proyecto eléctrico público.' },
+  { ...DEMO_CLIENT, id: 'client-sebastian', name: 'Sebastián V.', e: 'SV', loc: 'Temuco · Labranza', bio: 'Cliente de demostración con un proyecto de carpintería público.' },
+]
+
 export const DEMO_PROJECTS = [
   {
     id: 'project-public-kitchen',

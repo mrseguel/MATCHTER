@@ -134,6 +134,12 @@ h3{font-size:17px;font-weight:800;color:#141b2c;margin:19px 0 9px}
 
 /* Demo flows use the supplied MATCHTER visual system and its mobile proportions. */
 .project-form{display:grid;gap:10px;border-color:#f2e9e5}
+.request-form{margin:0 0 18px}
+.request-fields{display:grid;gap:10px}
+.request-form h2{margin:2px 0 7px}
+.request-project-summary{margin:0;background:var(--soft)}
+.request-project-summary h3{margin:8px 0}
+.request-detail{font-size:13px;line-height:1.5;margin:7px 0;overflow-wrap:anywhere}
 .project-form h3{margin:0 0 2px}
 .project-form label{display:flex;flex:1;flex-direction:column;gap:5px;color:var(--mut);font-size:12px;font-weight:650}
 .project-form input,.project-form select,.project-form textarea,.project-filters input,.project-filters select{width:100%;min-width:0;border:1px solid #e6e8ee;border-radius:13px;padding:11px 12px;background:#fff;color:var(--tx);font:inherit;font-size:14px}
