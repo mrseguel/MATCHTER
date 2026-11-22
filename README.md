@@ -1,14 +1,14 @@
-# MATCHTER · Prototipo funcional
+# MATCHTER · Demo visual
 
-Aplicación web de demostración para conectar clientes, maestros independientes, contratistas y empresas constructoras en Temuco, Chile.
+Demo de MATCHTER construida sobre el diseño de `MATCHTER-visual.zip` y la arquitectura cliente/API del repositorio.
 
 ## Qué incluye
-- Panel de cliente con inicio, exploración tipo Tinder, filtros por especialidad, likes, favoritos, mensajes, servicios, reclamos, wallet, perfil y calificaciones.
-- Panel de empresa con información pública/privada, estado de verificación y métricas de ejemplo.
-- Perfiles profesionales, especialidades, reputación y portafolio demostrativo.
-- API Node/Express separada de React.
-- Capa `repository.js` que permite reemplazar datos de prueba por persistencia real.
-- Esquema inicial Prisma/PostgreSQL en `server/prisma/schema.prisma`.
+- Cuatro perfiles diferenciados para recorrer: Cliente, Maestro o contratista, Profesional y Empresa.
+- Explorar y filtrar perfiles, guardar favoritos, enviar likes y abrir detalles/portafolios.
+- Crear proyectos públicos, explorar encargos y expresar interés.
+- Enviar solicitudes privadas. Solo la aceptación del destinatario crea el Match, trabajo y chat.
+- Matches, mensajería con respuestas automáticas, contratos, hitos, wallet, reclamos y administración.
+- API Node/Express con `MockRepository`; los esquemas Beta de Prisma están preparados, sin conexión ni migración a Neon.
 
 ## Requisitos
 Node.js 20+ y npm.
@@ -16,20 +16,21 @@ Node.js 20+ y npm.
 ## Ejecutar localmente
 ```bash
 npm install
-cp server/.env.example server/.env
 npm run dev
 ```
 Frontend: http://localhost:5173  
 API: http://localhost:4000/api/health
 
-## Configurar conexión real
-1. Crear una base PostgreSQL administrada.
-2. Configurar `DATABASE_URL` en `server/.env`.
-3. Instalar Prisma en el workspace server (`npm install prisma @prisma/client -w server`).
-4. Ejecutar `npx prisma generate --schema server/prisma/schema.prisma`.
-5. Crear migraciones revisadas (`npx prisma migrate dev --schema server/prisma/schema.prisma`).
-6. Implementar `PrismaRepository` en `server/src/repository.js` y seleccionarlo por configuración. Las rutas HTTP no deberían consultar Prisma directamente.
-7. Añadir autenticación, autorización por rol y validación de entrada antes de exponer la API.
+El desarrollo usa datos en memoria para que los cambios se conserven durante la sesión. La API también usa memoria; al reiniciar el servidor los datos vuelven a los valores de demo.
+
+## Endpoints demo
+- `GET /api/health` y `GET /api/dashboard`
+- `GET /api/professionals`, `GET /api/professionals/:id`
+- `POST /api/interactions`
+- `GET /api/projects`, `POST /api/projects`
+- `GET /api/requests`, `POST /api/requests`, `PATCH /api/requests/:id`
+
+Las solicitudes privadas comienzan en estado pendiente. El endpoint de respuesta verifica que quien acepta o rechaza sea el destinatario indicado por el cliente demo. Aún no hay autenticación de usuario; no expongas esta API de memoria como servicio con datos reales.
 
 ## Endpoints disponibles
 - `GET /api/health`
@@ -39,7 +40,7 @@ API: http://localhost:4000/api/health
 - `POST /api/interactions` `{ "professionalId":"p1", "type":"like" }`
 
 ## Datos de prueba
-Los nombres, RUT, empresas, calificaciones, conversaciones y montos que aparecen en pantalla son ficticios y se usan exclusivamente para demostrar flujos. No representan profesionales reales ni verificaciones reales.
+Los nombres, fotos externas, empresas, calificaciones, conversaciones, estados de verificación y montos son ficticios. Wallet, firma/aceptación de acuerdos, evidencia, mediación y pagos solo actualizan estado de demostración: no transfieren dinero, suben archivos ni crean contratos legales.
 
 ## Antes de producción: imprescindible
 Este repositorio es un prototipo, no un sistema listo para recibir datos reales o pagos.
@@ -54,5 +55,5 @@ Este repositorio es un prototipo, no un sistema listo para recibir datos reales 
 - Definir contratos, alcance, materiales incluidos/excluidos, hitos, aceptación, plazos, cambios, cancelaciones y resolución de controversias.
 - Añadir pruebas unitarias/integración/e2e y pipeline CI/CD.
 
-## Decisiones de alcance tomadas
-La propuesta PDF define como núcleo del MVP perfiles, portafolios, búsqueda, match, comunicación, reputación vinculada a trabajos y administración básica. El pago protegido se deja como integración preparada para una etapa posterior, porque el documento condiciona su incorporación a proveedor habilitado y revisión legal/financiera.
+## Evolución a Beta
+La capa de repositorio y el esquema Prisma contemplan proyectos, solicitudes privadas, matches e interacciones. Para Beta se debe implementar autenticación y autorización real, persistencia PostgreSQL/Neon, migraciones revisadas, chat y almacenamiento, y un proveedor de pagos habilitado. Ninguna base Neon se conecta ni migra desde esta demo.

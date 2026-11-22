@@ -5,11 +5,14 @@ datasource db {
   provider = "postgresql"
   url      = env("DATABASE_URL")
 }
-enum AccountRole { CLIENT PROFESSIONAL COMPANY ADMIN }
+enum AccountRole { CLIENT MAESTRO_CONTRACTOR PROFESSIONAL COMPANY ADMIN }
 enum VerificationStatus { UNVERIFIED PENDING VERIFIED REJECTED }
 enum InteractionType { LIKE FAVORITE PASS }
 enum ContractStatus { DRAFT PROPOSED ACCEPTED IN_PROGRESS COMPLETED CANCELLED DISPUTED }
 enum ClaimStatus { NEW OPEN IN_REVIEW CLOSED }
+enum ProjectVisibility { PUBLIC PRIVATE }
+enum ProjectStatus { OPEN IN_PROGRESS COMPLETED CANCELLED }
+enum PrivateRequestStatus { PENDING ACCEPTED REJECTED CANCELLED }
 model User {
   id String @id @default(cuid())
   email String @unique
@@ -135,4 +138,49 @@ model PaymentReference {
   last4 String?
   createdAt DateTime @default(now())
   // Nunca almacenar PAN completo ni CVV.
+}
+
+// Esquema preparado para Beta. La demo actual usa MockRepository y no migra Neon.
+model Project {
+  id String @id @default(cuid())
+  ownerUserId String
+  title String
+  description String
+  category String
+  city String @default("Temuco")
+  zone String?
+  budget Decimal? @db.Decimal(14,2)
+  area String?
+  timeline String?
+  visibility ProjectVisibility @default(PUBLIC)
+  status ProjectStatus @default(OPEN)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  @@index([ownerUserId, status])
+  @@index([visibility, category, city])
+}
+
+model PrivateRequest {
+  id String @id @default(cuid())
+  projectId String?
+  clientUserId String
+  recipientUserId String
+  message String
+  status PrivateRequestStatus @default(PENDING)
+  acceptedAt DateTime?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  @@index([recipientUserId, status])
+  @@index([clientUserId, createdAt])
+}
+
+model MarketplaceMatch {
+  id String @id @default(cuid())
+  projectId String?
+  privateRequestId String? @unique
+  clientUserId String
+  providerUserId String
+  createdAt DateTime @default(now())
+  @@index([clientUserId, createdAt])
+  @@index([providerUserId, createdAt])
 }

@@ -6,3 +6,6 @@ export const professionals = [
  {id:'p5',name:'Maderas Cautín',role:'Contratista',company:'Maderas Cautín Ltda.',verified:true,category:'Carpintería',rating:4.6,reviews:21,works:15,zone:'Temuco · Cajón',distance:'8,4 km',price:'A convenir',bio:'Estructuras de madera, techumbres, terrazas y revestimientos.',avatar:'MC',color:'from-amber-700 to-yellow-500',tags:['Carpintería','Techumbre','Terrazas'],photos:['Terraza en madera','Techumbre','Revestimiento']}
 ]
 export const interactions = []
+export const projects = []
+export const privateRequests = []
+export const matches = []
