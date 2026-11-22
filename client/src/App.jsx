@@ -3,7 +3,7 @@ import { html } from './lib/html.js'
 import { PROS, FL0 } from './data.js'
 import { DEMO_CLIENT, DEMO_CLIENTS, DEMO_PROJECTS, ROLE_PROFILE_IDS } from './demoData.js'
 import { createProject as saveProject, createPrivateRequest as savePrivateRequest, updatePrivateRequest } from './api.js'
-import { buildProfileRequest, buildProjectInterestRequest, canRespondToRequest, requestDedupeKey, resolveRequest } from './requestFlow.js'
+import { buildProfileRequest, buildProjectInterestRequest, canRespondToRequest, requestDedupeKey, submitRequestWithApi, decideRequestWithApi } from './requestFlow.js'
 import { Admin } from './components/Admin.jsx'
 import { Chat } from './components/Chat.jsx'
 import { Contract } from './components/Contract.jsx'
@@ -41,6 +41,7 @@ export function App() {
   const [requestDraft, setRequestDraft] = useState(null)
   const handlingRequests = useRef(new Set())
   const submittedRequestKeys = useRef(new Set())
+  const submittingRequestKeys = useRef(new Set())
   const [message, setMessage] = useState('')
   const [disputes, setDisputes] = useState([
     { id: 1024, title: 'Ampliación Habitación', from: 'Carlos Muñoz', step: 1, files: ['Foto_obra_demo.jpg'], checks: [true, true, false, false] },
@@ -114,7 +115,7 @@ export function App() {
     toast('Cliente activo de demostración actualizado')
   }
 
-  const createPublicProject = projectData => {
+  const createPublicProject = async projectData => {
     const project = {
       ...projectData,
       id: `project-${Date.now()}`,
@@ -122,15 +123,22 @@ export function App() {
       ownerName: activeClient.name,
       photo: 'https://images.unsplash.com/photo-1556912172-45b7abe8b7e1?auto=format&fit=crop&w=1200&q=85',
     }
-    setProjects(previous => [project, ...previous])
-    saveProject(project).catch(() => {})
-    toast('Proyecto publicado en esta sesión de demostración')
+    try {
+      const confirmedProject = await saveProject(project)
+      if (!confirmedProject?.id) throw new Error('La API no devolvió el proyecto creado')
+      setProjects(previous => previous.some(item => String(item.id) === String(confirmedProject.id)) ? previous : [confirmedProject, ...previous])
+      toast('Proyecto publicado por la API; disponible en esta sesión')
+      return true
+    } catch (error) {
+      toast(`No se pudo publicar el proyecto: ${error.message}`)
+      return false
+    }
   }
 
   const expressInterest = project => {
     const providerId = roleProfile?.id
     if (!providerId) return
-    const duplicateKey = requestDedupeKey({ clientId: project.ownerId, providerId, projectTitle: project.title })
+    const duplicateKey = requestDedupeKey({ clientId: project.ownerId, providerId, projectId: project.id, projectTitle: project.title })
     if (requests.some(request => request.dedupeKey === duplicateKey) || matches.some(item => item.dedupeKey === duplicateKey)) {
       toast('Ya existe una solicitud para este proyecto y perfil')
       return
@@ -138,32 +146,41 @@ export function App() {
     setRequestDraft({ kind: 'project_interest', project, provider: roleProfile, role })
   }
 
-  const submitRequest = details => {
-    if (!requestDraft) return
+  const submitRequest = async details => {
+    if (!requestDraft) return false
     const request = requestDraft.kind === 'project_interest'
       ? buildProjectInterestRequest({ ...requestDraft, details })
       : buildProfileRequest({ ...requestDraft, details })
     const key = request.dedupeKey
-    if (submittedRequestKeys.current.has(key) || requests.some(item => item.dedupeKey === key) || matches.some(item => item.dedupeKey === key)) {
+    if (submittedRequestKeys.current.has(key) || submittingRequestKeys.current.has(key) || requests.some(item => item.dedupeKey === key) || matches.some(item => item.dedupeKey === key)) {
       setRequestDraft(null)
       toast('Ya existe una solicitud o Match para este proyecto y perfil')
-      return
+      return false
     }
-    submittedRequestKeys.current.add(key)
     request.id = `request-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`
     request.senderName = requestDraft.kind === 'project_interest' ? requestDraft.provider.name : requestDraft.client.name
     request.recipientName = requestDraft.kind === 'project_interest' ? requestDraft.project.ownerName : requestDraft.provider.name
-    setRequests(previous => previous.some(item => item.dedupeKey === key) ? previous : [request, ...previous])
-    savePrivateRequest(request).catch(() => {})
-    if (requestDraft.kind === 'profile') {
-      setSeen(previous => previous.includes(requestDraft.provider.id) ? previous : [...previous, requestDraft.provider.id])
-      setLikes(previous => previous.includes(requestDraft.provider.id) ? previous : [...previous, requestDraft.provider.id])
+    submittingRequestKeys.current.add(key)
+    try {
+      const confirmedRequest = await submitRequestWithApi(request, savePrivateRequest)
+      submittedRequestKeys.current.add(key)
+      setRequests(previous => previous.some(item => item.dedupeKey === key) ? previous : [confirmedRequest, ...previous])
+      if (requestDraft.kind === 'profile') {
+        setSeen(previous => previous.includes(requestDraft.provider.id) ? previous : [...previous, requestDraft.provider.id])
+        setLikes(previous => previous.includes(requestDraft.provider.id) ? previous : [...previous, requestDraft.provider.id])
+      }
+      setRequestDraft(null)
+      toast('La API confirmó la solicitud pendiente. Aún no hay Match, trabajo ni chat.')
+      return true
+    } catch (error) {
+      toast(`No se pudo enviar la solicitud: ${error.message}`)
+      return false
+    } finally {
+      submittingRequestKeys.current.delete(key)
     }
-    setRequestDraft(null)
-    toast('Solicitud enviada y pendiente de aceptación. Aún no hay Match, trabajo ni chat.')
   }
 
-  const decideRequest = (requestId, status) => {
+  const decideRequest = async (requestId, status) => {
     const request = requests.find(item => item.id === requestId)
     const actor = { role, clientId: activeClient.id, profileIds: role === 'Cliente' ? [] : [activeProviderId] }
     if (!request || !canRespondToRequest(request, actor)) {
@@ -172,27 +189,36 @@ export function App() {
     }
     if (handlingRequests.current.has(requestId)) return
     handlingRequests.current.add(requestId)
-    const transition = resolveRequest({ request, status, actor, matches, jobs, chats, now: new Date().toISOString() })
-    if (transition.error) {
+    try {
+      const actorId = String(role === 'Cliente' ? activeClient.id : activeProviderId)
+      const confirmed = await decideRequestWithApi({
+        request,
+        status,
+        actor,
+        actorId,
+        matches,
+        jobs,
+        updateRequest: updatePrivateRequest,
+        now: new Date().toISOString(),
+      })
+      setRequests(previous => previous.map(item => item.id === requestId ? confirmed.request : item))
+      if (status === 'accepted') {
+        setMatches(previous => previous.some(item => item.dedupeKey === confirmed.match.dedupeKey) ? previous : [...previous, confirmed.match])
+        setJobs(previous => previous.some(item => item.projectRef === confirmed.job.projectRef) ? previous : [confirmed.job, ...previous])
+        setChats(previous => previous[confirmed.job.id] ? previous : { ...previous, [confirmed.job.id]: confirmed.conversation })
+        const counterpart = role === 'Cliente'
+          ? profileById(request.providerId)
+          : { ...(clientById(request.clientId) || DEMO_CLIENT), id: request.clientId, name: request.clientName }
+        setMatch({ profile: counterpart || DEMO_CLIENT, jobId: confirmed.job.id })
+        toast('La API confirmó el Match. El trabajo y el chat son simulaciones de esta sesión.')
+      } else {
+        toast('La API confirmó el rechazo. No se creó un Match.')
+      }
+    } catch (error) {
+      toast(`No se pudo ${status === 'accepted' ? 'aceptar' : 'rechazar'} la solicitud: ${error.message}`)
+    } finally {
       handlingRequests.current.delete(requestId)
-      if (transition.error === 'conflict') toast('Esta solicitud ya fue respondida')
-      return
     }
-    setRequests(previous => previous.map(item => item.id === requestId ? transition.request : item))
-    updatePrivateRequest(requestId, status, String(role === 'Cliente' ? activeClient.id : activeProviderId), role).catch(() => {})
-    if (status === 'accepted') {
-      setMatches(previous => previous.some(item => item.dedupeKey === transition.match.dedupeKey) ? previous : [...previous, transition.match])
-      setJobs(previous => previous.some(item => item.projectRef === transition.job.projectRef) ? previous : [transition.job, ...previous])
-      setChats(previous => previous[transition.job.id] ? previous : { ...previous, [transition.job.id]: transition.conversation })
-      const counterpart = role === 'Cliente'
-        ? profileById(request.providerId)
-        : { ...(clientById(request.clientId) || DEMO_CLIENT), id: request.clientId, name: request.clientName }
-      setMatch({ profile: counterpart || DEMO_CLIENT, jobId: transition.job.id })
-      toast('Solicitud aceptada: Match, trabajo y chat creados')
-    } else {
-      toast('Solicitud privada rechazada; no se creó un Match')
-    }
-    window.setTimeout(() => handlingRequests.current.delete(requestId), 0)
   }
 
   const send = (jobId, text) => {

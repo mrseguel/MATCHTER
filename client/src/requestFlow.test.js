@@ -1,6 +1,6 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
-import { buildProfileRequest, buildProjectInterestRequest, canRespondToRequest, requestDedupeKey, resolveRequest } from './requestFlow.js'
+import { buildProfileRequest, buildProjectInterestRequest, canRespondToRequest, requestDedupeKey, resolveRequest, submitRequestWithApi, decideRequestWithApi } from './requestFlow.js'
 
 test('formulario de invitación registra todos los antecedentes como solicitud pendiente', () => {
   const request = buildProfileRequest({
@@ -85,4 +85,65 @@ test('el rechazo deja solicitud rechazada y no produce Match, trabajo ni chat', 
   assert.equal(rejected.match, null)
   assert.equal(rejected.job, null)
   assert.equal(rejected.conversation, null)
+})
+
+test('solo confirma el envío después de respuesta exitosa de la API y propaga el fallo', async () => {
+  const request = buildProfileRequest({
+    client: { id: 'demo-client', name: 'Francisca' }, provider: { id: 1, name: 'Carlos' },
+    details: { projectTitle: 'Baño', description: 'Remodelar', specifications: 'Ducha nueva', location: 'Temuco' },
+  })
+  request.id = 'request-submit'
+  const confirmed = await submitRequestWithApi(request, async payload => ({ ...payload, createdAt: '2026-01-01T00:00:00.000Z' }))
+  assert.equal(confirmed.status, 'pending')
+  assert.equal(confirmed.id, request.id)
+  const recovered = await submitRequestWithApi(request, async payload => ({ ...payload, id: 'server-original-id' }))
+  assert.equal(recovered.id, 'server-original-id')
+  await assert.rejects(() => submitRequestWithApi(request, async () => { throw new Error('API unavailable') }), /API unavailable/)
+  await assert.rejects(() => submitRequestWithApi(request, async () => null), /API no confirmó/)
+  assert.equal(request.status, 'pending')
+})
+
+test('solo confirma la aceptación después de la API y usa el MatchId confirmado por servidor', async () => {
+  const request = buildProjectInterestRequest({
+    project: { id: 'project-accept', ownerId: 'client-rodrigo', ownerName: 'Rodrigo', title: 'Techo', description: 'Reparación', zone: 'Temuco', area: '20 m²' },
+    provider: { id: 1, name: 'Carlos' }, role: 'Maestro o contratista', details: { message: 'Disponible' },
+  })
+  request.id = 'request-accept'
+  const actor = { role: 'Cliente', clientId: 'client-rodrigo' }
+  const confirmed = await decideRequestWithApi({
+    request, status: 'accepted', actor, actorId: 'client-rodrigo',
+    updateRequest: async () => ({ ...request, status: 'accepted', matchId: 'server-match-1', acceptedAt: '2026-01-01T00:00:00.000Z' }),
+  })
+  assert.equal(confirmed.request.status, 'accepted')
+  assert.equal(confirmed.match.id, 'server-match-1')
+  assert.equal(confirmed.job.matchId, 'server-match-1')
+  assert.deepEqual(confirmed.conversation, [])
+  await assert.rejects(() => decideRequestWithApi({
+    request, status: 'accepted', actor, actorId: 'client-rodrigo',
+    updateRequest: async () => { throw new Error('API unavailable') },
+  }), /API unavailable/)
+  assert.equal(request.status, 'pending')
+})
+
+test('un rechazo confirmado no produce Match, trabajo ni chat; destinatario incorrecto no llama la API', async () => {
+  const request = buildProjectInterestRequest({
+    project: { id: 'project-reject', ownerId: 'client-rodrigo', ownerName: 'Rodrigo', title: 'Techo', description: 'Reparación', zone: 'Temuco', area: '20 m²' },
+    provider: { id: 1, name: 'Carlos' }, role: 'Maestro o contratista', details: { message: 'Disponible' },
+  })
+  request.id = 'request-reject'
+  const actor = { role: 'Cliente', clientId: 'client-rodrigo' }
+  const rejected = await decideRequestWithApi({
+    request, status: 'rejected', actor, actorId: 'client-rodrigo',
+    updateRequest: async () => ({ ...request, status: 'rejected', respondedAt: '2026-01-01T00:00:00.000Z' }),
+  })
+  assert.equal(rejected.request.status, 'rejected')
+  assert.equal(rejected.match, null)
+  assert.equal(rejected.job, null)
+  assert.equal(rejected.conversation, null)
+  let called = false
+  await assert.rejects(() => decideRequestWithApi({
+    request, status: 'accepted', actor: { role: 'Cliente', clientId: 'demo-client' }, actorId: 'demo-client',
+    updateRequest: async () => { called = true },
+  }), /Solo el destinatario/)
+  assert.equal(called, false)
 })

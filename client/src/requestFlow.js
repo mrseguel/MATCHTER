@@ -5,8 +5,15 @@ export const normalizeProjectTitle = value => String(value || '')
   .replace(/\s+/g, ' ')
   .toLowerCase()
 
-export const requestDedupeKey = ({ clientId, providerId, projectTitle }) =>
-  `${String(clientId)}:${String(providerId)}:${normalizeProjectTitle(projectTitle)}`
+export const requestDedupeKey = ({ clientId, providerId, projectId, projectTitle, description, specifications, location, budget, antecedents }) => {
+  const identity = projectId
+    ? `id:${encodeURIComponent(String(projectId))}`
+    : `details:${encodeURIComponent(JSON.stringify([
+      normalizeProjectTitle(projectTitle), normalizeProjectTitle(description), normalizeProjectTitle(specifications),
+      normalizeProjectTitle(location), budget == null || budget === '' ? '' : String(Number(budget)), normalizeProjectTitle(antecedents),
+    ]))}`
+  return `${String(clientId)}:${String(providerId)}:${identity}`
+}
 
 export const providerRoleFor = providerId => String(providerId) === '2'
   ? 'Empresa'
@@ -30,7 +37,7 @@ export function resolveRequest({ request, status, actor, matches = [], jobs = []
 
   const dedupeKey = request.dedupeKey || requestDedupeKey(request)
   const match = matches.find(item => item.dedupeKey === dedupeKey || item.requestId === request.id)
-    || { id: `match-${request.id}`, requestId: request.id, dedupeKey, clientId: request.clientId, providerId: request.providerId }
+    || { id: request.matchId || `match-${request.id}`, requestId: request.id, dedupeKey, clientId: request.clientId, providerId: request.providerId }
   const job = jobs.find(item => item.projectRef === dedupeKey)
     || {
       id: `job-${dedupeKey}`,
@@ -50,6 +57,42 @@ export function resolveRequest({ request, status, actor, matches = [], jobs = []
     match,
     job,
     conversation: [],
+  }
+}
+
+export async function submitRequestWithApi(request, createRequest) {
+  const saved = await createRequest(request)
+  if (!saved || saved.status !== 'pending' || saved.dedupeKey !== request.dedupeKey) {
+    throw new Error('La API no confirmó la creación de la solicitud pendiente')
+  }
+  return { ...request, ...saved, dedupeKey: request.dedupeKey }
+}
+
+export async function decideRequestWithApi({ request, status, actor, actorId, matches = [], jobs = [], updateRequest, now }) {
+  const preflight = resolveRequest({ request, status, actor, matches, jobs, now })
+  if (preflight.error) throw new Error(preflight.error === 'forbidden'
+    ? 'Solo el destinatario de esta solicitud puede responder'
+    : preflight.error === 'conflict' ? 'Esta solicitud ya fue respondida' : 'La decisión no es válida')
+
+  const saved = await updateRequest(request.id, status, actorId, actor.role)
+  if (!saved || String(saved.id) !== String(request.id) || saved.status !== status) {
+    throw new Error('La API no confirmó la decisión de la solicitud')
+  }
+  const canonicalRequest = { ...request, ...saved, dedupeKey: request.dedupeKey, status: 'pending' }
+  const transition = resolveRequest({
+    request: canonicalRequest,
+    status,
+    actor,
+    matches,
+    jobs,
+    now: status === 'accepted' ? (saved.acceptedAt || now) : (saved.respondedAt || now),
+  })
+  if (transition.error) throw new Error(`La API confirmó la decisión, pero no se pudo preparar el estado demo (${transition.error})`)
+  return {
+    request: { ...transition.request, ...saved, dedupeKey: request.dedupeKey },
+    match: transition.match,
+    job: transition.job,
+    conversation: transition.conversation,
   }
 }
 
@@ -77,7 +120,7 @@ export function buildProfileRequest({ client, provider, details }) {
     antecedents: String(details.antecedents || '').trim(),
     message: String(details.description || '').trim(),
     status: 'pending',
-    dedupeKey: requestDedupeKey({ clientId, providerId, projectTitle }),
+    dedupeKey: requestDedupeKey({ clientId, providerId, projectTitle, description: details.description, specifications: details.specifications, location: details.location, budget: details.budget, antecedents: details.antecedents }),
   }
 }
 
@@ -105,6 +148,6 @@ export function buildProjectInterestRequest({ project, provider, role, details =
     antecedents: String(details.antecedents || '').trim(),
     message: String(details.message || '').trim(),
     status: 'pending',
-    dedupeKey: requestDedupeKey({ clientId, providerId, projectTitle: project.title }),
+    dedupeKey: requestDedupeKey({ clientId, providerId, projectId: project.id, projectTitle: project.title }),
   }
 }

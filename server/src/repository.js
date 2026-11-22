@@ -2,7 +2,15 @@ import { professionals, interactions, projects, privateRequests, matches } from 
 
 const PROFILE_ROLE = id => String(id) === '2' ? 'Empresa' : String(id) === '6' ? 'Profesional' : 'Maestro o contratista'
 const normalizeProjectTitle = value => String(value || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').trim().replace(/\s+/g, ' ').toLowerCase()
-const makeDedupeKey = ({ clientId, providerId, projectTitle }) => `${String(clientId)}:${String(providerId)}:${normalizeProjectTitle(projectTitle)}`
+const makeDedupeKey = ({ clientId, providerId, projectId, projectTitle, description, specifications, location, budget, antecedents }) => {
+  const identity = projectId
+    ? `id:${encodeURIComponent(String(projectId))}`
+    : `details:${encodeURIComponent(JSON.stringify([
+      normalizeProjectTitle(projectTitle), normalizeProjectTitle(description), normalizeProjectTitle(specifications),
+      normalizeProjectTitle(location), budget == null || budget === '' ? '' : String(Number(budget)), normalizeProjectTitle(antecedents),
+    ]))}`
+  return `${String(clientId)}:${String(providerId)}:${identity}`
+}
 
 export class MockRepository {
   constructor(store = {}) {
@@ -41,6 +49,7 @@ export class MockRepository {
   }
 
   async listPrivateRequests({ clientUserId, recipientId, participantId } = {}) {
+    if (![clientUserId, recipientId, participantId].some(value => String(value || '').trim())) return []
     return this.privateRequests.filter(request => (!clientUserId || String(request.clientId) === String(clientUserId))
       && (!recipientId || String(request.recipientId) === String(recipientId))
       && (!participantId || String(request.senderId) === String(participantId) || String(request.recipientId) === String(participantId)))
@@ -66,8 +75,9 @@ export class MockRepository {
         || String(senderId) !== String(providerId) || senderRole !== expectedRole) return { forbidden: true }
     } else return { invalid: true }
 
-    const dedupeKey = makeDedupeKey({ clientId, providerId, projectTitle })
+    const dedupeKey = makeDedupeKey(data)
     const duplicate = this.privateRequests.find(request => request.dedupeKey === dedupeKey)
+    if (duplicate?.status === 'pending') return { duplicate: true, request: duplicate }
     if (duplicate || this.matches.some(match => match.dedupeKey === dedupeKey)) return { conflict: true, request: duplicate }
 
     const item = {
@@ -86,6 +96,7 @@ export class MockRepository {
     const request = this.privateRequests.find(item => String(item.id) === String(id))
     if (!request) return null
     if (String(request.recipientId) !== String(actorId) || request.recipientRole !== actorRole) return { forbidden: true }
+    if (request.status === status) return { ...request, duplicate: true }
     if (request.status !== 'pending') return { conflict: true, request }
     if (!['accepted', 'rejected'].includes(status)) return { invalid: true }
     if (status === 'rejected') {

@@ -6,7 +6,7 @@ Demo de MATCHTER construida sobre el diseño de `MATCHTER-visual.zip` y la arqui
 - Cuatro perfiles diferenciados para recorrer: Cliente, Maestro o contratista, Profesional y Empresa.
 - Explorar y filtrar perfiles, guardar favoritos, enviar likes y abrir detalles/portafolios.
 - Crear proyectos públicos, explorar encargos y expresar interés.
-- Enviar solicitudes privadas. Solo la aceptación del destinatario crea el Match, trabajo y chat.
+- Enviar solicitudes privadas. La aceptación confirmada por la API crea el Match; trabajo y chat se simulan en la sesión.
 - Matches, mensajería con respuestas automáticas, contratos, hitos, wallet, reclamos y administración.
 - API Node/Express con `MockRepository`; los esquemas Beta de Prisma están preparados, sin conexión ni migración a Neon.
 
@@ -21,22 +21,23 @@ npm run dev
 Frontend: http://localhost:5173  
 API: http://localhost:4000/api/health
 
-El desarrollo usa datos en memoria para que los cambios se conserven durante la sesión. La API también usa memoria; al reiniciar el servidor los datos vuelven a los valores de demo.
+El cliente mantiene proyectos, solicitudes, Matches, trabajos y chats en memoria de React durante la sesión; al recargar la página, el cliente no rehidrata esos datos desde la API. `MockRepository` conserva proyectos, solicitudes, Matches e interacciones únicamente mientras vive el proceso Node; al reiniciarlo vuelve a los valores de demo. La API registra el Match al aceptar; el trabajo y el chat que aparecen en pantalla son simulaciones locales de la sesión y no se guardan en el servidor.
 
 ## Endpoints demo
 - `GET /api/health` y `GET /api/dashboard`
 - `GET /api/professionals`, `GET /api/professionals/:id`
 - `POST /api/interactions`
 - `GET /api/projects`, `POST /api/projects`
-- `GET /api/requests`, `POST /api/requests`, `PATCH /api/requests/:id`
+- `GET /api/requests?participantId=<id>` (también acepta `clientUserId` o `recipientId` como filtros explícitos)
+- `POST /api/requests`, `PATCH /api/requests/:id`
 
-Las solicitudes privadas comienzan en estado pendiente. El endpoint de respuesta verifica que quien acepta o rechaza sea el destinatario indicado por el cliente demo. Aún no hay autenticación de usuario; no expongas esta API de memoria como servicio con datos reales.
+Las solicitudes privadas comienzan en estado pendiente. La interfaz solo confirma envío, aceptación o rechazo cuando la API responde correctamente; si falla, conserva el estado previo y muestra el error. El endpoint de respuesta coteja el perfil demo declarado con el destinatario, pero esos identificadores no son credenciales y todavía no hay autenticación real.
 
 ## Pruebas
 - `npm run test -w client`: reglas de construcción de solicitudes, roles destinatarios, resolución de aceptación/rechazo y deduplicación.
 - `npm run test -w server`: reglas de persistencia en memoria, validación del propietario, permisos, aceptación, rechazo y duplicados.
 
-La demo no tiene autenticación ni pruebas de navegador end-to-end. La API valida la identidad declarada del perfil de demostración; esa comprobación no reemplaza autenticación/autorización real para Beta.
+La demo no tiene autenticación ni pruebas de navegador end-to-end. En un despliegue estático sin el servidor `/api`, las operaciones requieren un backend disponible y mostrarán error si no responde. La API valida la identidad declarada del perfil de demostración; esa comprobación no reemplaza autenticación/autorización real para Beta.
 
 ## Datos de prueba
 Los nombres, fotos externas, empresas, calificaciones, conversaciones, estados de verificación y montos son ficticios. Wallet, firma/aceptación de acuerdos, evidencia, mediación y pagos solo actualizan estado de demostración: no transfieren dinero, suben archivos ni crean contratos legales.

@@ -4,7 +4,12 @@ export async function api(path, options = {}) {
     headers: { 'Content-Type': 'application/json', ...(options.headers || {}) },
     ...options
   })
-  if (!response.ok) throw new Error((await response.json()).message || 'Error de conexión')
+  if (!response.ok) {
+    let message = `Error de API (${response.status})`
+    const body = await response.text()
+    try { message = JSON.parse(body).message || body || message } catch { message = body || message }
+    throw new Error(message)
+  }
   return response.json()
 }
 export const getProfessionals = (params = '') => api(`/professionals${params}`)

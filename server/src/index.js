@@ -4,6 +4,7 @@ import cors from 'cors'
 import helmet from 'helmet'
 import morgan from 'morgan'
 import { repository } from './repository.js'
+import { requestQueryFilters } from './requestQuery.js'
 
 const app = express()
 app.use(helmet())
@@ -41,13 +42,18 @@ app.post('/api/projects', async (req, res) => {
   return res.status(201).json(project)
 })
 
-app.get('/api/requests', async (req, res) => res.json(await repository.listPrivateRequests({ clientUserId: req.query.clientUserId, recipientId: req.query.recipientId, participantId: req.query.participantId })))
+app.get('/api/requests', async (req, res) => {
+  const filters = requestQueryFilters(req.query)
+  if (!filters) return res.status(400).json({ message: 'Indica participantId, clientUserId o recipientId para limitar la consulta' })
+  return res.json(await repository.listPrivateRequests(filters))
+})
 app.post('/api/requests', async (req, res) => {
   const request = await repository.createPrivateRequest(req.body || {})
   if (request.invalid) return res.status(400).json({ message: 'La solicitud está incompleta o contiene un tipo no válido' })
   if (request.forbidden) return res.status(403).json({ message: 'El destinatario o la identidad del solicitante no corresponden' })
   if (request.notFound) return res.status(404).json({ message: request.message })
   if (request.conflict) return res.status(409).json({ message: 'Ya existe una solicitud o Match para este proyecto y estos perfiles' })
+  if (request.duplicate) return res.status(200).json(request.request)
   return res.status(201).json(request)
 })
 app.patch('/api/requests/:id', async (req, res) => {
