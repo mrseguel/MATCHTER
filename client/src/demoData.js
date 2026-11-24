@@ -71,3 +71,15 @@ export const ROLE_PROFILE_IDS = {
   Profesional: [6],
   Empresa: [2],
 }
+
+ // Photographs are stock illustrations, not the identities of the fictional accounts.
+ const portraits={1:'men/32',2:'men/44',3:'men/52',4:'men/65',5:'men/36',6:'women/44','demo-client':'women/68','client-rodrigo':'men/22','client-sebastian':'men/46'}
+ export const demoPortrait=p=>p?.avatar|| (portraits[String(p?.id)]?'https://randomuser.me/api/portraits/'+portraits[String(p.id)]+'.jpg':null)
+ export const DEMO_JOBS=[
+ {id:'demo-contract-carlos',matchId:'demo-match-carlos',projectRef:'demo-project-carlos',providerId:1,clientId:CLIENT_ID,project:'Ampliación de habitación',scope:'Ampliación de 15 m² con estructura de madera, techumbre, aislación y terminaciones básicas.',signed:false,notarized:false,idOk:false,paid:0,demoSeed:true},
+ {id:'demo-contract-luis',matchId:'demo-match-luis',projectRef:'demo-project-luis',providerId:5,clientId:CLIENT_ID,project:'Renovación de cocina',scope:'Fabricación e instalación de muebles de cocina, cubierta y terminaciones de carpintería. No incluye artefactos ni obras sanitarias.',stages:[['Medición y fabricación','15 Dic 2026',650000],['Instalación de muebles','5 Ene 2027',900000],['Ajustes y entrega','25 Ene 2027',450000]],signed:false,notarized:false,idOk:false,paid:0,demoSeed:true}
+ ]
+ export const DEMO_CHATS={
+ 'demo-contract-carlos':[{me:false,t:'¡Hola! Soy Carlos. Puedo pasar a revisar las medidas de tu ampliación esta semana.'},{me:true,t:'Hola Carlos, ¿podrías venir el jueves por la tarde?'},{me:false,t:'Sí, a las 16:00 me acomoda. Te llevo una propuesta de materiales y plazos.'}],
+ 'demo-contract-luis':[{me:false,t:'Hola, te comparto la propuesta para los muebles de cocina.'},{me:true,t:'Gracias, Luis. ¿Incluye instalación y cubierta?'},{me:false,t:'Sí, ambos están incluidos. Podemos revisar los colores antes de fabricar.'}]
+ }
