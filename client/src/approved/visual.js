@@ -110,11 +110,11 @@ function Explore({pros,seen,act,setView,saved,filt,setFilt,fl,setFl}){
 }
 function Overlay({title,onBack,children,right}){return html`<div className="ov"><div className="hd"><button className="chip" onClick=${onBack}>←</button><span className="logo">MATCHTER<small>${title}</small></span><span style=${{width:40}}>${right}</span></div><div className="main">${children}</div></div>`}
 
-function ProView({p,onBack,act}){
+function ProView({p,onBack,act,portfolioItems=[],onPortfolio}){
  return html`<${Overlay} title="Perfil Profesional" onBack=${onBack}>
   <h2>Sobre mí</h2><p style=${{fontSize:14}}>${p.name} cuenta con más de 15 años de experiencia en el rubro de la construcción en Temuco. ${p.bio}</p>
-  <div className="card"><div className="row sp"><b>Portafolio de Proyectos</b><span style=${{color:'#ff5a00',fontSize:13}}>Ver todos (${p.jobs})</span></div>
-   <div className="row" style=${{marginTop:10}}>${[[IMG.casa,'Ampliación en Lomas'],[IMG.techo,'Techumbre y estructura'],[IMG.cocina,'Remodelación cocina']].map(([i,t])=>html`<div key=${t} style=${{flex:1,textAlign:'center',fontSize:12}}><img src=${i} alt=${t} style=${{width:'100%',height:76,objectFit:'cover',borderRadius:12,display:'block'}}/>${t}</div>`)}</div></div>
+  <div className="card"><div className="row sp"><b>Portafolio de Proyectos</b><button className="portfolio-all" onClick=${onPortfolio}>Ver todos (${portfolioItems.length})</button></div>
+   ${portfolioItems.length?html`<div className="row" style=${{marginTop:10}}>${portfolioItems.slice(0,3).map(item=>html`<button className="portfolio-preview" key=${item.id} onClick=${onPortfolio}>${item.kind==='image'?html`<img src=${item.url} alt=${item.caption}/>`:html`<span>▶ Video</span>`}${item.caption}</button>`)}</div>`:html`<p className="mut">Este perfil todavía no tiene fotos ni videos.</p>`}</div>
   <h3>Calificaciones y Reclamos</h3>
   <div className="card row sp"><div><b style=${{fontSize:26}}>⭐ ${p.r}</b> / 5<div className="mut">(${p.n} evaluaciones)</div></div><div><b>🛡️ 0 Reclamos</b><div className="mut">Resueltos</div></div></div>
   <h3>Historial de Clientes y Empresas</h3>
@@ -351,4 +351,4 @@ function FavoriteProfiles({profiles,onBack,onOpen,onAct,onRemove}){
   </div>`):html`<div className="card"><b>No tienes perfiles guardados</b><p className="mut">Puedes guardar perfiles mientras exploras.</p></div>`}
  <//>`;
 }
-export { html,Ic,PROS,FL0,CARDS,Landing,Explore,SwipeCard,Jobs,Messages,Contract,ContractsTab,NotaryFlow,Wallet,WalletTab,Chat,Profile,Security,Admin,MatchScreen,ProView,Overlay,FavoriteProfiles };
+export { IMG,html,Ic,PROS,FL0,CARDS,Landing,Explore,SwipeCard,Jobs,Messages,Contract,ContractsTab,NotaryFlow,Wallet,WalletTab,Chat,Profile,Security,Admin,MatchScreen,ProView,Overlay,FavoriteProfiles };

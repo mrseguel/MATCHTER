@@ -6,7 +6,7 @@ import {identity,pairKey,toggleMember,mayHire,sendSocialMessage,decideSocialMess
 const uid=()=>globalThis.crypto?.randomUUID?.()||Date.now()+'-'+Math.random().toString(36).slice(2)
 const categories=['Obra gruesa','Electricidad','Gasfitería','Carpintería','Pintura','Arquitectura','Remodelación','Terminaciones','Otros']
 const MAX_BYTES=40*1024*1024
-const DEMO_CLIPS=[
+export const DEMO_CLIPS=[
   {
     "id": "stock-8965566",
     "author": "1",

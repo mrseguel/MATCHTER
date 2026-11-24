@@ -1,14 +1,18 @@
-import React, { useRef, useState } from 'react'
+import React, { useRef, useState, useEffect } from 'react'
 import { DEMO_CLIENT, DEMO_CLIENTS, DEMO_PROJECTS, ROLE_PROFILE_IDS } from './demoData.js'
 import { createProject as saveProject, createPrivateRequest as savePrivateRequest, updatePrivateRequest } from './api.js'
 import { buildProfileRequest, buildProjectInterestRequest, canRespondToRequest, requestDedupeKey, submitRequestWithApi, decideRequestWithApi } from './requestFlow.js'
 import { Admin } from './components/Admin.jsx'
-import {html, PROS, FL0, CARDS, Landing, Explore, Jobs, Messages, Contract, ContractsTab, NotaryFlow, Wallet, WalletTab, Chat, Profile, Security, MatchScreen, ProView, Overlay, FavoriteProfiles} from './approved/visual.js'
+import {html, PROS, FL0, CARDS, Landing, Explore, Messages, Contract, ContractsTab, NotaryFlow, Wallet, WalletTab, Chat, Profile, Security, MatchScreen, ProView, Overlay, FavoriteProfiles, IMG} from './approved/visual.js'
 import { Profile as DemoProfile } from './components/Profile.jsx'
 import { Projects } from './components/Projects.jsx'
 import { PrivateRequests } from './components/PrivateRequests.jsx'
 import { RequestForm } from './components/RequestForm.jsx'
-import { Community } from './features/community/Community.jsx'
+import { Community, DEMO_CLIPS } from './features/community/Community.jsx'
+import { Quoter } from './features/quotes/Quoter.jsx'
+import './features/quotes/quotes.css'
+import { Portfolio, seedPortfolio } from './features/portfolio/Portfolio.jsx'
+import './features/portfolio/portfolio.css'
 import './features/community/community.css'
 
 export function App() {
@@ -26,6 +30,10 @@ export function App() {
   const [projects, setProjects] = useState(DEMO_PROJECTS)
   const [requests, setRequests] = useState([])
   const [jobs, setJobs] = useState([])
+  const [priceEntries,setPriceEntries]=useState([])
+  const [portfolio,setPortfolio]=useState(()=>seedPortfolio(IMG,DEMO_CLIPS))
+  const mediaUrls=useRef(new Set())
+  useEffect(()=>()=>{mediaUrls.current.forEach(url=>URL.revokeObjectURL(url));mediaUrls.current.clear()},[])
   const [matches, setMatches] = useState([])
   const [match, setMatch] = useState(null)
   const [view, setView] = useState(null)
@@ -55,6 +63,10 @@ export function App() {
   const clientById = id => DEMO_CLIENTS.find(client => String(client.id) === String(id))
   const profileById = id => [...pros, ...DEMO_CLIENTS].find(profile => String(profile.id) === String(id))
   const roleProfile = profileById(role === 'Cliente' ? null : activeProviderId)
+  const ownProfile=role==='Cliente'?activeClient:roleProfile
+  const ownerMedia=id=>portfolio.filter(p=>id!=null&&String(p.ownerId)===String(id))
+  const addPortfolio=(file,caption)=>{if(!ownProfile)return;const url=URL.createObjectURL(file);mediaUrls.current.add(url);setPortfolio(ps=>[...ps,{id:globalThis.crypto?.randomUUID?.()||String(Date.now()),ownerId:String(ownProfile.id),kind:file.type.startsWith('image/')?'image':'video',url,caption,local:true}])}
+  const removePortfolio=id=>{const item=ownerMedia(ownProfile?.id).find(p=>p.id===id);if(!item)return;if(item.local){URL.revokeObjectURL(item.url);mediaUrls.current.delete(item.url)}setPortfolio(ps=>ps.filter(p=>p!==item))}
   const contactForJob = job => {
     if (role === 'Cliente') return profileById(job.providerId) || DEMO_CLIENT
     const profile = profileById(job.clientId)
@@ -268,21 +280,22 @@ export function App() {
     exit=${() => setRole(account.type)}
   />`
 
- const SUB={videos:'Match Play',proyectos:'Proyectos',solicitudes:'Solicitudes',mensajes:'Mensajes',wallet:'Wallet',contratos:'Contratos',trabajos:'Portafolio',perfil:'Mi perfil',seguridad:'Reclamos'};
- const NAV=[['videos',html`<svg viewBox="0 0 24 24" width="1em" height="1em" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><rect x="3" y="4" width="18" height="16" rx="4"/><path d="m10 8 6 4-6 4Z"/></svg>`,'Match Play'],['contratos','📄','Contratos'],['explorar','🧭','Explorar'],['mensajes','💬','Mensajes'],['seguridad','🛡️','Reclamos'],['perfil','👤','Mi perfil']];
+ const SUB={videos:'Match Play',cotizador:'Cotizador inteligente',proyectos:'Proyectos',solicitudes:'Solicitudes',mensajes:'Mensajes',wallet:'Wallet',contratos:'Contratos',trabajos:'Portafolio',perfil:'Mi perfil',seguridad:'Reclamos'};
+ const NAV=[['videos',html`<svg viewBox="0 0 24 24" width="1em" height="1em" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><rect x="3" y="4" width="18" height="16" rx="4"/><path d="m10 8 6 4-6 4Z"/></svg>`,'Match Play'],['contratos','📄','Contratos'],['cotizador',html`<svg viewBox="0 0 24 24" width="1em" height="1em" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><rect x="5" y="2.5" width="14" height="19" rx="2"/><path d="M8 7h8M8 12h1M15 12h1M8 16h1M15 16h1"/></svg>`,'Cotizador'],['explorar','🧭','Explorar'],['mensajes','💬','Mensajes'],['seguridad','🛡️','Reclamos'],['perfil','👤','Mi perfil']];
   const uiJobs=jobs.filter(item=>role==='Cliente'?String(item.clientId)===String(activeClient.id):String(item.providerId)===String(activeProviderId)).map(item=>({...item,pid:item.id}))
   const uiContacts=uiJobs.map(item=>({...contactForJob(item),id:item.id}))
   const j=view&&uiJobs.find(item=>item.id===view.id)
   const vp=view?.t==='pro'?profileById(view.id):j?contactForJob(j):null
   const goTab=k=>{setView(null);setTab(k==='explorar'&&role!=='Cliente'?'proyectos':k)}
  return html`<div className="app">
-  <div className="hd"><button className="chip" style=${{width:44}} onClick=${()=>{setAccount(null);setView(null);setMatch(null);setRequestDraft(null)}}>←</button><span className="logo">MATCHTER${SUB[tab]?html`<small>${SUB[tab]}</small>`:''}</span>${tab==='wallet'?html`<button className="chip" style=${{minWidth:44,borderRadius:'50%'}} onClick=${()=>toast('Pago protegido: tus fondos quedan en custodia hasta dar tu conformidad')}>?</button>`:tab==='explorar'?html`<button className="chip" style=${{minWidth:44}} onClick=${()=>setFiltersOpen(f=>!f)}>🎚️${(filters.cats.length+['inm','ver','top','emp'].filter(k=>filters[k]).length+(filters.dist?1:0))||''}</button>`:html`<span style=${{width:44}}></span>`}</div>
+  <div className="hd"><button className="chip" style=${{width:44}} onClick=${()=>{if(['trabajos','wallet'].includes(tab)){goTab('perfil');return}setAccount(null);setView(null);setMatch(null);setRequestDraft(null)}}>←</button><span className="logo">MATCHTER${SUB[tab]?html`<small>${SUB[tab]}</small>`:''}</span>${tab==='wallet'?html`<button className="chip" style=${{minWidth:44,borderRadius:'50%'}} onClick=${()=>toast('Pago protegido: tus fondos quedan en custodia hasta dar tu conformidad')}>?</button>`:tab==='explorar'?html`<button className="chip" style=${{minWidth:44}} onClick=${()=>setFiltersOpen(f=>!f)}>🎚️${(filters.cats.length+['inm','ver','top','emp'].filter(k=>filters[k]).length+(filters.dist?1:0))||''}</button>`:html`<span style=${{width:44}}></span>`}</div>
   <div className=${'main'+(tab==='explorar'?' fit':'')+(tab==='videos'?' community-main':'')}>
    <div hidden=${tab!=='videos'} className="community-mount"><${Community} active=${tab==='videos'} actor=${role==='Cliente'?activeClient:roleProfile} role=${role} profiles=${pros} clients=${DEMO_CLIENTS} inboxSignal=${communityInboxSignal} onOpenProfile=${p=>setView({t:'pro',id:p.id})}/></div>
    ${tab==='explorar'&&role==='Cliente'&&html`<${Explore} pros=${pros} seen=${seen} act=${act} setView=${setView} saved=${saved} filt=${filtersOpen} setFilt=${setFiltersOpen} fl=${filters} setFl=${setFilters}/>`}
       ${tab === 'proyectos' && html`<${Projects} role=${role} projects=${projects} requests=${currentRequests} clientId=${activeClient.id} providerId=${roleProfile?.id} onCreate=${createPublicProject} onInterest=${expressInterest}/>`}
       ${tab === 'solicitudes' && html`<${PrivateRequests} role=${role} requests=${currentRequests} clientId=${activeClient.id} profileIds=${role === 'Cliente' ? [] : [activeProviderId]} onAccept=${id => decideRequest(id, 'accepted')} onReject=${id => decideRequest(id, 'rejected')}/>`}
-   ${tab==='trabajos'&&html`<${Jobs} jobs=${uiJobs} pros=${uiContacts} setView=${setView}/>`}
+   ${tab==='cotizador'&&html`<${Quoter} key=${String(ownProfile?.id)} role=${role} actor=${ownProfile} profiles=${pros} entries=${priceEntries} setEntries=${setPriceEntries} onProfile=${p=>setView({t:'pro',id:p.id})} onContact=${p=>openProfileRequest(p)}/>`}
+   ${tab==='trabajos'&&html`<${Portfolio} key=${String(ownProfile?.id)} owner=${ownProfile} items=${ownerMedia(ownProfile?.id)} editable=${true} onAdd=${addPortfolio} onRemove=${removePortfolio}/>`}
    ${tab==='mensajes'&&html`<${React.Fragment}><button className="btn out" style=${{marginBottom:10}} onClick=${()=>{goTab('videos');setCommunityInboxSignal(n=>n+1)}}>💬 Mensajes de Match Play</button><${Messages} jobs=${uiJobs} pros=${uiContacts} chats=${chats} setView=${setView}/><//>`}
    ${tab==='contratos'&&html`<${ContractsTab} jobs=${uiJobs} pros=${uiContacts} setView=${setView}/>`}
    ${tab==='wallet'&&html`<${WalletTab} jobs=${uiJobs} pros=${uiContacts} pay=${pay} cards=${cards} addCard=${addCard} setView=${setView}/>`}
@@ -292,7 +305,8 @@ export function App() {
   <div className="nav community-nav">${NAV.map(([k,i,l])=>html`<button key=${k} className=${(tab===k||(k==='explorar'&&role!=='Cliente'&&tab==='proyectos')||(k==='perfil'&&['wallet','trabajos'].includes(tab)))?'on':''} onClick=${()=>goTab(k)}><span>${i}</span>${l}${k==='mensajes'&&uiJobs.some(item=>(chats[item.id]||[]).length)&&html`<i className="badge">${uiJobs.filter(item=>(chats[item.id]||[]).length).length}</i>`}</button>`)}</div>
   ${view&&view.t==='favorites'&&html`<${FavoriteProfiles} profiles=${pros.filter(p=>saved.includes(p.id))} onBack=${()=>setView(null)} onOpen=${p=>setView({t:'pro',id:p.id})} onAct=${act} onRemove=${p=>setSaved(s=>s.filter(id=>id!==p.id))}/>`}
 ${view?.t === 'demo-profile' && html`<${Overlay} title="Gestión de perfil demo" onBack=${()=>setView(null)}><${DemoProfile} role=${role} clientProfile=${activeClient} clientOptions=${DEMO_CLIENTS} onClientChange=${changeClient} activeProvider=${roleProfile} providerOptions=${pros.filter(item => ROLE_PROFILE_IDS[role]?.includes(item.id))} onProviderChange=${changeProvider} priv=${privacy} setPriv=${setPrivacy} onRoleChange=${changeRole} onSecurity=${() => setTab('seguridad')} onAdmin=${() => setRole('admin')} savedProfiles=${pros.filter(item => saved.includes(item.id))} likedProfiles=${pros.filter(item => likes.includes(item.id))} onOpenProfile=${id => setView({t:'pro',id})} onRemoveFavorite=${id => setSaved(previous => previous.filter(item => item !== id))}/><//>`}
-  ${view&&view.t==='pro'&&vp&&html`<${ProView} p=${vp} onBack=${()=>setView(null)} act=${act}/>`}
+  ${view&&view.t==='pro'&&vp&&html`<${ProView} p=${vp} onBack=${()=>setView(null)} act=${act} portfolioItems=${ownerMedia(vp.id)} onPortfolio=${()=>setView({t:'portfolio',id:vp.id})}/>`}
+  ${view?.t==='portfolio'&&profileById(view.id)&&html`<${Overlay} title="Portafolio" onBack=${()=>setView({t:'pro',id:view.id})}><${Portfolio} key=${String(view.id)} owner=${profileById(view.id)} items=${ownerMedia(view.id)}/><//>`}
   ${view&&view.t==='contract'&&j&&vp&&html`<${Contract} j=${j} p=${vp} onBack=${()=>setView(null)} setJobs=${setJobs} setView=${setView} openDispute=${openDispute}/>`}
   ${view&&view.t==='wallet'&&j&&vp&&j.paid<3&&j.notarized&&html`<${Wallet} j=${j} p=${vp} onBack=${()=>setView({t:'contract',id:view.id})} pay=${pay} cards=${cards} addCard=${addCard}/>`}
   ${view&&view.t==='notary'&&j&&vp&&html`<${NotaryFlow} j=${j} p=${vp} onBack=${()=>setView({t:'contract',id:view.id})} onPatch=${patch=>setJobs(js=>js.map(x=>x.id===j.id?{...x,...patch}:x))}/>`}
