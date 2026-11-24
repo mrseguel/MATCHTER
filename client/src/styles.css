@@ -139,3 +139,12 @@ button:focus-visible,input:focus-visible,select:focus-visible,textarea:focus-vis
 
 /* Specialty catalogue: same original chips, grouped only when expanded. */
 .landing-specialties h3{margin-bottom:6px}.specialties-intro{line-height:1.5;margin:0 0 10px}.specialties-group{margin:12px 0 4px}.specialties-group h4{font-size:13px;color:var(--n);margin:0 0 8px}.specialties-group .ochip{max-width:100%;overflow-wrap:anywhere;white-space:normal}.impact-detail[hidden],#specialties-detail[hidden]{display:none!important}
+
+
+/* Refined landing, with a neutral editorial purpose panel. */
+.impact-card{background:#fff;border:1px solid var(--line);border-left:3px solid var(--o);border-radius:12px;padding:16px;margin:18px 0 16px;box-shadow:0 3px 12px #17213a08}
+.impact-kicker{color:var(--mut);font-size:11px;letter-spacing:.5px}.impact-card h3{font-size:18px}.impact-card p{font-size:13px;color:var(--tx)}
+.specialties-preview{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:7px}.specialties-preview .ochip{text-align:center;padding:8px 3px;font-size:11px;white-space:normal;overflow-wrap:anywhere}
+.weekly-grid{display:grid;grid-template-columns:1.25fr 1fr;gap:10px;padding-bottom:16px}.weekly-card{margin-bottom:0;background:var(--soft);min-width:0;padding:12px}.weekly-card p{font-size:12px;line-height:1.5;margin:9px 0 0}.weekly-person{display:flex;align-items:center;gap:7px;margin:12px 0}.weekly-person>div:last-child{min-width:0}.weekly-person b,.weekly-person small{display:block;font-size:11px;line-height:1.35;overflow-wrap:anywhere}.weekly-person b{font-size:12px}
+.profile-photo-edit{position:relative;flex:none}.profile-photo-button{position:absolute;right:-3px;bottom:-3px;display:grid;place-items:center;width:28px;height:28px;border:2px solid #fff;border-radius:50%;background:var(--o);color:#fff;cursor:pointer;font-size:17px}.profile-photo-button input{position:absolute;width:100%;height:100%;inset:0;opacity:0;cursor:pointer;padding:0}.profile-photo-button:focus-within{outline:2px solid var(--o);outline-offset:2px}
+@media(max-width:350px){.weekly-grid{grid-template-columns:1fr}.specialties-preview .ochip{font-size:10px}}
