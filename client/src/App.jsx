@@ -8,6 +8,8 @@ import { Profile as DemoProfile } from './components/Profile.jsx'
 import { Projects } from './components/Projects.jsx'
 import { PrivateRequests } from './components/PrivateRequests.jsx'
 import { RequestForm } from './components/RequestForm.jsx'
+import { Community } from './features/community/Community.jsx'
+import './features/community/community.css'
 
 export function App() {
   const [account, setAccount] = useState(null)
@@ -265,7 +267,7 @@ export function App() {
     exit=${() => setRole(account.type)}
   />`
 
- const SUB={proyectos:'Proyectos',solicitudes:'Solicitudes',mensajes:'Mensajes',wallet:'Wallet',contratos:'Contratos',trabajos:'Portafolio',perfil:'Mi perfil',seguridad:'Reclamos'};
+ const SUB={videos:'Comunidad',proyectos:'Proyectos',solicitudes:'Solicitudes',mensajes:'Mensajes',wallet:'Wallet',contratos:'Contratos',trabajos:'Portafolio',perfil:'Mi perfil',seguridad:'Reclamos'};
  const NAV=[['explorar','🧭','Explorar'],['trabajos','💼','Portafolio'],['contratos','📄','Contratos'],['mensajes','💬','Mensajes'],['wallet','💳','Wallet'],['perfil','👤','Mi perfil'],['seguridad','🛡️','Reclamos']];
   const uiJobs=jobs.filter(item=>role==='Cliente'?String(item.clientId)===String(activeClient.id):String(item.providerId)===String(activeProviderId)).map(item=>({...item,pid:item.id}))
   const uiContacts=uiJobs.map(item=>({...contactForJob(item),id:item.id}))
@@ -273,8 +275,9 @@ export function App() {
   const vp=view?.t==='pro'?profileById(view.id):j?contactForJob(j):null
   const goTab=k=>{setView(null);setTab(k==='explorar'&&role!=='Cliente'?'proyectos':k)}
  return html`<div className="app">
-  <div className="hd"><button className="chip" style=${{width:44}} onClick=${()=>{setAccount(null);setView(null);setMatch(null);setRequestDraft(null)}}>←</button><span className="logo">MATCHTER${SUB[tab]?html`<small>${SUB[tab]}</small>`:''}</span>${tab==='wallet'?html`<button className="chip" style=${{minWidth:44,borderRadius:'50%'}} onClick=${()=>toast('Pago protegido: tus fondos quedan en custodia hasta dar tu conformidad')}>?</button>`:tab==='explorar'?html`<button className="chip" style=${{minWidth:44}} onClick=${()=>setFiltersOpen(f=>!f)}>🎚️${(filters.cats.length+['inm','ver','top','emp'].filter(k=>filters[k]).length+(filters.dist?1:0))||''}</button>`:html`<span style=${{width:44}}></span>`}</div>
-  <div className=${'main'+(tab==='explorar'?' fit':'')}>
+  <div className="hd"><button className="chip" style=${{width:44}} onClick=${()=>{setAccount(null);setView(null);setMatch(null);setRequestDraft(null)}}>←</button><span className="logo">MATCHTER${SUB[tab]?html`<small>${SUB[tab]}</small>`:''}</span><button className="chip community-entry" aria-label="Abrir comunidad de videos" onClick=${()=>goTab('videos')}><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" aria-hidden="true"><rect x="3" y="4" width="18" height="16" rx="4"/><path d="m10 8 6 4-6 4Z"/></svg> Videos</button>${tab==='wallet'?html`<button className="chip" style=${{minWidth:44,borderRadius:'50%'}} onClick=${()=>toast('Pago protegido: tus fondos quedan en custodia hasta dar tu conformidad')}>?</button>`:tab==='explorar'?html`<button className="chip" style=${{minWidth:44}} onClick=${()=>setFiltersOpen(f=>!f)}>🎚️${(filters.cats.length+['inm','ver','top','emp'].filter(k=>filters[k]).length+(filters.dist?1:0))||''}</button>`:html`<span style=${{width:44}}></span>`}</div>
+  <div className=${'main'+(tab==='explorar'?' fit':'')+(tab==='videos'?' community-main':'')}>
+   <div hidden=${tab!=='videos'} className="community-mount"><${Community} active=${tab==='videos'} actor=${role==='Cliente'?activeClient:roleProfile} role=${role} profiles=${pros} clients=${DEMO_CLIENTS} onHire=${p=>openProfileRequest(p)} onOpenProfile=${p=>setView({t:'pro',id:p.id})}/></div>
    ${tab==='explorar'&&role==='Cliente'&&html`<${Explore} pros=${pros} seen=${seen} act=${act} setView=${setView} saved=${saved} filt=${filtersOpen} setFilt=${setFiltersOpen} fl=${filters} setFl=${setFilters}/>`}
       ${tab === 'proyectos' && html`<${Projects} role=${role} projects=${projects} requests=${currentRequests} clientId=${activeClient.id} providerId=${roleProfile?.id} onCreate=${createPublicProject} onInterest=${expressInterest}/>`}
       ${tab === 'solicitudes' && html`<${PrivateRequests} role=${role} requests=${currentRequests} clientId=${activeClient.id} profileIds=${role === 'Cliente' ? [] : [activeProviderId]} onAccept=${id => decideRequest(id, 'accepted')} onReject=${id => decideRequest(id, 'rejected')}/>`}
