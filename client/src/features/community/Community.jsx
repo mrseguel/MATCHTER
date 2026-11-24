@@ -52,22 +52,25 @@ export const DEMO_CLIPS=[
 
 function Video({post,active}){
  const ref=useRef(null),[muted,setMuted]=useState(false),[failed,setFailed]=useState(false),[playing,setPlaying]=useState(false),[feedback,setFeedback]=useState(null)
- const feedbackTimer=useRef(null),manualPause=useRef(false)
+ const feedbackTimer=useRef(null),manualPause=useRef(false),visible=useRef(false),attempt=useRef(0),wantsAudio=useRef(true)
+ const sound=(el,value)=>{el.defaultMuted=value;el.muted=value;setMuted(value)}
+ const start=(el)=>{const n=++attempt.current;sound(el,!wantsAudio.current);const fallback=()=>{if(n!==attempt.current||!visible.current||manualPause.current||!el.isConnected)return;if(!el.muted){sound(el,true);el.play().catch(()=>{if(n===attempt.current)setPlaying(false)})}else setPlaying(false)};try{el.play().catch(fallback)}catch{fallback()}}
  useEffect(()=>()=>clearTimeout(feedbackTimer.current),[])
  useEffect(()=>{setFailed(false)},[post.url])
  useEffect(()=>{
   const el=ref.current
   if(!el||failed)return
-  if(!active){el.pause();return}
+  if(!active){visible.current=false;++attempt.current;el.pause();return}
   const root=el.closest('.cm-feed')
-  if(!('IntersectionObserver' in window)){return}
-  const observer=new IntersectionObserver(entries=>{for(const e of entries){if(e.isIntersecting&&e.intersectionRatio>=.65){if(!manualPause.current)el.play().catch(error=>{if(error?.name==='NotAllowedError'&&!el.muted&&!manualPause.current&&active&&el.isConnected){el.muted=true;setMuted(true);el.play().catch(()=>{})}})}else{manualPause.current=false;el.pause();setFeedback(null)}}},{root,threshold:[0,.65,1]})
+  const update=on=>{visible.current=on;if(on){if(!manualPause.current)start(el)}else{++attempt.current;manualPause.current=false;el.pause();setFeedback(null)}}
+  if(!('IntersectionObserver' in window)){update(true);return()=>{visible.current=false;++attempt.current;el.pause()}}
+  const observer=new IntersectionObserver(entries=>{for(const e of entries){const on=e.isIntersecting&&e.intersectionRatio>=.65;if(on!==visible.current)update(on)}},{root,threshold:[0,.65,1]})
   observer.observe(el)
-  return()=>{observer.disconnect();el.pause()}
+  return()=>{observer.disconnect();visible.current=false;++attempt.current;el.pause()}
  },[active,post.url,failed])
- const togglePlayback=()=>{const el=ref.current;if(!el||!active)return;const resume=el.paused;manualPause.current=!resume;if(resume)el.play().catch(()=>{});else el.pause();setFeedback(resume?'play':'pause');clearTimeout(feedbackTimer.current);feedbackTimer.current=setTimeout(()=>setFeedback(null),850)}
+ const togglePlayback=()=>{const el=ref.current;if(!el||!active)return;const resume=el.paused;manualPause.current=!resume;if(resume){visible.current=true;start(el)}else{++attempt.current;el.pause()}setFeedback(resume?'play':'pause');clearTimeout(feedbackTimer.current);feedbackTimer.current=setTimeout(()=>setFeedback(null),850)}
  if(!post.url||failed)return html`<div className="cm-poster"><div className="cm-video-fallback"><${Film} size=${28}/><b>${failed?'Video no disponible en este momento':'Ejemplo sin video'}</b>${post.source&&html`<a href=${post.source} target="_blank" rel="noopener noreferrer">Ver video en su fuente original ↗</a>`}</div></div>`
- return html`<${React.Fragment}><video ref=${ref} src=${post.url} muted=${muted} loop playsInline preload="none" aria-label=${post.caption} onClick=${togglePlayback} onPlay=${()=>setPlaying(true)} onPause=${()=>setPlaying(false)} onError=${()=>setFailed(true)}></video><button className=${'cm-playback-center'+(feedback?' flash':'')} aria-label=${playing?'Pausar video':'Reproducir video'} onClick=${togglePlayback}><span aria-hidden="true">${(feedback?feedback==='pause':playing)?html`<${Pause} size=${36}/>`:html`<${Play} size=${36}/>`}</span></button><button className="cm-sound" aria-label=${muted?'Activar sonido':'Silenciar'} onClick=${()=>{const el=ref.current;const next=!el?.muted;if(el){el.muted=next;if(!next&&active&&el.paused){manualPause.current=false;el.play().catch(()=>{})}}setMuted(next)}}>${muted?html`<${VolumeX} size=${19}/>`:html`<${Volume2} size=${19}/>`}</button><//>`
+ return html`<${React.Fragment}><video ref=${ref} src=${post.url} muted=${muted} loop playsInline preload="metadata" aria-label=${post.caption} onClick=${togglePlayback} onPlay=${()=>setPlaying(true)} onPause=${()=>setPlaying(false)} onError=${()=>setFailed(true)}></video><button className=${'cm-playback-center'+(feedback?' flash':'')} aria-label=${playing?'Pausar video':'Reproducir video'} onClick=${togglePlayback}><span aria-hidden="true">${(feedback?feedback==='pause':playing)?html`<${Pause} size=${36}/>`:html`<${Play} size=${36}/>`}</span></button><button className="cm-sound" aria-label=${muted?'Activar sonido':'Silenciar'} onClick=${()=>{const el=ref.current;if(!el)return;const next=!el.muted;wantsAudio.current=!next;sound(el,next);if(!next&&active){visible.current=true;manualPause.current=false;start(el)}}}>${muted?html`<${VolumeX} size=${19}/>`:html`<${Volume2} size=${19}/>`}</button><//>`
 }
 export function Community({active,actor,role,profiles,clients,inboxSignal=0,onOpenProfile}){
  const me=identity(actor?.id)
