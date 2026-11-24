@@ -15,3 +15,5 @@ export function decideSocialMessage(threads,key,actor,status){
  if(!t||t.status!=='pending'||t.recipient!==identity(actor)||!['accepted','rejected'].includes(status))return threads
  return {...threads,[key]:{...t,status}}
 }
+
+export function servicePrompt(kind){return kind==='quote'?'Hola, me interesa solicitar un presupuesto por tus servicios.':kind==='project'?'Hola, vi tu publicación y me gustaría conversar sobre un proyecto.':''}
