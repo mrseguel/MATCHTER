@@ -21,3 +21,15 @@
 
 /* Tap the video to pause/resume; show a brief centered action indicator. */
 .cm-playback-center{position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);z-index:2;width:72px;height:72px;border:0;border-radius:50%;padding:0;background:transparent;color:white;display:grid;place-items:center;cursor:pointer;touch-action:pan-y}.cm-playback-center span{width:72px;height:72px;border-radius:50%;display:grid;place-items:center;background:#0008;opacity:0;transition:opacity .15s;pointer-events:none}.cm-playback-center.flash span,.cm-playback-center:focus-visible span{opacity:1}.cm-playback-center:focus-visible{outline:2px solid white;outline-offset:3px}.cm-author-row{display:flex;align-items:center;flex-wrap:wrap;gap:7px}.cm-author-row .cm-author{min-width:0;overflow-wrap:anywhere}.cm-contact{border:0;border-radius:999px;padding:5px 11px;background:var(--o);color:#fff;font-size:12px;line-height:1.4;font-weight:700;cursor:pointer;white-space:nowrap;box-shadow:0 1px 4px #0004}.cm-contact:focus-visible{outline:2px solid white;outline-offset:2px}
+
+/* Balanced top controls and black-to-transparent scrim, without covering the video. */
+.cm{--cm-edge:20px;--cm-top:14px;--cm-corner-width:88px}
+.cm-overlay-header{padding:var(--cm-top) var(--cm-edge) 24px;background:linear-gradient(to bottom,#000 0%,rgba(0,0,0,.82) 27%,rgba(0,0,0,.48) 60%,rgba(0,0,0,0) 100%)}
+.cm-brand-row .cm-publish-overlay,.cm-follow-top{display:flex;align-items:center;justify-content:center;gap:4px;width:var(--cm-corner-width);min-height:36px;height:36px;padding:6px;border:1px solid #ffffff9c;border-radius:999px;background:transparent;color:#fff;font-size:11px;font-weight:600;line-height:1;white-space:nowrap;text-shadow:0 1px 4px #000;box-shadow:0 1px 5px #0004;filter:none}
+.cm-follow-top{top:var(--cm-top);right:var(--cm-edge);z-index:4;cursor:pointer}
+.cm-brand-row .cm-publish-overlay svg,.cm-follow-top svg{width:15px;height:15px;flex-shrink:0}
+.cm-follow-top span{line-height:1}
+.cm-overlay-header .cm-brand{font-size:21px}
+@media(max-width:380px){.cm{--cm-edge:16px;--cm-corner-width:76px}.cm-brand-row .cm-publish-overlay,.cm-follow-top{font-size:10px;padding:5px;gap:3px}}
+@media(max-width:340px){.cm{--cm-edge:14px;--cm-corner-width:70px}.cm-overlay-header .cm-brand{font-size:19px}}
+@media(max-height:650px){.cm{--cm-top:12px}.cm-overlay-header{padding-bottom:20px}}
