@@ -125,3 +125,14 @@ label>input,label>select,label>textarea{margin-top:4px}
 button:focus-visible,input:focus-visible,select:focus-visible,textarea:focus-visible{outline:2px solid #f4510b;outline-offset:2px}
 @media(max-width:380px){.project-filters{grid-template-columns:1fr}.request-row{align-items:flex-start;flex-direction:column}.project-action{align-items:flex-start}}
 
+
+/* Landing: editorial impact panel, using the approved palette and type. */
+.impact-card{background:var(--soft);border:1px solid var(--line);border-radius:14px;margin:10px 0 0;padding:13px 14px;color:var(--tx)}
+.impact-kicker{font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.65px;color:var(--o);margin-bottom:6px}
+.impact-card h3{font-size:17px;line-height:1.28;margin:0 0 8px;color:var(--n)}
+.impact-card p{font-size:12px;line-height:1.55;margin:0 0 10px;color:var(--tx)}
+.impact-toggle{display:flex;align-items:center;justify-content:space-between;gap:8px;width:100%;text-align:left;border:0;background:transparent;padding:4px 0;color:var(--o);font:inherit;font-size:12px;font-weight:700;cursor:pointer}
+.impact-toggle span{font-size:20px;line-height:1}
+.impact-detail{border-top:1px solid var(--line);margin-top:8px;padding-top:12px}
+.impact-detail h4{font-size:14px;margin:0 0 8px}
+.impact-detail strong{display:block;font-size:13px;line-height:1.4;color:var(--n)}

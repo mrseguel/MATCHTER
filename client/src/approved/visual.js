@@ -294,7 +294,7 @@ function Admin({pros,setPros,jobs,disputes,setDisputes,pays,setPays,tab,setTab,e
 
 const TYPES=[['👤','Perfil clientes','Busca y contrata profesionales para tu proyecto'],['🔨','Perfil maestros','Ofrece tus servicios de obra y oficios'],['📐','Profesionales y contratistas','Arquitectos, ingenieros y contratistas independientes'],['🏢','Perfil empresas','Constructoras y empresas que buscan o ofrecen proyectos']];
 function Landing({onEnter}){
- const [auth,setAuth]=useState(null);const [more,setMore]=useState(false);
+ const [auth,setAuth]=useState(null);const [more,setMore]=useState(false);const [impactOpen,setImpactOpen]=useState(false);
  const SP=['Carpintería','Electricidad','Gasfitería','Herrería','Pintura'].concat(more?['Albañilería','Techumbre','Cerámica','Climatización']:[]);
  return html`<div className="app"><div className="main" style=${{paddingBottom:0}}>
   <div className="logo" style=${{textAlign:'center',fontSize:26,margin:'4px 0 12px'}}>MATCHTER</div>
@@ -304,6 +304,19 @@ function Landing({onEnter}){
   <div className="st3"><div><b>1,500+ 🛡️</b>Profesionales verificados</div><div><b>500+ ✔</b>Proyectos completados en Temuco</div><div><b>4.8/5 ⭐</b>Calificación promedio</div></div>
   <h3 style=${{marginBottom:2}}>Diferencias clave</h3><div className="mut" style=${{marginBottom:8}}>Más que recomendaciones, confianza real</div>
   <div className="tiles"><div className="tile">📷 Portafolios visibles</div><div className="tile">🏅 Calificaciones verificadas</div><div className="tile">🔒 Pago protegido</div></div>
+  <section className="impact-card" aria-labelledby="impact-title">
+   <div className="impact-kicker">Nuestro propósito</div>
+   <h3 id="impact-title">La confianza no debería depender de la suerte.</h3>
+   <p>Encontrar a quién confiar tu hogar o tu proyecto no debería depender únicamente de una recomendación. MATCHTER nace para cambiar la forma en que clientes y profesionales de la construcción se encuentran, se conocen y trabajan juntos.</p>
+   <button type="button" className="impact-toggle" aria-expanded=${impactOpen} aria-controls="impact-detail" onClick=${()=>setImpactOpen(v=>!v)}>${impactOpen?'Ver menos':'Descubre el cambio que queremos generar'} <span aria-hidden="true">${impactOpen?'⌃':'›'}</span></button>
+   ${impactOpen&&html`<div id="impact-detail" className="impact-detail">
+    <h4>Una nueva forma de construir confianza</h4>
+    <p>Durante años, muchas personas han buscado maestros, contratistas y empresas preguntando a conocidos, revisando publicaciones en redes sociales o aceptando al primero que está disponible, sin contar siempre con información suficiente para comparar. Y muchos buenos trabajadores dependen de que alguien los recomiende para conseguir su próxima oportunidad.</p>
+    <p>MATCHTER busca transformar esa realidad. Un espacio donde los clientes puedan conocer trabajos anteriores, comparar perfiles, revisar experiencias y elegir con mayor información; y donde maestros, profesionales y empresas puedan demostrar lo que saben hacer, construir su reputación y llegar a nuevos clientes por sus propios méritos.</p>
+    <p>Con herramientas de verificación, comunicación, acuerdos y pagos protegidos, buscamos que ambas partes puedan trabajar con mayor claridad y respaldo. No se trata solo de encontrar a alguien: se trata de poder elegir con confianza.</p>
+    <strong>Más oportunidades para quienes construyen. Más tranquilidad para quienes contratan.</strong>
+   </div>`}
+  </section>
   <h3>Especialidades disponibles</h3><div className="wrap">${SP.map(s=>html`<span key=${s} className="ochip">${s}</span>`)}</div>
   <button className="btn out" style=${{marginTop:12}} onClick=${()=>setMore(m=>!m)}>${more?'Ver menos ‹':'Ver todas ›'}</button>
   <h3>Destacados de la semana</h3>
