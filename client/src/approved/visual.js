@@ -1,3 +1,4 @@
+import {demoPortrait} from '../demoData.js'
 import React, { useState, useRef, useEffect } from "react";
 import htm from "htm";
 const ICONS={
@@ -110,9 +111,13 @@ function Explore({pros,seen,act,setView,saved,filt,setFilt,fl,setFl}){
 }
 function Overlay({title,onBack,children,right}){return html`<div className="ov"><div className="hd"><button className="chip" onClick=${onBack}>←</button><span className="logo">MATCHTER<small>${title}</small></span><span style=${{width:40}}>${right}</span></div><div className="main">${children}</div></div>`}
 
+function DemoAvatar({p,size=48}){
+ const src=demoPortrait(p)
+ return html`<div className="av" style=${{width:size,height:size,borderRadius:'50%',flexShrink:0,overflow:'hidden',background:p?.c||'#e6e9ef'}}>${src?html`<img src=${src} alt="Foto referencial de perfil" style=${{width:'100%',height:'100%',objectFit:'cover'}} onError=${e=>{e.currentTarget.style.display='none'}}/>`:(p?.e||'👤')}</div>`
+}
 function ProView({p,onBack,act,portfolioItems=[],onPortfolio}){
  return html`<${Overlay} title="Perfil Profesional" onBack=${onBack}>
-  <h2>Sobre mí</h2><p style=${{fontSize:14}}>${p.name} cuenta con más de 15 años de experiencia en el rubro de la construcción en Temuco. ${p.bio}</p>
+  <div className="card row"><${DemoAvatar} p=${p} size=${76}/><div><b style=${{fontSize:20}}>${p.name}</b><div className="mut">${p.role} · ${p.loc}</div><small>Foto referencial · perfil demo</small></div></div><h2>Sobre mí</h2><p style=${{fontSize:14}}>${p.name} cuenta con más de 15 años de experiencia en el rubro de la construcción en Temuco. ${p.bio}</p>
   <div className="card"><div className="row sp"><b>Portafolio de Proyectos</b><button className="portfolio-all" onClick=${onPortfolio}>Ver todos (${portfolioItems.length})</button></div>
    ${portfolioItems.length?html`<div className="row" style=${{marginTop:10}}>${portfolioItems.slice(0,3).map(item=>html`<button className="portfolio-preview" key=${item.id} onClick=${onPortfolio}>${item.kind==='image'?html`<img src=${item.url} alt=${item.caption}/>`:html`<span>▶ Video</span>`}${item.caption}</button>`)}</div>`:html`<p className="mut">Este perfil todavía no tiene fotos ni videos.</p>`}</div>
   <h3>Calificaciones y Reclamos</h3>
@@ -133,43 +138,44 @@ function Jobs({jobs,pros,setView}){
 const SUM=STAGES.reduce((a,s)=>a+s[2],0);
 const rutOk=r=>{const c=r.replace(/[^0-9kK]/g,'').toUpperCase();if(c.length<8)return false;const b=c.slice(0,-1),d=c.slice(-1);let s=0,m=2;for(let i=b.length-1;i>=0;i--){s+=+b[i]*m;m=m===7?2:m+1}const e=11-(s%11);return d===(e===11?'0':e===10?'K':String(e))};
 function Contract({j,p,onBack,setJobs,setView,openDispute}){
- const nxt=j.paid;
- const steps=[['Validación de Identidad (ClaveÚnica / Cédula)',!!j.idOk],['Firma del Contratista',true],['Tu Firma Digital',!!j.signed],['Certificación Notarial Automatizada',!!j.notarized]];
+ const nxt=j.paid;const stages=j.stages||STAGES,total=stages.reduce((a,x)=>a+x[2],0);
+ const steps=[['Validación de Identidad (ClaveÚnica / Cédula)',!!j.idOk],['Firma del Contratista',true],['Tu Firma Digital',!!j.signed],['Autorización notarial (simulada)',!!j.notarized]];
  const cur=steps.findIndex(x=>!x[1]);
  return html`<${Overlay} title="CONTRATOS" onBack=${onBack}>
-  <h2 style=${{fontSize:22,marginBottom:4}}>Resumen del Acuerdo de Trabajo</h2>
+  <h2 style=${{fontSize:22,marginBottom:4}}>Resumen del Acuerdo de Trabajo</h2><p className="mut">Contrato de demostración · sin validez legal</p>
   <div className="mut" style=${{fontSize:14,marginBottom:12}}>Proyecto: ${j.project} - Temuco<br/>Matched: ${p.name} (Contratista) & Cliente</div>
-  <div className="card"><b style=${{fontSize:18}}>Detalle y Alcance</b><p style=${{fontSize:14,margin:'6px 0 0'}}>Ampliación de habitación de 15 m² en primer piso con estructura de madera, techumbre y terminaciones básicas.</p></div>
+  <div className="card"><b style=${{fontSize:18}}>Detalle y Alcance</b><p style=${{fontSize:14,margin:'6px 0 0'}}>${j.scope||'Alcance ilustrativo del acuerdo; confirmar condiciones con el proveedor antes de contratar.'}</p></div>
   <div className="card"><b style=${{fontSize:18}}>Etapas e Hitos de Pago</b><div style=${{marginTop:10}}>
-   ${STAGES.map((s,i)=>{const done=i<j.paid,now=i===j.paid;const col=done?'#17a34a':now?'#2563eb':'var(--line)';return html`<div key=${i} className="row" style=${{alignItems:'stretch',gap:10}}>
-    <div style=${{display:'flex',flexDirection:'column',alignItems:'center',width:30,flex:'none'}}><span style=${{width:30,height:30,borderRadius:'50%',background:col,color:done||now?'#fff':'var(--mut)',display:'flex',alignItems:'center',justifyContent:'center',fontSize:done?18:10,fontWeight:700}}>${done?'✓':Math.round(s[2]/SUM*100)+'%'}</span>${i<STAGES.length-1&&html`<span style=${{flex:1,width:3,background:col,margin:'2px 0'}}></span>`}</div>
+   ${stages.map((s,i)=>{const done=i<j.paid,now=i===j.paid;const col=done?'#17a34a':now?'#2563eb':'var(--line)';return html`<div key=${i} className="row" style=${{alignItems:'stretch',gap:10}}>
+    <div style=${{display:'flex',flexDirection:'column',alignItems:'center',width:30,flex:'none'}}><span style=${{width:30,height:30,borderRadius:'50%',background:col,color:done||now?'#fff':'var(--mut)',display:'flex',alignItems:'center',justifyContent:'center',fontSize:done?18:10,fontWeight:700}}>${done?'✓':Math.round(s[2]/total*100)+'%'}</span>${i<stages.length-1&&html`<span style=${{flex:1,width:3,background:col,margin:'2px 0'}}></span>`}</div>
     <div className="row sp" style=${{flex:1,alignItems:'flex-start',paddingBottom:12}}><div style=${{fontSize:14}}><b>Etapa ${i+1}: ${s[0]}</b><div className="mut">Estimada: ${s[1]}<br/>Pago sujeto a conformidad</div></div><b style=${{fontSize:13,whiteSpace:'nowrap'}}>${fmt(s[2])}</b></div></div>`})}</div></div>
   <div className="card"><b style=${{fontSize:18}}>Plazos y Entregas</b><div className="row" style=${{gap:20,flexWrap:'wrap',marginTop:8}}><div className="row"><span style=${{fontSize:34}}>📅</span><div><div className="mut">Fecha de Inicio:</div><b>01 Dic 2026</b></div></div><div className="row"><span style=${{fontSize:34}}>🕐</span><div><div className="mut">Fecha de Término Estimada:</div><b>30 Ene 2027</b></div></div></div></div>
   <div className="card" style=${{border:'2px solid transparent',background:'linear-gradient(var(--card),var(--card)) padding-box,linear-gradient(90deg,#17a34a,#2563eb) border-box'}}>
-   <div className="row" style=${{alignItems:'flex-start'}}><span style=${{fontSize:44,color:'#17a34a'}}>🏅</span><div style=${{flex:1}}><b style=${{fontSize:18}}>Respaldo Legal y Notarial</b><div className="tag g" style=${{display:'block',margin:'8px 0',padding:'6px 12px'}}>● Enlace Digital: Notaría Online Autorizada</div></div></div>
+   <div className="row" style=${{alignItems:'flex-start'}}><span style=${{fontSize:44,color:'#17a34a'}}>🏅</span><div style=${{flex:1}}><b style=${{fontSize:18}}>Respaldo Legal y Notarial</b><div className="tag g" style=${{display:'block',margin:'8px 0',padding:'6px 12px'}}>● Flujo de notaría online · simulación</div></div></div>
    <b>Paso de Firma Digital</b>
    ${steps.map((x,i)=>html`<div key=${i} className="row" style=${{fontSize:14,margin:'6px 0'}}><span style=${{fontSize:20}}>${x[1]?'✅':i===cur?'🔵':'⚪'}</span><span>${i+1}. ${x[0]} ${i===cur?html`<span style=${{color:'#2563eb'}}>(Pendiente)</span>`:''}</span></div>`)}
-   ${j.notarized&&html`<div className="mut" style=${{marginTop:8,fontSize:12}}>Folio ${j.folio} · Certificado el ${j.certAt}<br/>Huella SHA-256: ${j.hash.slice(0,24)}…</div>`}
+   ${j.notarized&&html`<div className="mut" style=${{marginTop:8,fontSize:12}}>Folio ${j.folio} · Certificado el ${j.certAt}<br/>Huella SHA-256: ${(j.hash||'No disponible').slice(0,24)}…</div>`}
   </div>
-  ${!j.notarized?html`<button className="btn" onClick=${()=>setView({t:'notary',id:j.pid})}>${j.signed?'Continuar certificación notarial':'Firmar Acuerdo y Conectar Notaría'}</button>`
-   :nxt<3?html`<button className="btn gr" onClick=${()=>setView({t:'wallet',id:j.pid})}>Pagar etapa ${nxt+1} · ${fmt(STAGES[nxt][2])}</button>`:html`<div className="tag g">Todas las etapas pagadas</div>`}
-  <p className="mut" style=${{textAlign:'center',fontSize:12}}>Este acuerdo cuenta con respaldo legal bajo custodia de pago MATCHTER.</p>
+  ${!j.notarized?html`<button className="btn" onClick=${()=>setView({t:'notary',id:j.pid})}>${j.signed?'Continuar certificación notarial':'Firmar contrato'}</button>`
+   :nxt<3?html`<button className="btn gr" onClick=${()=>setView({t:'wallet',id:j.pid})}>Pagar etapa ${nxt+1} · ${fmt(stages[nxt][2])}</button>`:html`<div className="tag g">Todas las etapas pagadas</div>`}
+  <p className="mut" style=${{textAlign:'center',fontSize:12}}>Demostración sin firma avanzada, certificación notarial ni custodia real.</p>
   <button className="btn out" onClick=${()=>openDispute(j)}>⚠️ Reportar un problema</button>
  <//>`;
 }
 function ContractsTab({jobs,pros,setView}){
- return html`<div><h2>Contratos</h2>${jobs.length===0&&html`<p className="mut">Aún no tienes contratos. Haz match con un profesional para generarlo.</p>`}
- ${jobs.map(j=>{const p=pros.find(x=>x.id===j.pid);const d=1+(j.idOk?1:0)+(j.signed?1:0)+(j.notarized?1:0);const t=j.notarized?['Certificado','g']:j.signed?['Firmado','b']:['Por firmar',''];
-  return html`<div key=${j.pid} className="card"><div className="row sp"><div className="row"><div className="av">${p.e}</div><div><b>${j.project}</b><div className="mut">${p.name} (Contratista)</div></div></div><span className=${'tag '+t[1]}>${t[0]}</span></div>
+ return html`<div><h2>Contratos</h2><p className="mut">Acuerdos de ejemplo · firma y notaría simuladas.</p>${jobs.length===0&&html`<p className="mut">Aún no tienes contratos. Haz match con un profesional para generarlo.</p>`}
+ ${jobs.map(j=>{const p=pros.find(x=>x.id===j.pid);const d=1+(j.idOk?1:0)+(j.signed?1:0)+(j.notarized?1:0);const t=j.notarized?['Certificado demo','g']:j.signed?['Firmado','b']:['Por firmar',''];
+  return html`<div key=${j.pid} className="card"><div className="row sp"><div className="row"><${DemoAvatar} p=${p}/><div><b>${j.project}</b><div className="mut">${p.name} (Contratista)</div></div></div><span className=${'tag '+t[1]}>${t[0]}</span></div>
   <div className="row" style=${{margin:'10px 0'}}><div className="bar"><i style=${{width:(d/4*100)+'%'}}></i></div><span className="mut">${d}/4 pasos de firma</span></div>
-  <div className="mut" style=${{fontSize:12,marginBottom:8}}>Total del acuerdo: ${fmt(SUM)} · Inicio 01 Dic 2026</div>
-  <div className="row"><button className="btn sm" onClick=${()=>setView({t:'contract',id:j.pid})}>Abrir contrato</button>${!j.notarized&&html`<button className="btn sm out" onClick=${()=>setView({t:'notary',id:j.pid})}>Firmar y conectar notaría</button>`}</div></div>`})}</div>`;
+  <div className="mut" style=${{fontSize:12,marginBottom:8}}>Total del acuerdo: ${fmt((j.stages||STAGES).reduce((a,x)=>a+x[2],0))} · Inicio 01 Dic 2026</div>
+  <div className="row"><button className="btn sm" onClick=${()=>setView({t:'contract',id:j.pid})}>Abrir contrato</button>${!j.notarized&&html`<button className="btn sm out" onClick=${()=>setView({t:'notary',id:j.pid})}>Firmar contrato</button>`}</div></div>`})}</div>`;
 }
 function NotaryFlow({j,p,onBack,onPatch}){
+ const total=(j.stages||STAGES).reduce((a,x)=>a+x[2],0);
  const [st,setSt]=useState(j.notarized?3:j.signed?2:j.idOk?1:0);
  const [method,setMethod]=useState('clave');const [run,setRun]=useState('');const [busy,setBusy]=useState(false);const [err,setErr]=useState('');
  const [ok,setOk]=useState(false);const [drawn,setDrawn]=useState(false);const cv=useRef(null);const dr=useRef(false);const [prog,setProg]=useState(0);
- const validate=()=>{if(method==='clave'&&!rutOk(run)){setErr('RUN inválido. Revisa el número y el dígito verificador.');return}
+ const validate=()=>{
   setErr('');setBusy(true);setTimeout(()=>{setBusy(false);onPatch({idOk:true,idMethod:method});setSt(1)},1600)};
  const pos=e=>{const r=cv.current.getBoundingClientRect();return [(e.clientX-r.left)*cv.current.width/r.width,(e.clientY-r.top)*cv.current.height/r.height]};
  const pd=e=>{dr.current=true;const c=cv.current.getContext('2d');c.lineWidth=3;c.lineCap='round';c.lineJoin='round';c.strokeStyle='#0b1f5c';c.beginPath();const q=pos(e);c.moveTo(q[0],q[1]);e.currentTarget.setPointerCapture(e.pointerId)};
@@ -180,39 +186,39 @@ function NotaryFlow({j,p,onBack,onPatch}){
  useEffect(()=>{if(st!==2)return;let dead=false;setProg(0);
   const t=[900,1900,3100,4200].map((ms,i)=>setTimeout(()=>{if(!dead)setProg(i+1)},ms));
   const fin=setTimeout(async()=>{let h='';
-   try{const b=new TextEncoder().encode(JSON.stringify({proyecto:j.project,profesional:p.name,total:SUM,firma:(j.sig||'').length,t:Date.now()}));const d=await crypto.subtle.digest('SHA-256',b);h=Array.from(new Uint8Array(d)).map(x=>x.toString(16).padStart(2,'0')).join('')}
-   catch(e){h=(Math.random().toString(16).slice(2)+Math.random().toString(16).slice(2)).padEnd(64,'0')}
-   if(dead)return;onPatch({notarized:true,folio:'MT-'+new Date().getFullYear()+'-'+String(Math.floor(Math.random()*90000)+10000),hash:h,certAt:new Date().toLocaleString('es-CL')});setSt(3)},4800);
+   try{const b=new TextEncoder().encode(JSON.stringify({proyecto:j.project,profesional:p.name,total:total,firma:j.sig||'',t:Date.now()}));const d=await crypto.subtle.digest('SHA-256',b);h=Array.from(new Uint8Array(d)).map(x=>x.toString(16).padStart(2,'0')).join('')}
+   catch(e){h='No disponible'}
+   if(dead)return;onPatch({notarized:true,folio:'DEMO-MT-'+new Date().getFullYear()+'-'+String(Math.floor(Math.random()*90000)+10000),hash:h,certAt:new Date().toLocaleString('es-CL')});setSt(3)},4800);
   return()=>{dead=true;t.forEach(clearTimeout);clearTimeout(fin)}},[st]);
  const LB=['Identidad','Firma','Notaría','Listo'];
- const PG=['Generando documento firmado (PDF)','Calculando huella digital SHA-256','Enviando a Notaría Online autorizada','Certificación notarial emitida'];
- return html`<${Overlay} title="NOTARÍA ONLINE" onBack=${onBack}>
+ const PG=['Preparando datos del acuerdo de prueba','Calculando huella digital SHA-256','Simulando envío a notaría','Simulación finalizada'];
+ return html`<${Overlay} title="NOTARÍA ONLINE · DEMO" onBack=${onBack}>
   <div className="step">${LB.map((l,i)=>html`<div key=${l} style=${{textAlign:'center',flex:1,fontSize:11}}><div className=${'dot '+(i<st?'c':i===st?'d':'')} style=${{margin:'0 auto 4px'}}>${i<st?'✓':i+1}</div>${l}</div>`)}</div>
   ${st===0&&html`<div><h2>Validación de identidad</h2><p className="mut">Confirma quién eres antes de firmar el acuerdo con ${p.name}.</p>
    <button className=${'opt'+(method==='clave'?' sel':'')} onClick=${()=>setMethod('clave')}><span className="i">🔒</span><span><b>ClaveÚnica</b><small>Identidad digital del Estado de Chile</small></span></button>
-   <button className=${'opt'+(method==='cedula'?' sel':'')} onClick=${()=>setMethod('cedula')}><span className="i">👤</span><span><b>Cédula de identidad</b><small>Lectura segura desde el teléfono</small></span></button>
-   ${method==='clave'&&html`<div style=${{marginTop:12}}><div className="mut" style=${{fontSize:13}}>RUN</div><input type="text" value=${run} placeholder="12.345.678-5" onChange=${e=>setRun(e.target.value)} style=${{width:'100%',marginTop:4}}/><button className="chip" style=${{marginTop:6}} onClick=${()=>setRun('12.345.678-5')}>Usar RUN de ejemplo</button></div>`}
+   <button className=${'opt'+(method==='cedula'?' sel':'')} onClick=${()=>setMethod('cedula')}><span className="i">👤</span><span><b>Cédula de identidad</b><small>Método de prueba · sin lectura de datos reales</small></span></button>
+   <div className="card" style=${{marginTop:12}}><b>Identidad de prueba</b><p className="mut">Usa un usuario ficticio para recorrer el flujo. No ingreses RUN, contraseña, código de verificación ni datos de identidad reales.</p></div>
    ${err&&html`<div className="tag r" style=${{display:'block',marginTop:10}}>${err}</div>`}
-   <div className="card" style=${{marginTop:12,background:'var(--soft)',fontSize:12}}>Demostración: en producción serás redirigido al sitio oficial de ClaveÚnica. Nunca ingreses claves reales en un prototipo.</div>
-   <button className="btn" disabled=${busy} onClick=${validate}>${busy?(method==='clave'?'Redirigiendo a ClaveÚnica…':'Leyendo cédula…'):'Validar identidad'}</button>${busy&&html`<div style=${{textAlign:'center',marginTop:12}}><span className="spin"></span></div>`}</div>`}
-  ${st===1&&html`<div><h2>Firma electrónica</h2><div className="tag g">✓ Identidad validada con ${j.idMethod==='cedula'?'cédula':'ClaveÚnica'}</div>
-   <div className="card" style=${{marginTop:12,fontSize:14}}><b>${j.project}</b><div className="mut">Contratista: ${p.name} · Cliente: tú</div><div style=${{marginTop:6}}>Total del acuerdo: <b>${fmt(SUM)}</b><br/>Plazo: 01 Dic 2026 – 30 Ene 2027<br/>3 etapas, con pago sujeto a conformidad y custodia MATCHTER.</div></div>
-   <label className="row" style=${{fontSize:14,margin:'8px 0'}}><input type="checkbox" checked=${ok} onChange=${()=>setOk(v=>!v)}/> He leído y acepto el acuerdo de trabajo</label>
+   <div className="card" style=${{marginTop:12,background:'var(--soft)',fontSize:12}}>Demostración sin conexión oficial. En producción, un proveedor habilitado deberá gestionar la autenticación y la firma. MATCHTER no solicitará tu contraseña.</div>
+   <button className="btn" disabled=${busy} onClick=${validate}>${busy?(method==='clave'?'Simulando autorización de ClaveÚnica…':'Leyendo cédula…'):'Simular validación de identidad'}</button>${busy&&html`<div style=${{textAlign:'center',marginTop:12}}><span className="spin"></span></div>`}</div>`}
+  ${st===1&&html`<div><h2>Firma electrónica de prueba</h2><div className="tag g">✓ Identidad de prueba validada mediante ${j.idMethod==='cedula'?'cédula':'ClaveÚnica'}</div>
+   <div className="card" style=${{marginTop:12,fontSize:14}}><b>${j.project}</b><div className="mut">Contratista: ${p.name} · Cliente: tú</div><div style=${{marginTop:6}}>Total del acuerdo: <b>${fmt(total)}</b><br/>Plazo: 01 Dic 2026 – 30 Ene 2027<br/>3 etapas, con pago sujeto a conformidad y custodia MATCHTER.</div></div>
+   <label className="row" style=${{fontSize:14,margin:'8px 0'}}><input type="checkbox" checked=${ok} onChange=${()=>setOk(v=>!v)}/> He leído y acepto simular la firma del acuerdo</label>
    <div className="row sp"><b>Tu firma</b><button className="chip" onClick=${clr}>Limpiar</button></div>
    <canvas ref=${cv} width="600" height="240" className="sig" onPointerDown=${pd} onPointerMove=${pm} onPointerUp=${pu} onPointerCancel=${pu}></canvas>
-   <div className="mut" style=${{fontSize:12,margin:'6px 0 12px'}}>Dibuja tu firma con el dedo o el mouse.</div>
-   <button className="btn" disabled=${!ok||!drawn} onClick=${sign}>✍ Firmar electrónicamente</button></div>`}
-  ${st===2&&html`<div><h2>Certificación notarial</h2><p className="mut">Conectando con la Notaría Online autorizada…</p>
+   <div className="mut" style=${{fontSize:12,margin:'6px 0 12px'}}>Dibuja un trazo de prueba; no uses tu firma real.</div>
+   <button className="btn" disabled=${!ok||!drawn} onClick=${sign}>✍ Simular firma electrónica</button></div>`}
+  ${st===2&&html`<div><h2>Certificación notarial</h2><p className="mut">Simulando el proceso de autorización notarial. No se envían datos fuera de la demo.</p>
    ${PG.map((t,i)=>html`<div key=${i} className="card row" style=${{padding:12,marginBottom:8}}><span style=${{fontSize:22}}>${prog>i?'✅':prog===i?'🔵':'⚪'}</span><span style=${{fontSize:14}}>${t}</span></div>`)}<div style=${{textAlign:'center',marginTop:12}}><span className="spin"></span></div></div>`}
-  ${st===3&&html`<div style=${{textAlign:'center'}}><div style=${{fontSize:64,color:'#17a34a'}}>🏅</div><h2 style=${{marginBottom:4}}>¡Contrato certificado!</h2><p className="mut">El acuerdo con ${p.name} quedó firmado y certificado.</p>
-   <div className="card" style=${{textAlign:'left',fontSize:13}}><b>Certificado notarial (demostración)</b><div style=${{marginTop:6}}>Folio: <b>${j.folio}</b><br/>Fecha: ${j.certAt}<br/>Firmante: tú (identidad validada) · Contratista: ${p.name}<br/><span style=${{wordBreak:'break-all'}}>SHA-256: ${j.hash}</span></div>${j.sig&&html`<img src=${j.sig} alt="Tu firma" style=${{width:140,marginTop:8,borderBottom:'1px solid var(--line)'}}/>`}</div>
+  ${st===3&&html`<div style=${{textAlign:'center'}}><div style=${{fontSize:64,color:'#17a34a'}}>🏅</div><h2 style=${{marginBottom:4}}>¡Simulación completada!</h2><p className="mut">El acuerdo con ${p.name} ha completado el recorrido de firma y certificación ficticia. Sin validez legal.</p>
+   <div className="card" style=${{textAlign:'left',fontSize:13}}><b>Comprobante de simulación · no notarial</b><div style=${{marginTop:6}}>Folio: <b>${j.folio}</b><br/>Fecha: ${j.certAt}<br/>Firmante: tú (identidad validada) · Contratista: ${p.name}<br/><span style=${{wordBreak:'break-all'}}>SHA-256: ${j.hash}</span></div>${j.sig&&html`<img src=${j.sig} alt="Tu firma" style=${{width:140,marginTop:8,borderBottom:'1px solid var(--line)'}}/>`}</div>
    <button className="btn" onClick=${onBack}>Volver al contrato</button></div>`}
  <//>`;
 }
 function WalletBody({j,p,pay,cards,addCard,locked,onContract}){
  const [sel,setSel]=useState(0);
  if(!j)return html`<div className="card" style=${{textAlign:'center'}}><div style=${{fontSize:40}}>✅</div><b>No tienes pagos pendientes</b><p className="mut">Cuando firmes un contrato y avance una etapa, podrás pagarla aquí con custodia de fondos.</p></div>`;
- const s=STAGES[j.paid];const c=cards[Math.min(sel,cards.length-1)];
+ const s=(j.stages||STAGES)[j.paid];const c=cards[Math.min(sel,cards.length-1)];
  return html`<div>
   <h2>Pago Protegido</h2>
   <div className="card" style=${{padding:0,overflow:'hidden'}}>
@@ -239,19 +245,19 @@ function Chat({p,msgs,send,onBack}){
  const [t,setT]=useState('');
  const go=()=>{if(!t.trim())return;send(p.id,t.trim());setT('')};
  return html`<${Overlay} title=${p.name} onBack=${onBack}>
-  <div style=${{minHeight:320}}>${(msgs||[]).map((m,i)=>html`<div key=${i} className=${'msg'+(m.me?' me':'')}>${m.t}</div>`)}</div>
+  <div className="card row"><${DemoAvatar} p=${p}/><div><b>${p.name}</b><div className="mut">Conversación de demostración</div></div></div><div style=${{minHeight:320}}>${(msgs||[]).map((m,i)=>html`<div key=${i} className=${'msg'+(m.me?' me':'')}>${m.t}</div>`)}</div>
   <div className="row"><input type="text" value=${t} placeholder="Escribe un mensaje…" onChange=${e=>setT(e.target.value)} onKeyDown=${e=>e.key==='Enter'&&go()}/><button className="btn sm" onClick=${go}>Enviar</button></div>
  <//>`;
 }
 
 function Messages({jobs,pros,chats,setView}){
- return html`<div><h2>Mensajes</h2>${jobs.map(j=>{const p=pros.find(x=>x.id===j.pid);const m=(chats[j.pid]||[]).slice(-1)[0];return html`<div key=${j.pid} className="card row" onClick=${()=>setView({t:'chat',id:j.pid})} style=${{cursor:'pointer'}}><div className="av">${p.e}</div><div style=${{flex:1}}><b>${p.name}</b><div className="mut">${m?m.t:'Inicia la conversación'}</div></div></div>`})}${jobs.length===0&&html`<p className="mut">Haz match para chatear.</p>`}</div>`;
+ return html`<div><h2>Mensajes</h2><p className="mut">Conversaciones de ejemplo y contactos de esta sesión.</p>${jobs.map(j=>{const p=pros.find(x=>x.id===j.pid);const m=(chats[j.pid]||[]).slice(-1)[0];return html`<div key=${j.pid} className="card row" onClick=${()=>setView({t:'chat',id:j.pid})} style=${{cursor:'pointer'}}><${DemoAvatar} p=${p}/><div style=${{flex:1}}><b>${p.name}</b><div className="mut">${m?m.t:'Inicia la conversación'}</div></div></div>`})}${jobs.length===0&&html`<p className="mut">Haz match para chatear.</p>`}</div>`;
 }
 
-function Profile({priv,setPriv,onAdmin}){
- const rows=[['Nombre/Razón social','Carlos Muñoz González'],['RUT','12.345.678-9'],['Teléfono','+56 9 1234 5678'],['Correo','c.munoz@email.com']];
+function Profile({person,priv,setPriv,onAdmin}){
+ const rows=[['Nombre/Razón social',person?.name||'Perfil demo'],['RUT','Dato de ejemplo'],['Teléfono','Dato de ejemplo'],['Correo','Dato de ejemplo']];
  return html`<div>
-  <div className="card row"><div className="av" style=${{width:72,height:72,fontSize:36,borderRadius:'50%',border:'3px solid #2563eb',background:'#d9a066'}}>👷</div><div><b style=${{fontSize:19}}>Carlos Muñoz</b> <span className="tag b">VERIFICADO</span><div className="mut">Maestro constructor · Temuco · 18 trabajos</div><span className="tag g">CUENTA PROFESIONAL / CONTRATISTA</span></div></div>
+  <div className="card row"><${DemoAvatar} p=${person} size=${72}/><div><b style=${{fontSize:19}}>${person?.name||'Mi perfil'}</b> <span className="tag b">DEMO</span><div className="mut">${person?.role} · ${person?.loc||'Temuco'}</div><small>Foto referencial</small></div></div>
   <div className="card"><b style=${{fontSize:17}}>Información de contacto 🔒</b>${rows.map((r,i)=>html`<div key=${i} className="row sp" style=${{margin:'10px 0',fontSize:13}}><span>${r[0]}: ${r[1]}</span><button className="tog" style=${{background:PRIV[priv[i]][1]}} onClick=${()=>setPriv(pv=>pv.map((v,k)=>k===i?(v+1)%3:v))}>${PRIV[priv[i]][0]}</button></div>`)}<div className="mut">Toca para cambiar quién ve cada dato.</div></div>
   <div className="card"><b style=${{fontSize:17}}>Reputación y calificaciones</b><div className="row" style=${{marginTop:8}}><div><b style=${{fontSize:30}}>4.9</b>/5<div className="mut">65 evaluaciones</div></div><div style=${{flex:1}}>${[[5,58],[4,5],[3,2],[2,0],[1,0]].map(([s,n])=>html`<div key=${s} className="row" style=${{fontSize:12}}>${s}★<div className="bar"><i style=${{width:(n/58*100)+'%'}}></i></div>${n}</div>`)}</div></div><div className="mut" style=${{marginTop:8}}>“Excelente trabajo, muy profesional” - Juan P.<br/>“Cumplió plazos y presupuesto” - María L.</div></div>
   <div className="card"><b style=${{fontSize:17}}>Historial de reclamos y transparencia</b><table><tbody>${[['16.01.2023','Incumplimiento de plazos','Cerrado - Acuerdo mutuo'],['13.01.2023','Calidad de obra','Resuelto por mediación'],['09.04.2023','Calidad de obra','Fallo a favor del cliente']].map(r=>html`<tr key=${r[0]+r[2]}><td>${r[0]}</td><td>${r[1]}</td><td>${r[2]}</td></tr>`)}</tbody></table></div><button className="btn out" onClick=${onAdmin}>⚙️ Módulo de administración</button></div>`;
