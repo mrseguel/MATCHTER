@@ -6,27 +6,71 @@ import {identity,pairKey,toggleMember,mayHire,sendSocialMessage,decideSocialMess
 const uid=()=>globalThis.crypto?.randomUUID?.()||Date.now()+'-'+Math.random().toString(36).slice(2)
 const categories=['Obra gruesa','Electricidad','Gasfitería','Carpintería','Pintura','Arquitectura','Remodelación','Terminaciones','Otros']
 const MAX_BYTES=40*1024*1024
+const DEMO_CLIPS=[
+  {
+    "id": "stock-8965566",
+    "author": "1",
+    "category": "Carpintería",
+    "caption": "Trabajo de carpintería en terreno.",
+    "credit": "Mikael Blomkvist",
+    "source": "https://www.pexels.com/video/a-man-drilling-a-wood-8965566/",
+    "url": "https://videos.pexels.com/video-files/8965566/8965566-uhd_2160_3840_25fps.mp4",
+    "seconds": 4
+  },
+  {
+    "id": "stock-11567463",
+    "author": "2",
+    "category": "Obra gruesa",
+    "caption": "Avance de construcción de un edificio.",
+    "credit": "RECALL FROM THE FUTURE :)",
+    "source": "https://www.pexels.com/video/workers-on-building-construction-11567463/",
+    "url": "https://videos.pexels.com/video-files/11567463/11567463-hd_1080_1920_30fps.mp4",
+    "seconds": 20
+  },
+  {
+    "id": "stock-17998566",
+    "author": "6",
+    "category": "Pintura",
+    "caption": "Aplicación de pintura con rodillo durante una renovación.",
+    "credit": "shakar adalat",
+    "source": "https://www.pexels.com/video/a-man-in-a-yellow-vest-is-painting-a-wall-17998566/",
+    "url": "https://videos.pexels.com/video-files/17998566/17998566-uhd_2160_3840_60fps.mp4",
+    "seconds": 14
+  },
+  {
+    "id": "stock-34292920",
+    "author": "demo-client",
+    "category": "Remodelación",
+    "caption": "Inspiración: cocina terminada de estilo moderno.",
+    "credit": "Fernanda Neitzel",
+    "source": "https://www.pexels.com/video/modern-black-kitchen-interior-design-34292920/",
+    "url": "https://videos.pexels.com/video-files/34292920/14527924_2160_3840_24fps.mp4",
+    "seconds": 6
+  }
+]
+
 
 function Video({post,active}){
- const ref=useRef(null),[muted,setMuted]=useState(true)
+ const ref=useRef(null),[muted,setMuted]=useState(true),[failed,setFailed]=useState(false)
+ useEffect(()=>{setFailed(false)},[post.url])
  useEffect(()=>{
   const el=ref.current
-  if(!el)return
+  if(!el||failed)return
   if(!active){el.pause();return}
-  const observer=new IntersectionObserver(entries=>{for(const e of entries){if(e.isIntersecting&&e.intersectionRatio>=.7)el.play().catch(()=>{});else el.pause()}},{threshold:[0,.7,1]})
+  const root=el.closest('.cm-feed')
+  if(!('IntersectionObserver' in window)){return}
+  const observer=new IntersectionObserver(entries=>{for(const e of entries){if(e.isIntersecting&&e.intersectionRatio>=.65){el.muted=muted;el.play().catch(()=>{})}else el.pause()}},{root,threshold:[0,.65,1]})
   observer.observe(el)
   return()=>{observer.disconnect();el.pause()}
- },[active,post.url])
- if(!post.url)return html`<div className="cm-poster" style=${post.poster?{backgroundImage:'url('+post.poster+')'}:{}}><span><${Film} size=${28}/> Ejemplo de publicación · sin video</span></div>`
- return html`<video ref=${ref} src=${post.url} muted=${muted} loop playsInline controls preload="metadata" aria-label=${post.caption}></video><button className="cm-sound" aria-label=${muted?'Activar sonido':'Silenciar'} onClick=${()=>setMuted(v=>!v)}>${muted?html`<${VolumeX} size=${19}/>`:html`<${Volume2} size=${19}/>`}</button>`
+ },[active,post.url,failed,muted])
+ if(!post.url||failed)return html`<div className="cm-poster"><div className="cm-video-fallback"><${Film} size=${28}/><b>${failed?'Video no disponible en este momento':'Ejemplo sin video'}</b>${post.source&&html`<a href=${post.source} target="_blank" rel="noopener noreferrer">Ver video en su fuente original ↗</a>`}</div></div>`
+ return html`<${React.Fragment}><video ref=${ref} src=${post.url} muted=${muted} loop playsInline controls preload="none" aria-label=${post.caption} onError=${()=>setFailed(true)}></video><button className="cm-sound" aria-label=${muted?'Activar sonido':'Silenciar'} onClick=${()=>setMuted(v=>!v)}>${muted?html`<${VolumeX} size=${19}/>`:html`<${Volume2} size=${19}/>`}</button><//>`
 }
 export function Community({active,actor,role,profiles,clients,inboxSignal=0,onOpenProfile}){
  const me=identity(actor?.id)
  const people=[...profiles,...clients]
  const person=id=>people.find(p=>identity(p.id)===identity(id))
- const [posts,setPosts]=useState(()=>[
-  ...profiles.filter(p=>p.img).slice(0,3).map((p,i)=>({id:'sample-'+p.id,author:identity(p.id),poster:p.img,category:p.cat,caption:['Avance de obra · construcción en Temuco','Resultado de un proyecto residencial','Detalles de carpintería y techumbre'][i],likes:[],comments:[],sample:true}))
- ])
+ const [posts,setPosts]=useState(()=>DEMO_CLIPS.map(p=>({...p,likes:[],comments:[],sample:true})))
  const [follows,setFollows]=useState({})
  const [threads,setThreads]=useState({})
  const [hidden,setHidden]=useState({})
@@ -49,10 +93,10 @@ export function Community({active,actor,role,profiles,clients,inboxSignal=0,onOp
  const show=p=>{setPanel(p);setDraft('');setError('');setShareNotice('')}
  useEffect(()=>{if(inboxSignal!==seenInbox.current){seenInbox.current=inboxSignal;show({type:'inbox'})}},[inboxSignal])
  const sharePost=async p=>{
-  const text=(person(p.author)?.name||'Perfil')+' · Match Play\n'+p.caption
+  const text=p.sample?'Video ilustrativo · Match Play\n'+p.caption+'\nFuente: '+p.credit+' / Pexels\n'+p.source:(person(p.author)?.name||'Perfil')+' · Match Play\n'+p.caption
   try {
    if(p.file&&navigator.canShare?.({files:[p.file]})&&navigator.share){await navigator.share({title:'Match Play',text,files:[p.file]});return}
-   if(navigator.share){await navigator.share({title:'Match Play',text});return}
+   if(navigator.share){await navigator.share({title:'Match Play',text,...(p.source?{url:p.source}:{})});return}
   } catch(e){if(e.name==='AbortError')return}
   show({type:'share',postId:p.id,text})
  }
@@ -84,7 +128,7 @@ export function Community({active,actor,role,profiles,clients,inboxSignal=0,onOp
   <p className="cm-notice">Demo local · publicaciones e interacciones duran esta sesión. No ingreses datos privados.</p>
   <div className="cm-feed">${visible.length?visible.map(p=>{
    const a=person(p.author),own=p.author===me,liked=p.likes.includes(me),following=followed.includes(p.author)
-   return html`<article className="cm-video" key=${p.id}><${Video} post=${p} active=${active&&!panel}/><div className="cm-shade"></div><div className="cm-caption"><button className="cm-author" onClick=${()=>show({type:'author',author:p.author})}>@${a?.name||'Perfil'} </button><small>${a?.role||'Cliente'} · ${p.category}</small><p>${p.caption}</p>${mayHire(role,me,p.author,profiles)&&html`<button className="cm-hire" onClick=${()=>show({type:'message',author:p.author,service:true})}>Consultar servicio <span aria-hidden="true">›</span></button>`}</div>
+   return html`<article className="cm-video" key=${p.id}><${Video} post=${p} active=${active&&!panel}/><div className="cm-shade"></div><div className="cm-caption"><button className="cm-author" onClick=${()=>show({type:'author',author:p.author})}>@${a?.name||'Perfil'} </button><small>${a?.role||'Cliente'} · ${p.category}</small><p>${p.caption}</p>${p.sample&&html`<div className="cm-credit">Video ilustrativo · no corresponde a trabajos del perfil demo. <a href=${p.source} target="_blank" rel="noopener noreferrer">${p.credit} / Pexels ↗</a></div>`}${mayHire(role,me,p.author,profiles)&&html`<button className="cm-hire" onClick=${()=>show({type:'message',author:p.author,service:true})}>${p.sample?'Consultar servicio (demo)':'Consultar servicio'} <span aria-hidden="true">›</span></button>`}</div>
    <div className="cm-actions">${!own&&html`<button aria-label=${following?'Dejar de seguir':'Seguir'} onClick=${()=>setFollows(f=>({...f,[me]:toggleMember(f[me]||[],p.author)}))}>${following?html`<${UserCheck}/>`:html`<${UserPlus}/>`}<small>${following?'Siguiendo':'Seguir'}</small></button>`}<button aria-label="Me gusta video" aria-pressed=${liked} className=${liked?'liked':''} onClick=${()=>updatePost(p.id,x=>({...x,likes:toggleMember(x.likes,me)}))}><${Heart} fill=${liked?'currentColor':'none'}/><small>${p.likes.length}</small></button><button aria-label="Comentarios" onClick=${()=>show({type:'comments',postId:p.id})}><${MessageCircle}/><small>${p.comments.length}</small></button>${!own&&html`<button aria-label="Mensaje privado" onClick=${()=>show({type:'message',author:p.author})}><${Send}/><small>Mensaje</small></button>`}<button aria-label="Compartir publicación" onClick=${()=>sharePost(p)}><${Share2}/><small>Compartir</small></button><button aria-label=${own?'Eliminar publicación':'Reportar u ocultar'} onClick=${()=>show({type:own?'delete':'report',postId:p.id})}>${own?html`<${Trash2}/>`:html`<${Flag}/>`}</button></div></article>`
   }):html`<div className="cm-empty"><${Film} size=${36}/><h3>${mode==='following'?'Aún no sigues perfiles con publicaciones':'Todavía no hay videos aquí'}</h3><button className="btn out" onClick=${()=>setMode('all')}>Ver Match Play</button></div>`}</div>
   ${panel&&html`<div className="cm-modal"><div className="cm-sheet"><div className="cm-row cm-heading"><h3>${({upload:'Publicar video',comments:'Comentarios',author:'Perfil de Match Play',message:'Mensaje privado',inbox:'Mensajes de Match Play',report:'Reportar publicación',delete:'Eliminar publicación',share:'Compartir publicación'})[panel.type]}</h3><button className="cm-icon" aria-label="Cerrar" onClick=${close}><${X}/></button></div>

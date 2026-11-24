@@ -9,3 +9,10 @@ Título Match Play. Menú inferior: Community, Contratos, Explorar, Mensajes, Re
 
 ## Nombre elegido
 Match Play es el nombre de la sección de videos y su etiqueta en el menú inferior. Se conservan la navegación, diseño y funcionalidades anteriores.
+
+## Videos ilustrativos para Match Play
+Se incorporan cuatro clips verticales de Pexels como ejemplos de prueba, con enlaces originales y créditos visibles. La atribución no implica que sus autores sean usuarios de MATCHTER ni que los perfiles de demostración hayan realizado esos trabajos. Los botones de servicio y conversaciones son únicamente simulaciones. Licencia: https://www.pexels.com/license/ . No redistribuir los archivos originales como un banco de stock. El reproductor carga desde las URLs de medios derivadas de los enlaces de descarga públicos; no se han copiado archivos a GitHub. Si falla la reproducción, aparece un enlace al original. La reproducción y el peso real deben validarse en Vercel; no se ha verificado la reproducción de los MP4 en esta sesión.
+- Mikael Blomkvist: https://www.pexels.com/video/a-man-drilling-a-wood-8965566/ (4 s).
+- RECALL FROM THE FUTURE :): https://www.pexels.com/video/workers-on-building-construction-11567463/ (20 s).
+- shakar adalat: https://www.pexels.com/video/a-man-in-a-yellow-vest-is-painting-a-wall-17998566/ (14 s).
+- Fernanda Neitzel: https://www.pexels.com/video/modern-black-kitchen-interior-design-34292920/ (6 s).
