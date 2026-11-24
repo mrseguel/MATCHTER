@@ -125,7 +125,7 @@ export function Community({active,actor,role,profiles,clients,inboxSignal=0,onOp
  const myThreads=Object.entries(threads).filter(([,t])=>t.participants.includes(me))
  return html`<section className="cm" aria-label="Match Play">
   <header className="cm-overlay-header">
-   <div className="cm-brand logo" aria-label="Match Play">Match Play</div>
+   <div className="cm-brand logo" aria-label="Match Play">MATCHPLAY</div>
    <div className="cm-tabs cm-overlay-tabs" role="group" aria-label="Filtrar videos">${[['all','Para ti'],['following','Siguiendo'],['mine','Mis videos']].map(([k,label])=>html`<button key=${k} className=${mode===k?'selected':''} aria-pressed=${mode===k} onClick=${()=>{setMode(k);const feed=document.querySelector('.cm-feed');if(feed)feed.scrollTop=0}}>${label}</button>`)}</div>
   </header>
   <div className="cm-feed">${visible.length?visible.map(p=>{
