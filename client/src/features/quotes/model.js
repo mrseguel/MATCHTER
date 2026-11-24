@@ -1,18 +1,25 @@
 // Demo-only deterministic matching. A production AI interpreter must resolve exact canonical scope; it must not guess prices.
 export const norm=s=>String(s??'').normalize('NFD').replace(/[\u0300-\u036f]/g,'').toLowerCase().replace(/\s+/g,' ').trim().replace(/[.!?]+$/,'')
-export const reference={id:'CYPE-RIP030',service:'Pintura interior de muros de yeso, obra nueva, hasta 3 m, sin patologías, blanco mate, imprimación y dos manos',unit:'m2',price:3341.63,source:'Generador de precios de la construcción, CYPE Chile, RIP030',url:'https://chile.generadordeprecios.info/obra_nueva/Revestimientos/Pinturas_en_paramentos_interiores/Plasticas/RIP030_Pintura_plastica_sobre_paramento_in.html',checked:'2026-11-24',zone:'Chile, sin ajuste verificado a Temuco',scope:'Costos directos: materiales, mano de obra y herramientas. No es precio de venta ni cotización final; no incluye cálculo de gastos generales, utilidad o impuestos.',sample:'Un análisis de costo unitario; no es una muestra de precios de mercado.',confidence:'Limitada para precios de contratación locales'}
+export const reference={id:'FACTOIA-2026-PINTURA',service:'Pintura interior de muros con materiales y preparación media',unit:'m2',min:5500,max:11000,source:'factoIA · guía de precios de pintura interior, 20 abril 2026',url:'https://factoia.cl/blog/precio-metro-cuadrado-pintura-chile/',checked:'2026-11-24',zone:'Chile · no es una muestra representativa de Temuco',scope:'Pintura, mano de obra y preparación media. No cubre reparaciones mayores, humedad ni condiciones especiales; impuestos y mínimos de visita deben confirmarse.',sample:'Rango publicado en una guía comercial; tamaño de muestra no informado.',confidence:'Orientativa; requiere cotización local.'}
+export const laborReference={...reference,id:'FACTOIA-2026-MANO-OBRA',service:'Pintura interior de muros solo mano de obra',min:2800,max:5500,scope:'Solo mano de obra; no incluye pintura ni otros materiales. Confirmar preparación, impuestos y mínimos.'}
+export const demoOffers=[
+ {ownerId:'1',service:reference.service,zone:'Temuco',unit:'m2',price:9500,scope:'Dos manos de látex, preparación media, protección y materiales. Valor total ilustrativo; sin reparaciones mayores.',date:'2026-11-24',demo:true,seed:true},
+ {ownerId:'6',service:reference.service,zone:'Temuco',unit:'m2',price:10500,scope:'Preparación media, dos manos, pintura lavable y materiales. Valor total ilustrativo; sin reparación de humedad.',date:'2026-11-24',demo:true,seed:true},
+ {ownerId:'1',service:laborReference.service,zone:'Temuco',unit:'m2',price:4800,scope:'Solo mano de obra, dos manos sobre muros preparados. Materiales a cargo del cliente.',date:'2026-11-24',demo:true,seed:true}
+]
 export function parseDescription(input){
  const s=norm(input).replace(/m²/g,'m2')
  const match=s.match(/^([0-9]+(?:[.,][0-9]+)?)\s*m2\s+(?:de\s+)?(.+)$/)
  return match?{service:match[2],unit:'m2',quantity:Number(match[1].replace(',','.'))}:{service:s,unit:'servicio',quantity:1}
 }
-export function estimate(description,zone,entries,profiles,refs=[reference]){
+export function estimate(description,zone,entries,profiles,refs=[reference,laborReference]){
  const q=parseDescription(description), area=norm(zone)
  if(!q.service||!area||!Number.isFinite(q.quantity)||q.quantity<=0||q.quantity>100000)return {kind:'invalid'}
  const candidates=entries.filter(x=>norm(x.service)===q.service&&x.unit===q.unit&&norm(x.zone)===area&&Number.isFinite(x.price)&&x.price>0&&profiles.some(p=>String(p.id)===String(x.ownerId)&&!p.sus))
- if(candidates.length)return {kind:'internal',q,items:candidates.map(x=>({...x,total:Math.round(x.price*q.quantity)}))}
- const ref=refs.find(x=>norm(x.service)===q.service&&x.unit===q.unit&&['temuco','chile'].includes(area)&&Number.isFinite(x.price)&&x.price>0)
- if(ref)return {kind:'external',q,ref,total:Math.round(ref.price*q.quantity)}
+ const ref=refs.find(x=>norm(x.service)===q.service&&x.unit===q.unit&&['temuco','chile'].includes(area)&&Number.isFinite(x.min)&&Number.isFinite(x.max)&&x.min>0&&x.max>=x.min)
+ const external=ref?{ref,minTotal:Math.round(ref.min*q.quantity),maxTotal:Math.round(ref.max*q.quantity)}:null
+ if(candidates.length)return {kind:'internal',q,items:candidates.map(x=>({...x,total:Math.round(x.price*q.quantity)})),external}
+ if(external)return {kind:'external',q,...external}
  return {kind:'unavailable',q}
 }
 export function addOffer(entries,actor,offer){
