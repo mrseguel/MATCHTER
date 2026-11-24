@@ -1,24 +1,13 @@
 import React, { useRef, useState } from 'react'
-import { html } from './lib/html.js'
-import { PROS, FL0 } from './data.js'
 import { DEMO_CLIENT, DEMO_CLIENTS, DEMO_PROJECTS, ROLE_PROFILE_IDS } from './demoData.js'
 import { createProject as saveProject, createPrivateRequest as savePrivateRequest, updatePrivateRequest } from './api.js'
 import { buildProfileRequest, buildProjectInterestRequest, canRespondToRequest, requestDedupeKey, submitRequestWithApi, decideRequestWithApi } from './requestFlow.js'
 import { Admin } from './components/Admin.jsx'
-import { Chat } from './components/Chat.jsx'
-import { Contract } from './components/Contract.jsx'
-import { Explore } from './components/Explore.jsx'
-import { Jobs } from './components/Jobs.jsx'
-import { Landing } from './components/Landing.jsx'
-import { MatchScreen } from './components/MatchScreen.jsx'
-import { Messages } from './components/Messages.jsx'
-import { ProView } from './components/ProView.jsx'
-import { Profile } from './components/Profile.jsx'
+import {html, PROS, FL0, CARDS, Landing, Explore, Jobs, Messages, Contract, ContractsTab, NotaryFlow, Wallet, WalletTab, Chat, Profile, Security, MatchScreen, ProView, Overlay, FavoriteProfiles} from './approved/visual.js'
+import { Profile as DemoProfile } from './components/Profile.jsx'
 import { Projects } from './components/Projects.jsx'
 import { PrivateRequests } from './components/PrivateRequests.jsx'
 import { RequestForm } from './components/RequestForm.jsx'
-import { Security } from './components/Security.jsx'
-import { Wallet } from './components/Wallet.jsx'
 
 export function App() {
   const [account, setAccount] = useState(null)
@@ -52,6 +41,8 @@ export function App() {
   const [chats, setChats] = useState({})
   const [privacy, setPrivacy] = useState([0, 1, 2, 0])
   const [filtersOpen, setFiltersOpen] = useState(false)
+  const [cards, setCards] = useState(CARDS)
+  const addCard = () => { setCards(cs => [...cs, {b:cs.length%2?'Mastercard':'VISA', l:String(1000+cs.length*1111).slice(-4), e:'12/30', c:'#4a5570'}]); toast('Tarjeta de demostración agregada') }
 
   const toast = text => {
     setMessage(text)
@@ -237,6 +228,7 @@ export function App() {
   }
 
   const pay = (job, stage, card) => {
+    if (!job.notarized || job.paid >= 3) { toast('El contrato de demostración debe estar certificado y tener un hito pendiente'); return }
     setJobs(previous => previous.map(item => item.id === job.id ? { ...item, paid: Math.min(3, item.paid + 1) } : item))
     setPayments(previous => [{ id: `P-${303 + previous.length}`, p: `${job.project} · ${card.b}`, a: stage[2], s: 'En custodia · demo' }, ...previous])
     setView({ t: 'contract', id: job.id })
@@ -260,11 +252,11 @@ export function App() {
   }
 
   if (!account) return html`<${Landing} onEnter=${nextAccount => {
-    setAccount(nextAccount)
-    setRole(nextAccount.type)
-    if (ROLE_PROFILE_IDS[nextAccount.type]?.length) setActiveProviderId(ROLE_PROFILE_IDS[nextAccount.type][0])
-    setTab(nextAccount.type === 'Cliente' ? 'explorar' : 'proyectos')
-    toast(`Sesión de demostración: ${nextAccount.type}`)
+    const canonicalRole = ({'Perfil clientes':'Cliente','Perfil maestros':'Maestro o contratista','Profesionales y contratistas':'Profesional','Perfil empresas':'Empresa'})[nextAccount.type] || nextAccount.type
+    setAccount({...nextAccount, type:canonicalRole})
+    setRole(canonicalRole)
+    if (ROLE_PROFILE_IDS[canonicalRole]?.length) setActiveProviderId(ROLE_PROFILE_IDS[canonicalRole][0])
+    setTab(canonicalRole === 'Cliente' ? 'explorar' : 'proyectos')
   }}/>`
 
   if (role === 'admin') return html`<${Admin}
@@ -273,30 +265,36 @@ export function App() {
     exit=${() => setRole(account.type)}
   />`
 
-  const navigation = role === 'Cliente'
-    ? [['explorar', '🧭', 'Explorar'], ['proyectos', '📋', 'Proyectos'], ['solicitudes', '✉️', 'Solicitudes'], ['trabajos', '💼', 'Trabajos'], ['mensajes', '💬', 'Mensajes'], ['perfil', '👤', 'Perfil']]
-    : [['proyectos', '📋', 'Proyectos'], ['solicitudes', '✉️', 'Solicitudes'], ['trabajos', '💼', 'Trabajos'], ['mensajes', '💬', 'Mensajes'], ['perfil', '👤', 'Perfil']]
-  const job = view && jobs.find(item => item.id === view.id || item.pid === view.id)
-  const profile = view?.t === 'pro' ? profileById(view.id) : job ? contactForJob(job) : profileById(view?.id)
-
-  return html`<div className="app">
-    <div className="hd"><button className="chip" style=${{width:44}} onClick=${() => { setAccount(null); setView(null); setMatch(null) }} aria-label="Volver al inicio">←</button><span className="logo">MATCHTER<small>${role}</small></span>${tab === 'explorar' && html`<button className="chip" style=${{minWidth:44}} onClick=${() => setFiltersOpen(value => !value)} aria-label="Abrir filtros">🎚️${(filters.cats.length + ['inm', 'ver', 'top', 'emp'].filter(key => filters[key]).length + (filters.dist ? 1 : 0)) || ''}</button>`}</div>
-    <div className=${`main ${tab === 'explorar' ? 'fit' : ''}`}>
-      ${tab === 'explorar' && role === 'Cliente' && html`<${Explore} pros=${pros} seen=${seen} act=${act} setView=${setView} saved=${saved} filt=${filtersOpen} setFilt=${setFiltersOpen} fl=${filters} setFl=${setFilters}/>`}
+ const SUB={proyectos:'Proyectos',solicitudes:'Solicitudes',mensajes:'Mensajes',wallet:'Wallet',contratos:'Contratos',trabajos:'Portafolio',perfil:'Mi perfil',seguridad:'Reclamos'};
+ const NAV=[['explorar','🧭','Explorar'],['trabajos','💼','Portafolio'],['contratos','📄','Contratos'],['mensajes','💬','Mensajes'],['wallet','💳','Wallet'],['perfil','👤','Mi perfil'],['seguridad','🛡️','Reclamos']];
+  const uiJobs=jobs.filter(item=>role==='Cliente'?String(item.clientId)===String(activeClient.id):String(item.providerId)===String(activeProviderId)).map(item=>({...item,pid:item.id}))
+  const uiContacts=uiJobs.map(item=>({...contactForJob(item),id:item.id}))
+  const j=view&&uiJobs.find(item=>item.id===view.id)
+  const vp=view?.t==='pro'?profileById(view.id):j?contactForJob(j):null
+  const goTab=k=>{setView(null);setTab(k==='explorar'&&role!=='Cliente'?'proyectos':k)}
+ return html`<div className="app">
+  <div className="hd"><button className="chip" style=${{width:44}} onClick=${()=>{setAccount(null);setView(null);setMatch(null);setRequestDraft(null)}}>←</button><span className="logo">MATCHTER${SUB[tab]?html`<small>${SUB[tab]}</small>`:''}</span>${tab==='wallet'?html`<button className="chip" style=${{minWidth:44,borderRadius:'50%'}} onClick=${()=>toast('Pago protegido: tus fondos quedan en custodia hasta dar tu conformidad')}>?</button>`:tab==='explorar'?html`<button className="chip" style=${{minWidth:44}} onClick=${()=>setFiltersOpen(f=>!f)}>🎚️${(filters.cats.length+['inm','ver','top','emp'].filter(k=>filters[k]).length+(filters.dist?1:0))||''}</button>`:html`<span style=${{width:44}}></span>`}</div>
+  <div className=${'main'+(tab==='explorar'?' fit':'')}>
+   ${tab==='explorar'&&role==='Cliente'&&html`<${Explore} pros=${pros} seen=${seen} act=${act} setView=${setView} saved=${saved} filt=${filtersOpen} setFilt=${setFiltersOpen} fl=${filters} setFl=${setFilters}/>`}
       ${tab === 'proyectos' && html`<${Projects} role=${role} projects=${projects} requests=${currentRequests} clientId=${activeClient.id} providerId=${roleProfile?.id} onCreate=${createPublicProject} onInterest=${expressInterest}/>`}
       ${tab === 'solicitudes' && html`<${PrivateRequests} role=${role} requests=${currentRequests} clientId=${activeClient.id} profileIds=${role === 'Cliente' ? [] : [activeProviderId]} onAccept=${id => decideRequest(id, 'accepted')} onReject=${id => decideRequest(id, 'rejected')}/>`}
-      ${tab === 'trabajos' && html`<${Jobs} jobs=${jobs} pros=${pros} getContact=${contactForJob} setView=${setView}/>`}
-      ${tab === 'mensajes' && html`<${Messages} jobs=${jobs} pros=${pros} getContact=${contactForJob} chats=${chats} setView=${setView}/>`}
-      ${tab === 'perfil' && html`<${Profile} role=${role} clientProfile=${activeClient} clientOptions=${DEMO_CLIENTS} onClientChange=${changeClient} activeProvider=${roleProfile} providerOptions=${pros.filter(item => ROLE_PROFILE_IDS[role]?.includes(item.id))} onProviderChange=${changeProvider} priv=${privacy} setPriv=${setPrivacy} onRoleChange=${changeRole} onSecurity=${() => setTab('seguridad')} onAdmin=${() => setRole('admin')} savedProfiles=${pros.filter(item => saved.includes(item.id))} likedProfiles=${pros.filter(item => likes.includes(item.id))} onOpenProfile=${id => setView({t:'pro',id})} onRemoveFavorite=${id => setSaved(previous => previous.filter(item => item !== id))}/>`}
-      ${tab === 'seguridad' && html`<${Security} disputes=${disputes} setDisputes=${setDisputes} toast=${toast}/>`}
-    </div>
-    <div className="nav">${navigation.map(([key, icon, label]) => html`<button key=${key} className=${tab === key ? 'on' : ''} onClick=${() => setTab(key)}><span>${icon}</span>${label}${key === 'solicitudes' && currentRequests.some(request => request.status === 'pending') && html`<i className="badge">${currentRequests.filter(request => request.status === 'pending').length}</i>`}</button>`)}</div>
-    ${view?.t === 'pro' && profile && html`<${ProView} p=${profile} onBack=${() => setView(null)} onPrivateRequest=${openProfileRequest}/>`}
+   ${tab==='trabajos'&&html`<${Jobs} jobs=${uiJobs} pros=${uiContacts} setView=${setView}/>`}
+   ${tab==='mensajes'&&html`<${Messages} jobs=${uiJobs} pros=${uiContacts} chats=${chats} setView=${setView}/>`}
+   ${tab==='contratos'&&html`<${ContractsTab} jobs=${uiJobs} pros=${uiContacts} setView=${setView}/>`}
+   ${tab==='wallet'&&html`<${WalletTab} jobs=${uiJobs} pros=${uiContacts} pay=${pay} cards=${cards} addCard=${addCard} setView=${setView}/>`}
+   ${tab==='perfil'&&html`<${React.Fragment}><button className="btn out" style=${{marginBottom:10}} onClick=${()=>setView({t:'favorites'})}>♥ Perfiles guardados (${saved.length})</button><${Profile} priv=${privacy} setPriv=${setPrivacy} onAdmin=${()=>setRole('admin')}/><div className="card"><b>Gestión de demostración</b><p className="mut">Los perfiles, cifras y servicios de esta vista previa son ilustrativos.</p><div className="wrap"><button className="chip" onClick=${()=>setTab('proyectos')}>Proyectos</button><button className="chip" onClick=${()=>setTab('solicitudes')}>Solicitudes (${currentRequests.filter(r=>r.status==='pending').length})</button><button className="chip" onClick=${()=>setView({t:'demo-profile'})}>Cambiar perfil de demostración</button></div></div><//>`}
+   ${tab==='seguridad'&&html`<${Security} disputes=${disputes} setDisputes=${setDisputes} toast=${toast}/>`}
+  </div>
+  <div className="nav">${NAV.map(([k,i,l])=>html`<button key=${k} className=${(tab===k||(k==='explorar'&&role!=='Cliente'&&tab==='proyectos'))?'on':''} onClick=${()=>goTab(k)}><span>${i}</span>${l}${k==='mensajes'&&uiJobs.some(item=>(chats[item.id]||[]).length)&&html`<i className="badge">${uiJobs.filter(item=>(chats[item.id]||[]).length).length}</i>`}</button>`)}</div>
+  ${view&&view.t==='favorites'&&html`<${FavoriteProfiles} profiles=${pros.filter(p=>saved.includes(p.id))} onBack=${()=>setView(null)} onOpen=${p=>setView({t:'pro',id:p.id})} onAct=${act} onRemove=${p=>setSaved(s=>s.filter(id=>id!==p.id))}/>`}
+${view?.t === 'demo-profile' && html`<${Overlay} title="Gestión de perfil demo" onBack=${()=>setView(null)}><${DemoProfile} role=${role} clientProfile=${activeClient} clientOptions=${DEMO_CLIENTS} onClientChange=${changeClient} activeProvider=${roleProfile} providerOptions=${pros.filter(item => ROLE_PROFILE_IDS[role]?.includes(item.id))} onProviderChange=${changeProvider} priv=${privacy} setPriv=${setPrivacy} onRoleChange=${changeRole} onSecurity=${() => setTab('seguridad')} onAdmin=${() => setRole('admin')} savedProfiles=${pros.filter(item => saved.includes(item.id))} likedProfiles=${pros.filter(item => likes.includes(item.id))} onOpenProfile=${id => setView({t:'pro',id})} onRemoveFavorite=${id => setSaved(previous => previous.filter(item => item !== id))}/><//>`}
+  ${view&&view.t==='pro'&&vp&&html`<${ProView} p=${vp} onBack=${()=>setView(null)} act=${act}/>`}
+  ${view&&view.t==='contract'&&j&&vp&&html`<${Contract} j=${j} p=${vp} onBack=${()=>setView(null)} setJobs=${setJobs} setView=${setView} openDispute=${openDispute}/>`}
+  ${view&&view.t==='wallet'&&j&&vp&&j.paid<3&&j.notarized&&html`<${Wallet} j=${j} p=${vp} onBack=${()=>setView({t:'contract',id:view.id})} pay=${pay} cards=${cards} addCard=${addCard}/>`}
+  ${view&&view.t==='notary'&&j&&vp&&html`<${NotaryFlow} j=${j} p=${vp} onBack=${()=>setView({t:'contract',id:view.id})} onPatch=${patch=>setJobs(js=>js.map(x=>x.id===j.id?{...x,...patch}:x))}/>`}
+  ${view&&view.t==='chat'&&j&&vp&&html`<${Chat} p=${vp} msgs=${chats[view.id]} send=${(_id,t)=>send(j.id,t)} onBack=${()=>setView(null)}/>`}
+  ${match&&html`<${MatchScreen} p=${match.profile} onContract=${()=>{setView({t:'contract',id:match.jobId});setMatch(null);setTab('contratos')}} onClose=${()=>setMatch(null)}/>`}
     ${requestDraft && html`<${RequestForm} draft=${requestDraft} onClose=${() => setRequestDraft(null)} onSubmit=${submitRequest}/>`}
-    ${view?.t === 'contract' && job && html`<${Contract} j=${job} p=${profile} onBack=${() => setView(null)} setJobs=${setJobs} setView=${setView} openDispute=${openDispute}/>`}
-    ${view?.t === 'wallet' && job && profile && html`<${Wallet} j=${job} p=${profile} onBack=${() => setView({t:'contract',id:job.id})} pay=${pay}/>`}
-    ${view?.t === 'chat' && job && html`<${Chat} p=${profile} msgs=${chats[job.id] || []} send=${text => send(job.id, text)} onBack=${() => setView(null)}/>`}
-    ${match && html`<${MatchScreen} p=${match.profile} onContract=${() => { setView({t:'contract',id:match.jobId}); setMatch(null); setTab('trabajos') }} onClose=${() => setMatch(null)}/>`}
-    ${message && html`<div className="toast" role="status">${message}</div>`}
-  </div>`
+  ${message&&html`<div className="toast">${message}</div>`}
+ </div>`;
 }

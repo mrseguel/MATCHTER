@@ -1,0 +1,12 @@
+{
+  "framework": "vite",
+  "installCommand": "npm install",
+  "buildCommand": "npm test -w client && npm test -w server && npm run build -w client",
+  "outputDirectory": "client/dist",
+  "rewrites": [
+    {
+      "source": "/api/:path*",
+      "destination": "/api/index?__matchter_path=:path*"
+    }
+  ]
+}
