@@ -1,5 +1,5 @@
 import React, { useRef, useState, useEffect } from 'react'
-import { DEMO_CLIENT, DEMO_CLIENTS, DEMO_PROJECTS, ROLE_PROFILE_IDS } from './demoData.js'
+import { DEMO_CLIENT, DEMO_CLIENTS, DEMO_PROJECTS, ROLE_PROFILE_IDS, DEMO_JOBS, DEMO_CHATS, demoPortrait } from './demoData.js'
 import { createProject as saveProject, createPrivateRequest as savePrivateRequest, updatePrivateRequest } from './api.js'
 import { buildProfileRequest, buildProjectInterestRequest, canRespondToRequest, requestDedupeKey, submitRequestWithApi, decideRequestWithApi } from './requestFlow.js'
 import { Admin } from './components/Admin.jsx'
@@ -10,6 +10,7 @@ import { PrivateRequests } from './components/PrivateRequests.jsx'
 import { RequestForm } from './components/RequestForm.jsx'
 import { Community, DEMO_CLIPS } from './features/community/Community.jsx'
 import { Quoter } from './features/quotes/Quoter.jsx'
+import { demoOffers } from './features/quotes/model.js'
 import './features/quotes/quotes.css'
 import { Portfolio, seedPortfolio } from './features/portfolio/Portfolio.jsx'
 import './features/portfolio/portfolio.css'
@@ -22,15 +23,15 @@ export function App() {
   const [activeProviderId, setActiveProviderId] = useState(ROLE_PROFILE_IDS['Maestro o contratista'][0])
   const [tab, setTab] = useState('explorar')
   const [adminTab, setAdminTab] = useState('res')
-  const [pros, setPros] = useState(PROS)
+  const [pros, setPros] = useState(()=>PROS.map(p=>({...p,avatar:p.id===1?IMG.carlos:demoPortrait(p)})))
   const [seen, setSeen] = useState([])
   const [saved, setSaved] = useState([])
   const [likes, setLikes] = useState([])
   const [filters, setFilters] = useState(FL0)
   const [projects, setProjects] = useState(DEMO_PROJECTS)
   const [requests, setRequests] = useState([])
-  const [jobs, setJobs] = useState([])
-  const [priceEntries,setPriceEntries]=useState([])
+  const [jobs, setJobs] = useState(()=>DEMO_JOBS.map(j=>({...j})))
+  const [priceEntries,setPriceEntries]=useState(()=>demoOffers.map(x=>({...x})))
   const [portfolio,setPortfolio]=useState(()=>seedPortfolio(IMG,DEMO_CLIPS))
   const mediaUrls=useRef(new Set())
   useEffect(()=>()=>{mediaUrls.current.forEach(url=>URL.revokeObjectURL(url));mediaUrls.current.clear()},[])
@@ -48,7 +49,7 @@ export function App() {
   const [payments, setPayments] = useState([
     { id: 'P-301', p: 'Cocina · Luis Vera', a: 650000, s: 'En custodia · demo' },
   ])
-  const [chats, setChats] = useState({})
+  const [chats, setChats] = useState(()=>DEMO_CHATS)
   const [privacy, setPrivacy] = useState([0, 1, 2, 0])
   const [filtersOpen, setFiltersOpen] = useState(false)
   const [communityInboxSignal,setCommunityInboxSignal]=useState(0)
@@ -229,7 +230,7 @@ export function App() {
 
   const send = (jobId, text) => {
     const job = jobs.find(item => item.id === jobId)
-    if (!job?.matchId || !matches.some(item => item.id === job.matchId)) {
+    if (!job?.demoSeed && (!job?.matchId || !matches.some(item => item.id === job.matchId))) {
       toast('El chat se habilita cuando la solicitud haya sido aceptada')
       return
     }
@@ -283,7 +284,7 @@ export function App() {
  const SUB={videos:'Match Play',cotizador:'Cotizador inteligente',proyectos:'Proyectos',solicitudes:'Solicitudes',mensajes:'Mensajes',wallet:'Wallet',contratos:'Contratos',trabajos:'Portafolio',perfil:'Mi perfil',seguridad:'Reclamos'};
  const NAV=[['videos',html`<svg viewBox="0 0 24 24" width="1em" height="1em" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><rect x="3" y="4" width="18" height="16" rx="4"/><path d="m10 8 6 4-6 4Z"/></svg>`,'Match Play'],['contratos','📄','Contratos'],['cotizador',html`<svg viewBox="0 0 24 24" width="1em" height="1em" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><rect x="5" y="2.5" width="14" height="19" rx="2"/><path d="M8 7h8M8 12h1M15 12h1M8 16h1M15 16h1"/></svg>`,'Cotizador'],['explorar','🧭','Explorar'],['mensajes','💬','Mensajes'],['seguridad','🛡️','Reclamos'],['perfil','👤','Mi perfil']];
   const uiJobs=jobs.filter(item=>role==='Cliente'?String(item.clientId)===String(activeClient.id):String(item.providerId)===String(activeProviderId)).map(item=>({...item,pid:item.id}))
-  const uiContacts=uiJobs.map(item=>({...contactForJob(item),id:item.id}))
+  const uiContacts=uiJobs.map(item=>{const p=contactForJob(item);return {...p,avatar:demoPortrait(p),id:item.id}})
   const j=view&&uiJobs.find(item=>item.id===view.id)
   const vp=view?.t==='pro'?profileById(view.id):j?contactForJob(j):null
   const goTab=k=>{setView(null);setTab(k==='explorar'&&role!=='Cliente'?'proyectos':k)}
@@ -299,7 +300,7 @@ export function App() {
    ${tab==='mensajes'&&html`<${React.Fragment}><button className="btn out" style=${{marginBottom:10}} onClick=${()=>{goTab('videos');setCommunityInboxSignal(n=>n+1)}}>💬 Mensajes de Match Play</button><${Messages} jobs=${uiJobs} pros=${uiContacts} chats=${chats} setView=${setView}/><//>`}
    ${tab==='contratos'&&html`<${ContractsTab} jobs=${uiJobs} pros=${uiContacts} setView=${setView}/>`}
    ${tab==='wallet'&&html`<${WalletTab} jobs=${uiJobs} pros=${uiContacts} pay=${pay} cards=${cards} addCard=${addCard} setView=${setView}/>`}
-   ${tab==='perfil'&&html`<${React.Fragment}><button className="btn out" style=${{marginBottom:10}} onClick=${()=>setView({t:'favorites'})}>♥ Perfiles guardados (${saved.length})</button><div className="profile-shortcuts"><button className="card" onClick=${()=>goTab('trabajos')}><span>💼</span><b>Portafolio</b><span aria-hidden="true">›</span></button><button className="card" onClick=${()=>goTab('wallet')}><span>💳</span><b>Wallet</b><span aria-hidden="true">›</span></button></div><${Profile} priv=${privacy} setPriv=${setPrivacy} onAdmin=${()=>setRole('admin')}/><div className="card"><b>Gestión de demostración</b><p className="mut">Los perfiles, cifras y servicios de esta vista previa son ilustrativos.</p><div className="wrap"><button className="chip" onClick=${()=>setTab('proyectos')}>Proyectos</button><button className="chip" onClick=${()=>setTab('solicitudes')}>Solicitudes (${currentRequests.filter(r=>r.status==='pending').length})</button><button className="chip" onClick=${()=>setView({t:'demo-profile'})}>Cambiar perfil de demostración</button></div></div><//>`}
+   ${tab==='perfil'&&html`<${React.Fragment}><button className="btn out" style=${{marginBottom:10}} onClick=${()=>setView({t:'favorites'})}>♥ Perfiles guardados (${saved.length})</button><div className="profile-shortcuts"><button className="card" onClick=${()=>goTab('trabajos')}><span>💼</span><b>Portafolio</b><span aria-hidden="true">›</span></button><button className="card" onClick=${()=>goTab('wallet')}><span>💳</span><b>Wallet</b><span aria-hidden="true">›</span></button></div><${Profile} person=${ownProfile} priv=${privacy} setPriv=${setPrivacy} onAdmin=${()=>setRole('admin')}/><div className="card"><b>Gestión de demostración</b><p className="mut">Los perfiles, cifras y servicios de esta vista previa son ilustrativos.</p><div className="wrap"><button className="chip" onClick=${()=>setTab('proyectos')}>Proyectos</button><button className="chip" onClick=${()=>setTab('solicitudes')}>Solicitudes (${currentRequests.filter(r=>r.status==='pending').length})</button><button className="chip" onClick=${()=>setView({t:'demo-profile'})}>Cambiar perfil de demostración</button></div></div><//>`}
    ${tab==='seguridad'&&html`<${Security} disputes=${disputes} setDisputes=${setDisputes} toast=${toast}/>`}
   </div>
   <div className="nav community-nav">${NAV.map(([k,i,l])=>html`<button key=${k} className=${(tab===k||(k==='explorar'&&role!=='Cliente'&&tab==='proyectos')||(k==='perfil'&&['wallet','trabajos'].includes(tab)))?'on':''} onClick=${()=>goTab(k)}><span>${i}</span>${l}${k==='mensajes'&&uiJobs.some(item=>(chats[item.id]||[]).length)&&html`<i className="badge">${uiJobs.filter(item=>(chats[item.id]||[]).length).length}</i>`}</button>`)}</div>
