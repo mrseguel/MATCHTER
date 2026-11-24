@@ -51,7 +51,7 @@ export const DEMO_CLIPS=[
 
 
 function Video({post,active}){
- const ref=useRef(null),[muted,setMuted]=useState(true),[failed,setFailed]=useState(false),[playing,setPlaying]=useState(false),[feedback,setFeedback]=useState(null)
+ const ref=useRef(null),[muted,setMuted]=useState(false),[failed,setFailed]=useState(false),[playing,setPlaying]=useState(false),[feedback,setFeedback]=useState(null)
  const feedbackTimer=useRef(null),manualPause=useRef(false)
  useEffect(()=>()=>clearTimeout(feedbackTimer.current),[])
  useEffect(()=>{setFailed(false)},[post.url])
@@ -61,13 +61,13 @@ function Video({post,active}){
   if(!active){el.pause();return}
   const root=el.closest('.cm-feed')
   if(!('IntersectionObserver' in window)){return}
-  const observer=new IntersectionObserver(entries=>{for(const e of entries){if(e.isIntersecting&&e.intersectionRatio>=.65){if(!manualPause.current)el.play().catch(()=>{})}else{manualPause.current=false;el.pause();setFeedback(null)}}},{root,threshold:[0,.65,1]})
+  const observer=new IntersectionObserver(entries=>{for(const e of entries){if(e.isIntersecting&&e.intersectionRatio>=.65){if(!manualPause.current)el.play().catch(error=>{if(error?.name==='NotAllowedError'&&!el.muted&&!manualPause.current&&active&&el.isConnected){el.muted=true;setMuted(true);el.play().catch(()=>{})}})}else{manualPause.current=false;el.pause();setFeedback(null)}}},{root,threshold:[0,.65,1]})
   observer.observe(el)
   return()=>{observer.disconnect();el.pause()}
  },[active,post.url,failed])
  const togglePlayback=()=>{const el=ref.current;if(!el||!active)return;const resume=el.paused;manualPause.current=!resume;if(resume)el.play().catch(()=>{});else el.pause();setFeedback(resume?'play':'pause');clearTimeout(feedbackTimer.current);feedbackTimer.current=setTimeout(()=>setFeedback(null),850)}
  if(!post.url||failed)return html`<div className="cm-poster"><div className="cm-video-fallback"><${Film} size=${28}/><b>${failed?'Video no disponible en este momento':'Ejemplo sin video'}</b>${post.source&&html`<a href=${post.source} target="_blank" rel="noopener noreferrer">Ver video en su fuente original ↗</a>`}</div></div>`
- return html`<${React.Fragment}><video ref=${ref} src=${post.url} muted=${muted} loop playsInline preload="none" aria-label=${post.caption} onClick=${togglePlayback} onPlay=${()=>setPlaying(true)} onPause=${()=>setPlaying(false)} onError=${()=>setFailed(true)}></video><button className=${'cm-playback-center'+(feedback?' flash':'')} aria-label=${playing?'Pausar video':'Reproducir video'} onClick=${togglePlayback}><span aria-hidden="true">${(feedback?feedback==='pause':playing)?html`<${Pause} size=${36}/>`:html`<${Play} size=${36}/>`}</span></button><button className="cm-sound" aria-label=${muted?'Activar sonido':'Silenciar'} onClick=${()=>setMuted(v=>!v)}>${muted?html`<${VolumeX} size=${19}/>`:html`<${Volume2} size=${19}/>`}</button><//>`
+ return html`<${React.Fragment}><video ref=${ref} src=${post.url} muted=${muted} loop playsInline preload="none" aria-label=${post.caption} onClick=${togglePlayback} onPlay=${()=>setPlaying(true)} onPause=${()=>setPlaying(false)} onError=${()=>setFailed(true)}></video><button className=${'cm-playback-center'+(feedback?' flash':'')} aria-label=${playing?'Pausar video':'Reproducir video'} onClick=${togglePlayback}><span aria-hidden="true">${(feedback?feedback==='pause':playing)?html`<${Pause} size=${36}/>`:html`<${Play} size=${36}/>`}</span></button><button className="cm-sound" aria-label=${muted?'Activar sonido':'Silenciar'} onClick=${()=>{const el=ref.current;const next=!el?.muted;if(el){el.muted=next;if(!next&&active&&el.paused){manualPause.current=false;el.play().catch(()=>{})}}setMuted(next)}}>${muted?html`<${VolumeX} size=${19}/>`:html`<${Volume2} size=${19}/>`}</button><//>`
 }
 export function Community({active,actor,role,profiles,clients,inboxSignal=0,onOpenProfile}){
  const me=identity(actor?.id)
