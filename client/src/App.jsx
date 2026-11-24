@@ -34,6 +34,7 @@ export function App() {
   const [priceEntries,setPriceEntries]=useState(()=>demoOffers.map(x=>({...x})))
   const [portfolio,setPortfolio]=useState(()=>seedPortfolio(IMG,DEMO_CLIPS))
   const mediaUrls=useRef(new Set())
+  const [avatarOverrides,setAvatarOverrides]=useState({})
   useEffect(()=>()=>{mediaUrls.current.forEach(url=>URL.revokeObjectURL(url));mediaUrls.current.clear()},[])
   const [matches, setMatches] = useState([])
   const [match, setMatch] = useState(null)
@@ -60,13 +61,15 @@ export function App() {
     setMessage(text)
     window.setTimeout(() => setMessage(''), 2600)
   }
-  const activeClient = DEMO_CLIENTS.find(client => String(client.id) === String(activeClientId)) || DEMO_CLIENT
+  const withAvatar=p=>p&&avatarOverrides[String(p.id)]?{...p,avatar:avatarOverrides[String(p.id)],customAvatar:true}:p
+  const activeClient = withAvatar(DEMO_CLIENTS.find(client => String(client.id) === String(activeClientId)) || DEMO_CLIENT)
   const clientById = id => DEMO_CLIENTS.find(client => String(client.id) === String(id))
-  const profileById = id => [...pros, ...DEMO_CLIENTS].find(profile => String(profile.id) === String(id))
+  const profileById = id => withAvatar([...pros, ...DEMO_CLIENTS].find(profile => String(profile.id) === String(id)))
   const roleProfile = profileById(role === 'Cliente' ? null : activeProviderId)
   const ownProfile=role==='Cliente'?activeClient:roleProfile
+  const editPhoto=file=>{if(!ownProfile||!['image/jpeg','image/png','image/webp'].includes(file.type)||file.size>10*1024*1024){toast('Elige una foto JPG, PNG o WebP de hasta 10 MB');return}const id=String(ownProfile.id),url=URL.createObjectURL(file),previous=avatarOverrides[id];mediaUrls.current.add(url);if(previous){URL.revokeObjectURL(previous);mediaUrls.current.delete(previous)}setAvatarOverrides(ps=>({...ps,[id]:url}));if(role!=='Cliente')setPros(ps=>ps.map(p=>String(p.id)===id?{...p,avatar:url,customAvatar:true}:p));toast('Foto actualizada en esta sesión')}
   const ownerMedia=id=>portfolio.filter(p=>id!=null&&String(p.ownerId)===String(id))
-  const addPortfolio=(file,caption)=>{if(!ownProfile)return;const url=URL.createObjectURL(file);mediaUrls.current.add(url);setPortfolio(ps=>[...ps,{id:globalThis.crypto?.randomUUID?.()||String(Date.now()),ownerId:String(ownProfile.id),kind:file.type.startsWith('image/')?'image':'video',url,caption,local:true}])}
+  const addPortfolio=(files,caption,project)=>{if(!ownProfile)return;const uid=()=>globalThis.crypto?.randomUUID?.()||Date.now()+'-'+Math.random().toString(36).slice(2);const groupId=project?uid():null;const items=Array.from(files).map(file=>{const url=URL.createObjectURL(file);mediaUrls.current.add(url);return {id:uid(),ownerId:String(ownProfile.id),kind:file.type.startsWith('image/')?'image':'video',url,caption:project?file.name:caption,local:true,projectId:groupId,projectTitle:project?.title,projectDescription:project?.description}});setPortfolio(ps=>[...ps,...items])}
   const removePortfolio=id=>{const item=ownerMedia(ownProfile?.id).find(p=>p.id===id);if(!item)return;if(item.local){URL.revokeObjectURL(item.url);mediaUrls.current.delete(item.url)}setPortfolio(ps=>ps.filter(p=>p!==item))}
   const contactForJob = job => {
     if (role === 'Cliente') return profileById(job.providerId) || DEMO_CLIENT
@@ -300,7 +303,7 @@ export function App() {
    ${tab==='mensajes'&&html`<${React.Fragment}><button className="btn out" style=${{marginBottom:10}} onClick=${()=>{goTab('videos');setCommunityInboxSignal(n=>n+1)}}>💬 Mensajes de Match Play</button><${Messages} jobs=${uiJobs} pros=${uiContacts} chats=${chats} setView=${setView}/><//>`}
    ${tab==='contratos'&&html`<${ContractsTab} jobs=${uiJobs} pros=${uiContacts} setView=${setView}/>`}
    ${tab==='wallet'&&html`<${WalletTab} jobs=${uiJobs} pros=${uiContacts} pay=${pay} cards=${cards} addCard=${addCard} setView=${setView}/>`}
-   ${tab==='perfil'&&html`<${React.Fragment}><button className="btn out" style=${{marginBottom:10}} onClick=${()=>setView({t:'favorites'})}>♥ Perfiles guardados (${saved.length})</button><div className="profile-shortcuts"><button className="card" onClick=${()=>goTab('trabajos')}><span>💼</span><b>Portafolio</b><span aria-hidden="true">›</span></button><button className="card" onClick=${()=>goTab('wallet')}><span>💳</span><b>Wallet</b><span aria-hidden="true">›</span></button></div><${Profile} person=${ownProfile} priv=${privacy} setPriv=${setPrivacy} onAdmin=${()=>setRole('admin')}/><div className="card"><b>Gestión de demostración</b><p className="mut">Los perfiles, cifras y servicios de esta vista previa son ilustrativos.</p><div className="wrap"><button className="chip" onClick=${()=>setTab('proyectos')}>Proyectos</button><button className="chip" onClick=${()=>setTab('solicitudes')}>Solicitudes (${currentRequests.filter(r=>r.status==='pending').length})</button><button className="chip" onClick=${()=>setView({t:'demo-profile'})}>Cambiar perfil de demostración</button></div></div><//>`}
+   ${tab==='perfil'&&html`<${React.Fragment}><button className="btn out" style=${{marginBottom:10}} onClick=${()=>setView({t:'favorites'})}>♥ Perfiles guardados (${saved.length})</button><div className="profile-shortcuts"><button className="card" onClick=${()=>goTab('trabajos')}><span>💼</span><b>Portafolio</b><span aria-hidden="true">›</span></button><button className="card" onClick=${()=>goTab('wallet')}><span>💳</span><b>Wallet</b><span aria-hidden="true">›</span></button></div><${Profile} person=${ownProfile} onEditPhoto=${editPhoto} priv=${privacy} setPriv=${setPrivacy} onAdmin=${()=>setRole('admin')}/><div className="card"><b>Gestión de demostración</b><p className="mut">Los perfiles, cifras y servicios de esta vista previa son ilustrativos.</p><div className="wrap"><button className="chip" onClick=${()=>setTab('proyectos')}>Proyectos</button><button className="chip" onClick=${()=>setTab('solicitudes')}>Solicitudes (${currentRequests.filter(r=>r.status==='pending').length})</button><button className="chip" onClick=${()=>setView({t:'demo-profile'})}>Cambiar perfil de demostración</button></div></div><//>`}
    ${tab==='seguridad'&&html`<${Security} disputes=${disputes} setDisputes=${setDisputes} toast=${toast}/>`}
   </div>
   <div className="nav community-nav">${NAV.map(([k,i,l])=>html`<button key=${k} className=${(tab===k||(k==='explorar'&&role!=='Cliente'&&tab==='proyectos')||(k==='perfil'&&['wallet','trabajos'].includes(tab)))?'on':''} onClick=${()=>goTab(k)}><span>${i}</span>${l}${k==='mensajes'&&uiJobs.some(item=>(chats[item.id]||[]).length)&&html`<i className="badge">${uiJobs.filter(item=>(chats[item.id]||[]).length).length}</i>`}</button>`)}</div>
