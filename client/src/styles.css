@@ -136,3 +136,6 @@ button:focus-visible,input:focus-visible,select:focus-visible,textarea:focus-vis
 .impact-detail{border-top:1px solid var(--line);margin-top:8px;padding-top:12px}
 .impact-detail h4{font-size:14px;margin:0 0 8px}
 .impact-detail strong{display:block;font-size:13px;line-height:1.4;color:var(--n)}
+
+/* Specialty catalogue: same original chips, grouped only when expanded. */
+.landing-specialties h3{margin-bottom:6px}.specialties-intro{line-height:1.5;margin:0 0 10px}.specialties-group{margin:12px 0 4px}.specialties-group h4{font-size:13px;color:var(--n);margin:0 0 8px}.specialties-group .ochip{max-width:100%;overflow-wrap:anywhere;white-space:normal}.impact-detail[hidden],#specialties-detail[hidden]{display:none!important}
