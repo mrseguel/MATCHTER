@@ -11,9 +11,9 @@ export default function AuthIntegration(){
    const token=await auth.getJWTToken()
    if(typeof token!=='string'||token.split('.').length!==3)throw Error('No se pudo obtener una sesión válida. Inicia sesión nuevamente.')
    const response=await fetch('/api/auth-preview/'+path,{method:body?'POST':'GET',headers:{Authorization:'Bearer '+token,...(body?{'Content-Type':'application/json'}:{})},...(body?{body:JSON.stringify(body)}:{})})
-   if(path==='me'&&response.status===404)return null
-   const data=await response.json()
-   if(!response.ok)throw Error(data.message||'No se pudo consultar la cuenta')
+   const data=await response.json().catch(()=>null)
+   if(path==='me'&&response.status===404&&data?.message==='Completa tu perfil')return null
+   if(!response.ok)throw Error(data?.message||'API de perfiles: HTTP '+response.status)
    return data
  }
  async function refresh(auth){
