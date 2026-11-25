@@ -5,6 +5,7 @@ const roles=['Cliente','Maestro o contratista','Profesional','Empresa']
 const callbackURL='https://matchter-beta-auth.vercel.app/'
 export default function AuthIntegration(){
  const [client,setClient]=useState(null),[session,setSession]=useState(null),[profile,setProfile]=useState(null),[mode,setMode]=useState('login'),[email,setEmail]=useState(''),[name,setName]=useState(''),[password,setPassword]=useState(''),[role,setRole]=useState('Cliente'),[busy,setBusy]=useState(false),[notice,setNotice]=useState(''),[error,setError]=useState('')
+ const [otp,setOtp]=useState('')
  const started=useRef(false)
  async function accountRequest(auth,path,body){
    const token=await auth.getJWTToken()
@@ -31,19 +32,36 @@ export default function AuthIntegration(){
    const result=mode==='register'?await client.signUp.email({email,password,name,callbackURL}):await client.signIn.email({email,password,callbackURL})
    setPassword('')
    if(result.error)throw Error(result.error.message||'No se pudo autenticar')
-   if(mode==='register')setNotice('Revisa tu correo y confirma la dirección. Después vuelve a iniciar sesión.')
+   if(mode==='register'){setMode('verify');setOtp('');setNotice('Ingresa el código que recibiste por correo.');return}
    await refresh(client)
+ })}
+ async function verify(e){e.preventDefault();await run(async()=>{
+   const result=await client.emailOtp.verifyEmail({email:email.trim(),otp:otp.trim()})
+   if(result.error)throw Error(result.error.message||'No se pudo verificar el código')
+   setOtp('');setMode('login');setSession(null);setNotice('Correo verificado. Inicia sesión con tu contraseña.')
+ })}
+ async function resend(){await run(async()=>{
+   if(!email.trim()||!email.includes('@'))throw Error('Ingresa tu correo electrónico.')
+   const result=await client.emailOtp.sendVerificationOtp({email:email.trim(),type:'email-verification'})
+   if(result.error)throw Error(result.error.message||'No se pudo enviar otro código')
+   setNotice('Si corresponde, recibirás un nuevo código. Revisa tu correo.')
  })}
  return <main className="mai-page"><section className="mai-card"><header><h1>Matchter</h1><p>Integración de autenticación · Entorno privado</p></header>
  <p className="mai-note">Prueba técnica separada de la demo. Usa un correo de prueba al que tengas acceso y una contraseña única. No ingreses RUT, domicilio ni otros datos personales.</p>
  {error&&<p role="alert" className="mai-error">{error}</p>}{notice&&<p role="status" className="mai-notice">{notice}</p>}
- {!client?<p>Conectando con Neon…</p>:session?.user?<><h2>Sesión iniciada</h2><p>{session.user.email}</p>
- {session.user.emailVerified!==true?<><p>Debes verificar tu correo antes de crear un perfil.</p><button disabled={busy} onClick={()=>run(()=>refresh(client))}>Comprobar verificación</button></>:profile?<><p>Perfil persistente: <b>{profile.role}</b></p><button disabled={busy} onClick={()=>run(()=>refresh(client))}>Comprobar cuenta guardada</button></>:<form onSubmit={e=>{e.preventDefault();run(async()=>{setProfile(await accountRequest(client,'onboard',{role}));setNotice('Perfil guardado en Neon')})}}><label>Tipo de cuenta<select value={role} onChange={e=>setRole(e.target.value)}>{roles.map(r=><option key={r}>{r}</option>)}</select></label><button disabled={busy}>Guardar perfil de prueba</button></form>}
+ {!client?<p>Conectando con Neon…</p>:mode==='verify'?<><h2>Verifica tu correo</h2><form onSubmit={verify}>
+ <label>Correo electrónico<input type="email" required value={email} onChange={e=>setEmail(e.target.value)} autoComplete="email"/></label>
+ <label>Código de verificación<input required value={otp} onChange={e=>setOtp(e.target.value)} autoComplete="one-time-code" inputMode="numeric" maxLength={12} pattern="[0-9]+" /></label>
+ <button disabled={busy}>{busy?'Verificando…':'Verificar código'}</button></form>
+ <button className="mai-secondary" disabled={busy} onClick={resend}>Solicitar un código nuevo</button>
+ <button className="mai-secondary" disabled={busy} onClick={()=>{setMode('login');setOtp('');setError('');setNotice('')}}>Volver a iniciar sesión</button></>:session?.user?<><h2>Sesión iniciada</h2><p>{session.user.email}</p>
+ {session.user.emailVerified!==true?<><p>Debes verificar tu correo antes de crear un perfil.</p><button disabled={busy} onClick={()=>{setEmail(session.user.email);setMode('verify');setOtp('')}}>Ingresar código de verificación</button></>:profile?<><p>Perfil persistente: <b>{profile.role}</b></p><button disabled={busy} onClick={()=>run(()=>refresh(client))}>Comprobar cuenta guardada</button></>:<form onSubmit={e=>{e.preventDefault();run(async()=>{setProfile(await accountRequest(client,'onboard',{role}));setNotice('Perfil guardado en Neon')})}}><label>Tipo de cuenta<select value={role} onChange={e=>setRole(e.target.value)}>{roles.map(r=><option key={r}>{r}</option>)}</select></label><button disabled={busy}>Guardar perfil de prueba</button></form>}
  <button className="mai-secondary" disabled={busy} onClick={()=>run(async()=>{const r=await client.signOut();if(r.error)throw Error('No se pudo cerrar la sesión');setSession(null);setProfile(null);setPassword('')})}>Cerrar sesión</button></>:<><h2>{mode==='register'?'Crear cuenta':'Iniciar sesión'}</h2><form onSubmit={submit}>
  {mode==='register'&&<label>Nombre de prueba<input required value={name} maxLength={80} onChange={e=>setName(e.target.value)} autoComplete="name"/></label>}
  <label>Correo electrónico<input type="email" required value={email} onChange={e=>setEmail(e.target.value)} autoComplete="email"/></label>
  <label>Contraseña<input type="password" required minLength={mode==='register'?12:undefined} maxLength={128} value={password} onChange={e=>setPassword(e.target.value)} autoComplete={mode==='register'?'new-password':'current-password'}/></label>
  <button disabled={busy}>{busy?'Procesando…':mode==='register'?'Crear cuenta de prueba':'Iniciar sesión'}</button></form>
  <button className="mai-secondary" disabled={busy} onClick={()=>{setMode(mode==='register'?'login':'register');setError('');setNotice('');setPassword('')}}>{mode==='register'?'Ya tengo cuenta':'Crear una cuenta'}</button>
+ <button className="mai-secondary" disabled={busy} onClick={()=>{setMode('verify');setOtp('');setPassword('');setError('');setNotice('')}}>Verificar correo de una cuenta existente</button>
  </>}</section></main>
 }
