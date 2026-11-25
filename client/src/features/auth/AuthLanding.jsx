@@ -1,6 +1,7 @@
 import React,{createContext,useContext,useEffect,useState,useRef} from 'react'
 import {Landing} from '../../approved/visual.js'
 import {RoleIcon} from './AuthPreview.jsx'
+import {ProfileSwitchIntro,ProfileSwitchPanel} from './ProfileSwitch.jsx'
 import {createPreviewAuthClient} from './authSdk.js'
 import {ACCOUNT_TYPES,roleForLabel,canonicalEmail,completeIdentity,accountRequest} from './realAuthFlow.js'
 import './auth.css'
@@ -35,7 +36,7 @@ export default function AuthLanding(){
  }
  const complete=(next,saved)=>{setSession(next);setProfile(saved)}
  if(!client)return <main className="mai-page"><section className="mai-card"><h1>Matchter</h1><p>{error||'Comprobando sesión…'}</p>{error&&<button disabled={busy} onClick={load}>Volver a intentar</button>}</section></main>
- if(profile)return <main className="mai-page"><section className="mai-card"><h1>Matchter</h1><p className="mai-note">Entorno privado · Cuenta real verificada. Los módulos de servicios todavía son de demostración y no están conectados a esta identidad.</p><h2>Sesión iniciada</h2><p>{session?.user?.email}</p><p>Perfil persistente: <b>{profile.role}</b></p>{error&&<p role="alert" className="mai-error">{error}</p>}<button disabled={busy} onClick={load}>Comprobar cuenta guardada</button><button className="mai-secondary" disabled={busy} onClick={logout}>Cerrar sesión</button></section></main>
+ if(profile)return <ProfileSwitchPanel client={client} session={session} profile={profile} onLogout={logout} busy={busy} error={error}/>
  return <Context.Provider value={{client,session,complete,logout,busy,error}}>
    <Landing onEnter={()=>{}} AuthComponent={RealAuthModal}/>
    {session&&<RealAuthModal mode="Completar perfil" types={ACCOUNT_TYPES} onClose={logout}/>}
@@ -46,6 +47,8 @@ function RealAuthModal({mode,types,onClose}){
  const ctx=useContext(Context),client=ctx.client
  const [step,setStep]=useState(ctx.session?(ctx.session.user.emailVerified?'finish':'verify'):mode==='Crear cuenta'?'role':'login')
  const [label,setLabel]=useState(''),[first,setFirst]=useState(''),[last,setLast]=useState(''),[email,setEmail]=useState(ctx.session?.user?.email||''),[password,setPassword]=useState(''),[confirm,setConfirm]=useState(''),[show,setShow]=useState(false),[otp,setOtp]=useState(''),[pending,setPending]=useState(null),[localSession,setLocalSession]=useState(ctx.session),[busy,setBusy]=useState(false),[error,setError]=useState(''),[notice,setNotice]=useState('')
+ const [introSeen,setIntroSeen]=useState(false)
+ const intro=step==='role'&&!introSeen
  const company=label==='Perfil empresas'
  const clearPasswords=()=>{setPassword('');setConfirm('');setShow(false)}
  function change(next){setError('');setNotice('');clearPasswords();setOtp('');setStep(next)}
@@ -94,15 +97,15 @@ function RealAuthModal({mode,types,onClose}){
   await finish(next,{email:next.user.email,label:value})
  })}
  const blocked=busy||ctx.busy
- const close=()=>{if(!blocked)onClose()}
+ const close=()=>{if(!blocked&&!intro)onClose()}
  const titles={role:'Crear cuenta',register:'Crear cuenta',login:'Iniciar sesión',verify:'Verifica tu correo',finish:'Completar perfil'}
  return <div className="modal beta-auth-modal" onClick={close}><div className="sheet beta-auth-sheet" role="dialog" aria-modal="true" aria-labelledby="beta-real-title" onClick={e=>e.stopPropagation()}>
-  <div className="row sp"><b id="beta-real-title" style={{fontSize:18}}>{titles[step]}</b><button className="chip" onClick={close} disabled={blocked} aria-label={ctx.session?'Cerrar sesión':'Cerrar'}>{ctx.session?'Cerrar sesión':'✕'}</button></div>
+  <div className="row sp"><b id="beta-real-title" style={{fontSize:18}}>{titles[step]}</b><button className="chip" onClick={close} disabled={blocked||intro} aria-label={ctx.session?'Cerrar sesión':'Cerrar'}>{ctx.session?'Cerrar sesión':'✕'}</button></div>
   <div className="beta-auth-notice">Integración privada · El registro y la verificación son reales. Usa datos de prueba. Los servicios de Matchter aún no están vinculados a esta cuenta.</div>
   {(error||ctx.error)&&<p className="beta-auth-error" role="alert">{error||ctx.error}</p>}
   {notice&&<p className="mut" role="status">{notice}</p>}
-  {(step==='role'||step==='finish')?<><p className="mut">{step==='finish'?'Tu cuenta verificada todavía no tiene un tipo de perfil.':'Elige tu tipo de perfil'}</p>{types.map(t=><button key={t[1]} className="opt" disabled={blocked} onClick={()=>step==='finish'?recoverRole(t[1]):choose(t[1])}><span className="i"><RoleIcon type={t[1]} fallback={t[0]}/></span><span><b>{t[1]}</b><small>{t[2]}</small></span></button>)}
-   {step==='role'&&<button className="beta-auth-switch" disabled={blocked} onClick={()=>change('login')}>¿Ya tienes cuenta? Iniciar sesión</button>}</>:step==='verify'?<form className="beta-auth-form" onSubmit={verify}>
+  {(step==='role'||step==='finish')?<><p className="mut">{step==='finish'?'Tu cuenta verificada todavía no tiene un tipo de perfil.':'Elige tu perfil inicial'}</p>{types.map(t=><button key={t[1]} className="opt" disabled={blocked||intro} onClick={()=>step==='finish'?recoverRole(t[1]):choose(t[1])}><span className="i"><RoleIcon type={t[1]} fallback={t[0]}/></span><span><b>{t[1]}</b><small>{t[2]}</small></span></button>)}
+   {step==='role'&&<button className="beta-auth-switch" disabled={blocked||intro} onClick={()=>change('login')}>¿Ya tienes cuenta? Iniciar sesión</button>}</>:step==='verify'?<form className="beta-auth-form" onSubmit={verify}>
    <label>Correo electrónico<input type="email" required value={email} readOnly={Boolean(pending||localSession)} onChange={e=>setEmail(e.target.value)} autoComplete="email"/></label>
    <label>Código de verificación<input required value={otp} onChange={e=>setOtp(e.target.value)} autoComplete="one-time-code" inputMode="numeric" maxLength={12} pattern="[0-9]+"/></label>
    <button className="btn" disabled={blocked}>{blocked?'Verificando…':'Verificar código'}</button>
@@ -120,5 +123,6 @@ function RealAuthModal({mode,types,onClose}){
    {step==='login'&&<button type="button" className="beta-auth-switch" disabled={blocked} onClick={()=>{setPending(null);change('verify')}}>Verificar correo de una cuenta existente</button>}
    <button type="button" className="beta-auth-switch" disabled={blocked} onClick={()=>{setPending(null);change(step==='login'?'role':'login')}}>{step==='login'?'¿No tienes cuenta? Crear cuenta':'¿Ya tienes cuenta? Iniciar sesión'}</button>
   </form>}
+ {intro&&<ProfileSwitchIntro onClose={()=>setIntroSeen(true)}/>}
  </div></div>
 }
