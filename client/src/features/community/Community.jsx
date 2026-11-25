@@ -52,8 +52,8 @@ export const DEMO_CLIPS=[
 
 const OFFICIAL_AUTHOR={id:'matchter-official',name:'MATCHTER',role:'Cuenta oficial',loc:'MATCHPLAY',bio:'Tutoriales, novedades y consejos de MATCHTER.'}
 const welcomeFiles=import.meta.glob('./matchplay-bienvenida.mp4',{eager:true,query:'?url',import:'default'})
-const welcomeUrl=welcomeFiles['./matchplay-bienvenida.mp4']
-const WELCOME_POST={id:'matchter-welcome-v1',author:OFFICIAL_AUTHOR.id,category:'Tutorial',caption:'¡Bienvenido a MATCHPLAY! Descubre una nueva forma de vivir la construcción. Desliza hacia arriba para explorar.',url:welcomeUrl,official:true,likes:[],comments:[]}
+const bundledWelcomeUrl=welcomeFiles['./matchplay-bienvenida.mp4']
+const WELCOME_POST={id:'matchter-welcome-v1',author:OFFICIAL_AUTHOR.id,category:'Tutorial',caption:'¡Bienvenido a MATCHPLAY! Descubre una nueva forma de vivir la construcción. Desliza hacia arriba para explorar.',url:bundledWelcomeUrl,official:true,likes:[],comments:[]}
 const visitedKey=me=>'matchplay-welcome-v1:'+me
 
 function Video({post,active}){
@@ -82,7 +82,10 @@ export function Community({active,actor,role,profiles,clients,inboxSignal=0,onOp
  const me=identity(actor?.id)
  const people=[...profiles,...clients,OFFICIAL_AUTHOR]
  const person=id=>people.find(p=>identity(p.id)===identity(id))
- const [posts,setPosts]=useState(()=>[...(welcomeUrl?[WELCOME_POST]:[]),...DEMO_CLIPS.map(p=>({...p,likes:[],comments:[],sample:true}))])
+ const [welcomeUrl,setWelcomeUrl]=useState(bundledWelcomeUrl)
+ const localWelcomeInput=useRef(null)
+ const localWelcomeObject=useRef(null)
+ const [posts,setPosts]=useState(()=>[...(bundledWelcomeUrl?[WELCOME_POST]:[]),...DEMO_CLIPS.map(p=>({...p,likes:[],comments:[],sample:true}))])
  const [welcomeVisible,setWelcomeVisible]=useState(false)
  const [saved,setSaved]=useState({})
  const welcomeVisits=useRef(new Set())
@@ -101,7 +104,16 @@ export function Community({active,actor,role,profiles,clients,inboxSignal=0,onOp
   }
   return()=>{if(firstFrame.current!==null)cancelAnimationFrame(firstFrame.current)}
  },[active,me])
- const openWelcome=()=>{if(!welcomeUrl)return;close();setMode('all');setWelcomeVisible(true);requestAnimationFrame(()=>{if(feedRef.current)feedRef.current.scrollTop=0})}
+ useEffect(()=>()=>{if(localWelcomeObject.current)URL.revokeObjectURL(localWelcomeObject.current)},[])
+ const previewWelcome=e=>{
+  const file=e.target.files?.[0];e.target.value=''
+  if(!file||!file.type.startsWith('video/'))return
+  if(localWelcomeObject.current)URL.revokeObjectURL(localWelcomeObject.current)
+  const url=URL.createObjectURL(file);localWelcomeObject.current=url
+  setWelcomeUrl(url);setPosts(ps=>[{...WELCOME_POST,url},...ps.filter(p=>!p.official)])
+  close();setMode('all');setWelcomeVisible(true);requestAnimationFrame(()=>{if(feedRef.current)feedRef.current.scrollTop=0})
+ }
+ const openWelcome=()=>{if(!welcomeUrl){localWelcomeInput.current?.click();return;}close();setMode('all');setWelcomeVisible(true);requestAnimationFrame(()=>{if(feedRef.current)feedRef.current.scrollTop=0})}
  const [follows,setFollows]=useState({})
  const [threads,setThreads]=useState({})
  const [hidden,setHidden]=useState({})
@@ -155,7 +167,7 @@ export function Community({active,actor,role,profiles,clients,inboxSignal=0,onOp
  const myThreads=Object.entries(threads).filter(([,t])=>t.participants.includes(me))
  return html`<section className="cm" aria-label="Match Play">
   <header className="cm-overlay-header">
-   <div className="cm-brand-row"><button className="cm-options cm-publish-overlay" aria-label="Publicar video" onClick=${()=>show({type:'upload'})}><span>Publicar</span></button><div className="cm-brand logo" aria-label="Match Play">MATCHPLAY</div><span style=${{justifySelf:'end'}}>${welcomeUrl&&html`<button className="cm-options" aria-label="Ver tutorial de MATCHPLAY" title="Tutorial de MATCHPLAY" onClick=${openWelcome}><${HelpCircle} size=${22}/></button>`}</span></div>
+   <div className="cm-brand-row"><button className="cm-options cm-publish-overlay" aria-label="Publicar video" onClick=${()=>show({type:'upload'})}><span>Publicar</span></button><div className="cm-brand logo" aria-label="Match Play">MATCHPLAY</div><span style=${{justifySelf:'end'}}><button className="cm-options" aria-label=${welcomeUrl?"Ver tutorial de MATCHPLAY":"Seleccionar video local para probar tutorial"} title=${welcomeUrl?"Tutorial de MATCHPLAY":"Prueba local: selecciona el video de bienvenida"} onClick=${openWelcome}><${HelpCircle} size=${22}/></button><input ref=${localWelcomeInput} type="file" accept="video/mp4" hidden onChange=${previewWelcome}/></span></div>
    <div className="cm-tabs cm-overlay-tabs" role="group" aria-label="Filtrar videos">${[['all','Para ti'],['following','Siguiendo'],['mine','Mis videos']].map(([k,label])=>html`<button key=${k} className=${mode===k?'selected':''} aria-pressed=${mode===k} onClick=${()=>{setMode(k);const feed=document.querySelector('.cm-feed');if(feed)feed.scrollTop=0}}>${label}</button>`)}</div>
   </header>
   <div className="cm-feed" ref=${feedRef}>${visible.length?visible.map(p=>{
