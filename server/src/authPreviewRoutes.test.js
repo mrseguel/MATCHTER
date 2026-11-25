@@ -1,6 +1,8 @@
 import {test} from 'node:test'
 import assert from 'node:assert/strict'
 import express from 'express'
+import {request} from 'node:http'
+function fetch(url,options={}){return new Promise((resolve,reject)=>{const req=request(url,{method:options.method||'GET',headers:options.headers||{}},res=>{res.resume();res.on('end',()=>resolve({status:res.statusCode}))});req.on('error',reject);req.end(options.body)})}
 import {createAuthRouter} from './authPreviewRoutes.js'
 test('authentication preview routes are isolated, reject missing tokens and enforce POST origin',async()=>{
   const app=express();app.use(express.json());let calls=0
