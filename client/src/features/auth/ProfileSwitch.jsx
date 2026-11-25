@@ -3,6 +3,7 @@ import {ArrowLeftRight,Check,ChevronDown,UserRound} from 'lucide-react'
 import {ACCOUNT_TYPES,roleForLabel,displayRole} from './realAuthFlow.js'
 import {RoleIcon} from './AuthPreview.jsx'
 import './profileSwitch.css'
+import {ProfileDetailsEditor} from './ProfileDetailsEditor.jsx'
 const types=ACCOUNT_TYPES.map(t=>({label:t[1],role:roleForLabel(t[1]),icon:t[0]}))
 export function ProfileSwitchIntro({onClose}){
  const button=useRef(null)
@@ -41,6 +42,7 @@ export function ProfileSwitchPanel({client,session,profile,onLogout,busy:parentB
  <p className="mt-email">{session?.user?.email}</p>
  {open&&<div className="mt-profile-menu"><strong>Cambiar perfil</strong>{types.map(t=>{const current=active===t.role;return <button key={t.role} type="button" disabled={blocked||current} onClick={()=>select(t.role)}><RoleIcon type={t.label} fallback={t.icon}/><span>{displayRole(t.role)}<small>{current?'Activo':'Cambiar a este perfil'}</small></span>{current?<Check size={18} className="mt-orange"/>:<ArrowLeftRight size={17}/>}</button>})}</div>}
  {(error||parentError)&&<p className="mai-error" role="alert">{error||parentError}</p>}{notice&&<p className="mai-notice" role="status">{notice}</p>}
+ {data&&<ProfileDetailsEditor key={active} client={client} role={active}/>}
  <p>Perfil persistente: <strong>{displayRole(active)}</strong></p><button type="button" disabled={blocked} onClick={load}>Comprobar cuenta guardada</button><button type="button" className="mai-secondary" disabled={blocked} onClick={onLogout}>Cerrar sesión</button>
  </section></main>
 }
