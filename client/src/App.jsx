@@ -1,3 +1,4 @@
+import {roleForLabel,ROLE_BY_LABEL,displayRole} from './profileRoles.js'
 import React, { useRef, useState, useEffect } from 'react'
 import { DEMO_CLIENT, DEMO_CLIENTS, DEMO_PROJECTS, ROLE_PROFILE_IDS, DEMO_JOBS, DEMO_CHATS, demoPortrait } from './demoData.js'
 import { createProject as saveProject, createPrivateRequest as savePrivateRequest, updatePrivateRequest } from './api.js'
@@ -105,7 +106,7 @@ export function App() {
     setTab(nextRole === 'Cliente' ? 'explorar' : 'proyectos')
     setView(null)
     setMatch(null)
-    toast(`Perfil de demostración activo: ${nextRole}`)
+    toast(`Perfil de demostración activo: ${displayRole(nextRole)}`)
   }
 
   const changeProvider = nextProviderId => {
@@ -272,7 +273,7 @@ export function App() {
   }
 
   if (!account) return html`<${Landing} onEnter=${nextAccount => {
-    const canonicalRole = ({'Perfil clientes':'Cliente','Perfil maestros':'Maestro o contratista','Profesionales y contratistas':'Profesional','Perfil empresas':'Empresa'})[nextAccount.type] || nextAccount.type
+    const canonicalRole = Object.hasOwn(ROLE_BY_LABEL,nextAccount.type) ? roleForLabel(nextAccount.type) : nextAccount.type
     setAccount({...nextAccount, type:canonicalRole})
     setRole(canonicalRole)
     if (ROLE_PROFILE_IDS[canonicalRole]?.length) setActiveProviderId(ROLE_PROFILE_IDS[canonicalRole][0])
