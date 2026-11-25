@@ -1,3 +1,4 @@
+import {ACCOUNT_TYPES} from './profileRoles.js';
 // Datos de ejemplo y constantes de MATCHTER
 export const fmt=n=>'$'+n.toLocaleString('es-CL')+' CLP';
 export const CATS=['Todos','Obra gruesa','Electricidad','Gasfitería','Carpintería','Pintura'];
@@ -18,4 +19,4 @@ export const AV=[1,2,3,5];
 export const km=p=>parseFloat(((p.loc.match(/([\d,]+) km/)||[])[1]||'99').replace(',','.'));
 export const FL0={inm:false,ver:false,dist:0,top:false,cats:[],emp:false};
 export const okp=(p,fl)=>!p.sus&&(!fl.inm||AV.includes(p.id))&&(!fl.ver||p.ver)&&(!fl.dist||km(p)<=fl.dist)&&(!fl.top||p.r>=4.8)&&(!fl.cats.length||fl.cats.includes(p.cat))&&(!fl.emp||p.role.includes('Empresa'));
-export const TYPES=[['👤','Cliente','Busca y contrata profesionales para tu proyecto'],['🦺','Maestro o contratista','Ofrece servicios de obra, especialidades y ejecución'],['📐','Profesional','Arquitectos, ingenieros y especialistas titulados'],['🏢','Empresa','Constructoras y empresas del rubro']];
+export const TYPES=ACCOUNT_TYPES;
