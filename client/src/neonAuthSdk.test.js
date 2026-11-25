@@ -10,4 +10,6 @@ test('pinned Neon SDK has usable email sign-up and sign-in methods',()=>{
  const client=createPreviewAuthClient('https://auth.example.test')
  assert.equal(typeof client.signUp.email,'function')
  assert.equal(typeof client.signIn.email,'function')
+ assert.equal(typeof client.emailOtp.verifyEmail,'function')
+ assert.equal(typeof client.emailOtp.sendVerificationOtp,'function')
 })
