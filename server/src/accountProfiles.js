@@ -11,12 +11,12 @@ export function createProfilesService({db,verifyIdentity}){
    await conn.query('BEGIN')
    const account=(await conn.query('SELECT id,role FROM matchter.accounts WHERE auth_issuer=$1 AND auth_subject=$2',[identity.issuer,identity.subject])).rows[0]
    if(!account)throw new AuthError(404,'Completa tu perfil')
-   await conn.query('INSERT INTO matchter.account_profiles(account_id,role) VALUES ($1,$2) ON CONFLICT(account_id,role) DO NOTHING',[account.id,account.role])
+   // All four modes belong to the same verified identity and are available by default.
+   for(const role of PROFILE_ROLES)await conn.query('INSERT INTO matchter.account_profiles(account_id,role) VALUES ($1,$2) ON CONFLICT(account_id,role) DO NOTHING',[account.id,role])
    await conn.query('INSERT INTO matchter.account_active_profiles(account_id,role) VALUES ($1,$2) ON CONFLICT(account_id) DO NOTHING',[account.id,account.role])
-   if(action==='add')await conn.query('INSERT INTO matchter.account_profiles(account_id,role) VALUES ($1,$2) ON CONFLICT(account_id,role) DO NOTHING',[account.id,body.role])
-   if(action==='switch'||action==='add'){
+   if(action==='switch'){
     const owned=(await conn.query('SELECT id FROM matchter.account_profiles WHERE account_id=$1 AND role=$2',[account.id,body.role])).rows[0]
-    if(!owned)throw new AuthError(404,'Primero crea este perfil')
+    if(!owned)throw new AuthError(404,'Perfil no disponible')
     await conn.query('UPDATE matchter.account_active_profiles SET role=$2 WHERE account_id=$1',[account.id,body.role])
    }
    const profiles=(await conn.query('SELECT id,role FROM matchter.account_profiles WHERE account_id=$1 ORDER BY role',[account.id])).rows
@@ -27,5 +27,5 @@ export function createProfilesService({db,verifyIdentity}){
   }catch(e){await conn.query('ROLLBACK');throw e}
   finally{conn.release()}
  }
- return Object.freeze({list:header=>transaction(header,'list'),add:(header,body)=>transaction(header,'add',body),switch:(header,body)=>transaction(header,'switch',body)})
+ return Object.freeze({list:header=>transaction(header,'list'),switch:(header,body)=>transaction(header,'switch',body)})
 }
