@@ -1,5 +1,5 @@
 import React,{useEffect,useState,useRef} from 'react'
-import {createAuthClient} from '@neondatabase/auth'
+import {createPreviewAuthClient} from './authSdk.js'
 import './authIntegration.css'
 const roles=['Cliente','Maestro o contratista','Profesional','Empresa']
 const callbackURL='https://matchter-beta-auth.vercel.app/'
@@ -24,7 +24,7 @@ export default function AuthIntegration(){
  useEffect(()=>{if(started.current)return;started.current=true;(async()=>{try{
    const res=await fetch('/api/auth-preview/config');if(!res.ok)throw Error('Configuración no disponible')
    const {authUrl}=await res.json()
-   const auth=createAuthClient(authUrl);setClient(auth);await refresh(auth)
+   const auth=createPreviewAuthClient(authUrl);setClient(auth);await refresh(auth)
  }catch(e){setError(e.message)}})()},[])
  async function run(fn){if(!client||busy)return;setBusy(true);setError('');setNotice('');try{await fn()}catch(e){setError(e.message||'No se pudo completar la operación')}finally{setBusy(false)}}
  async function submit(e){e.preventDefault();await run(async()=>{
