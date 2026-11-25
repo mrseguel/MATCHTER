@@ -1,0 +1,37 @@
+.cm-brand .play-title {
+  position: relative;
+  display: grid;
+  place-items: center;
+  width: 67px;
+  height: 20px;
+  color: white;
+}
+
+.play-title svg {
+  grid-area: 1 / 1;
+  display: block;
+  fill: currentColor;
+  stroke: none;
+}
+
+.play-title .play-title-symbol { width: 13px; height: 13px; opacity: 0; }
+.play-title .play-title-letters { width: 67px; height: 20px; }
+
+@media (prefers-reduced-motion: no-preference) {
+  .play-title-symbol { animation: play-symbol-reveal 1.65s both; }
+  .play-title-letters { animation: play-letters-reveal 1.65s both; }
+}
+
+@keyframes play-symbol-reveal {
+  0% { opacity: 1; transform: scale(.75); }
+  24% { opacity: 1; transform: scale(1.18); filter: drop-shadow(0 0 4px #fff9); }
+  38% { opacity: 1; transform: scale(1); }
+  54%, 100% { opacity: 0; transform: scale(.38); }
+}
+
+@keyframes play-letters-reveal {
+  0%, 37% { opacity: 0; clip-path: inset(0 50%); transform: scale(.88); }
+  50% { opacity: 1; }
+  78% { clip-path: inset(-15% 0); transform: scale(1.045); }
+  100% { opacity: 1; clip-path: inset(-15% 0); transform: scale(1); }
+}
