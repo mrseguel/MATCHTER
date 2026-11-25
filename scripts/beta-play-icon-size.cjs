@@ -1,0 +1,1 @@
+const fs=require('node:fs');fs.appendFileSync('client/src/features/settings/appearance.css','\n/* Refine only the play icon, preserving the button and publish plus. */\n.mn-nav .mn-item.mn-play>svg{width:21px;height:21px}\n');console.log('BETA: play icon reduced from 27px to 21px, button geometry unchanged.');

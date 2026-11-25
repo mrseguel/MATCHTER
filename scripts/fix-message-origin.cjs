@@ -1,0 +1,28 @@
+const fs=require('node:fs');
+const ap='client/src/App.jsx', vp='client/src/approved/visual.js',cp='client/src/features/community/Community.jsx';
+let a=fs.readFileSync(ap,'utf8'),v=fs.readFileSync(vp,'utf8'),c=fs.readFileSync(cp,'utf8');
+function once(s,x,y,label){const i=s.indexOf(x);if(i<0||s.indexOf(x,i+x.length)>=0)throw Error('Unexpected '+label);return s.slice(0,i)+y+s.slice(i+x.length)}
+const start=v.indexOf('function Messages('), end=v.indexOf('\nfunction ',start+1);
+if(start<0||end<0)throw Error('Messages not found');
+let m=v.slice(start,end);
+m=once(m,'<b>'+ '${p.name}'+'</b>','<b>'+ '${p.name}'+'</b> <span className="message-origin">Explorar</span>','message label');
+v=v.slice(0,start)+m+v.slice(end);
+a=once(a,'const [communityInboxSignal,setCommunityInboxSignal]=useState(0)','const [communityInboxSignal,setCommunityInboxSignal]=useState(0)\n  const [socialThreads,setSocialThreads]=useState({})','inbox state');
+a=once(a,'inboxSignal='+ '${communityInboxSignal}','inboxSignal='+ '${communityInboxSignal}'+' threads='+ '${socialThreads}'+' setThreads='+ '${setSocialThreads}','community props');
+const messagesStart=a.indexOf("<${Messages} jobs=");
+if(messagesStart<0)throw Error('Messages render missing');
+const messagesEnd=a.indexOf('/>',messagesStart);
+if(messagesEnd<0)throw Error('Messages render end missing');
+const social='<${SocialInboxRows} actor=${ownProfile} threads=${socialThreads} people=${[...pros,...DEMO_CLIENTS].map(withAvatar)} onOpen=${id=>{goTab("videos");setCommunityInboxSignal({author:id})}}/>';
+a=a.slice(0,messagesEnd+2)+social+a.slice(messagesEnd+2);
+a='import {SocialInboxRows} from "./features/community/SocialInboxRows.jsx";\n'+a;
+c=once(c,'inboxSignal=0,onOpenProfile','inboxSignal=0,onOpenProfile,threads,setThreads','community signature');
+c=once(c,'const [threads,setThreads]=useState({})','/* Shared with the main message inbox. */','thread state');
+c=once(c,"show({type:'inbox'})}},[inboxSignal])","show(inboxSignal?.author?{type:'message',author:inboxSignal.author}:{type:'inbox'})}},[inboxSignal])",'direct inbox routing');
+const inboxStart=c.indexOf("${panel.type==='inbox'"),inboxEnd=c.indexOf("${panel.type==='message'",inboxStart+1);
+if(inboxStart<0||inboxEnd<0)throw Error('Community inbox missing');
+let ci=c.slice(inboxStart,inboxEnd);
+ci=once(ci,"</b><small>","</b><span className=\"message-origin\">Match Play</span><small>",'social inbox label');
+c=c.slice(0,inboxStart)+ci+c.slice(inboxEnd);
+fs.writeFileSync(ap,a);fs.writeFileSync(vp,v);fs.writeFileSync(cp,c);
+console.log('MATCHTER: shared social inbox with channel tags; original match and social message handling unchanged.');

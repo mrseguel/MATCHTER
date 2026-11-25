@@ -1,0 +1,30 @@
+
+/* Matchter welcome: scoped to the logged-out landing view. */
+@media(min-width:600px){#root:has(.mw-app){width:min(460px,calc(100dvh * .485));max-width:460px;box-shadow:0 0 40px #0b1f5c20}}
+#root .mw-app{background:#081522!important;container-type:inline-size}
+#root .mw-app>.cta{display:none!important}
+#root .mw-main{padding:0!important;overflow-y:auto!important;background:#081522;color:#fff;scrollbar-width:none}
+#root .mw-main>:not(.mw-ban):not(.modal):not([role=dialog]){display:none!important}
+#root .mw-ban{display:flex!important;flex-direction:column;align-items:stretch;min-height:100%;margin:0!important;padding:0 0 max(22px,env(safe-area-inset-bottom))!important;border:0!important;border-radius:0!important;background:linear-gradient(180deg,#091827 0%,#182333 24%,#081522 72%)!important;overflow:visible!important;color:#fff;box-sizing:border-box}
+#root .mw-ban>:not(.mw-visual):not(.mw-actions):not(.mw-footer):not(.modal):not([role=dialog]){display:none!important}
+#root .mw-visual{width:100%;flex:0 0 auto;display:flex;flex-direction:column;position:relative}
+#root .mw-header{padding:clamp(29px,6.2dvh,55px) 22px 8px;text-align:center;position:relative;z-index:1}
+#root .mw-wordmark{font-family:system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;font-size:clamp(30px,8.4cqw,39px);font-weight:800;letter-spacing:-1.5px;color:#ff6b00;line-height:1.12;margin:0 0 15px}
+#root .mw-headline{font-family:inherit;font-size:clamp(17px,5.1cqw,23px);line-height:1.22;font-weight:700;letter-spacing:-.45px;color:#fff;margin:0 auto!important;max-width:100%!important}
+#root .mw-headline span{color:#ff7511;display:block}
+#root .mw-swoosh{display:block;width:37%;height:12px;margin:7px auto 0;overflow:visible}
+#root .mw-hero{width:100%;aspect-ratio:640/476;position:relative;flex:0 0 auto;background:url('/matchter-welcome-photo.webp') center/100% 100% no-repeat;mask-image:linear-gradient(to bottom,transparent 0%,#000 10%,#000 77%,transparent 100%);-webkit-mask-image:linear-gradient(to bottom,transparent 0%,#000 10%,#000 77%,transparent 100%);margin-top:-10px}
+#root .mw-features{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));padding:0 10px;margin:-27px 0 clamp(23px,4dvh,35px);position:relative;z-index:2;gap:0}
+#root .mw-feature{display:flex;flex-direction:column;align-items:center;text-align:center;color:#f4f5f8;gap:7px;font-size:clamp(10px,2.7cqw,12px);font-weight:550;line-height:1.19;padding:0 5px;position:relative;min-width:0}
+#root .mw-feature:not(:last-child)::after{content:'';position:absolute;right:0;top:10px;bottom:2px;width:1px;background:linear-gradient(transparent,#ffffff42,transparent)}
+#root .mw-feature svg{height:clamp(25px,7cqw,32px);width:clamp(25px,7cqw,32px);stroke:#ff790c;fill:none;stroke-width:1.9;stroke-linecap:round;stroke-linejoin:round;filter:drop-shadow(0 0 3px #ff790c38)}
+#root .mw-actions{display:flex!important;flex-direction:column!important;align-items:center!important;gap:12px!important;width:100%;padding:0!important;margin:0 auto!important;box-sizing:border-box}
+#root .mw-actions button.mw-create,#root .mw-actions button.mw-login{position:relative!important;display:block!important;width:68%!important;max-width:310px!important;flex:none!important;height:clamp(44px,10.5cqw,49px)!important;padding:0 12px!important;border-radius:999px!important;font-family:inherit!important;font-size:clamp(14px,3.7cqw,17px)!important;font-weight:650!important;letter-spacing:-.2px!important;line-height:1.2!important;color:#fff!important;cursor:pointer}
+#root .mw-actions button.mw-create{background:linear-gradient(180deg,#ff9409 0%,#ff7200 35%,#ff5200 100%)!important;border:1.5px solid #ffab42!important;box-shadow:0 -4px 20px -4px #ff7900b8,inset 0 2px 2px #ffdc9f80,0 7px 16px #ff6b001e!important;order:0}
+#root .mw-actions button.mw-create:before{content:'';position:absolute;top:0;left:12%;right:12%;height:1px;background:linear-gradient(90deg,transparent,#ffe7a4,transparent);pointer-events:none}
+#root .mw-actions button.mw-login{background:linear-gradient(180deg,#17202c90,#08152250)!important;border:1.5px solid #f7f8fb!important;box-shadow:none!important;order:1}
+#root .mw-actions button:focus-visible{outline:3px solid #ffae62!important;outline-offset:3px}
+#root .mw-actions button svg,#root .mw-actions button .i{display:none!important}
+#root .mw-footer{display:flex;align-items:center;justify-content:center;gap:13px;color:#c0c3cb;font-size:clamp(11px,2.8cqw,13px);font-weight:400;margin:clamp(25px,4.5dvh,38px) auto 0;line-height:1.4}
+#root .mw-footer i{height:13px;width:1px;background:#b9bec7;opacity:.7}
+@media(max-height:670px){#root .mw-header{padding-top:22px}#root .mw-features{margin-bottom:20px}#root .mw-footer{margin-top:22px}}

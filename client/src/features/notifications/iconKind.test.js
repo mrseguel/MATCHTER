@@ -1,0 +1,3 @@
+import test from 'node:test';import assert from 'node:assert/strict';import {notificationIcon} from './iconKind.js';
+test('MATCHPLAY icons distinguish likes, follows, comments and video activity',()=>{for(const [id,icon] of [['like:1:2','heart'],['follow:2','user-plus'],['comment:1','message-circle'],['video:1','play']])assert.equal(notificationIcon({id,category:'MATCHPLAY'}),icon)});
+test('other categories retain semantic icons',()=>{for(const [category,icon] of [['Mensajes','message-circle'],['Solicitudes','handshake'],['Contratos','file-pen'],['Cotizaciones','calculator'],['Empleos','briefcase'],['Pagos','wallet'],['Reclamos','shield-alert'],['Sistema','shield-check']])assert.equal(notificationIcon({category}),icon)});

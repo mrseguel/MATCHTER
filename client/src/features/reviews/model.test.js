@@ -1,0 +1,3 @@
+import test from 'node:test';import assert from 'node:assert/strict';import {demoReviews,average} from './model.js';
+test('demo history matches the existing count and rounded rating',()=>{for(const [id,n,r] of [['demo-client',4,4.9],[1,38,4.9],[2,61,4.8],[4,25,4.7],[5,30,4.8],[6,18,4.9]]){const rows=demoReviews({id,n,r});assert.equal(rows.length,n);assert.equal(Number(average(rows).toFixed(1)),r);assert.equal(new Set(rows.map(x=>x.id)).size,n);assert.ok(rows.every(x=>x.demo&&x.score>=1&&x.score<=5));}});
+test('unknown profiles have no invented reviews',()=>assert.deepEqual(demoReviews({id:'new-account',n:8,r:5}),[]));

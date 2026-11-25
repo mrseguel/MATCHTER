@@ -1,0 +1,13 @@
+(function(){
+const fs=require('node:fs'),once=(s,a,b)=>{if(s.split(a).length!==2)throw Error('Missing anchor: '+a);return s.replace(a,b)},update=(f,fn)=>fs.writeFileSync(f,fn(fs.readFileSync(f,'utf8')));
+update('client/src/App.jsx',s=>{
+s='import {subscribeVerification,activeVerification} from "./features/discover/verificationModel.js";\n'+s;
+s=once(s,'const [demoVerified,setDemoVerified]=useState({})','const [verificationSubscriptions,setVerificationSubscriptions]=useState({})\n  const [verificationNow,setVerificationNow]=useState(Date.now)\n  useEffect(()=>{const timer=setInterval(()=>setVerificationNow(Date.now()),60000);return ()=>clearInterval(timer)},[])\n  const demoVerified=Object.fromEntries(Object.entries(verificationSubscriptions).map(([id,sub])=>[id,activeVerification(sub,verificationNow)]))');
+const old='onConfirm=${()=>{setDemoVerified(v=>({...v,[String(ownProfile.id)]:true}));if(role!=="Cliente")setPros(ps=>ps.map(p=>String(p.id)===String(ownProfile.id)?{...p,ver:true}:p));setView(null);goTab("perfil");toast("Verificación de prueba completada")}}';
+s=once(s,old,'cards=${cards} addCard=${addCard} subscription=${verificationSubscriptions[String(ownProfile?.id)]} onConfirm=${data=>{const id=String(ownProfile.id);const sub=subscribeVerification({...data,actorId:id,now:Date.now(),previous:verificationSubscriptions[id]});setVerificationSubscriptions(v=>({...v,[id]:sub}));setVerificationNow(Date.now());setPayments(ps=>[{id:sub.id,p:"Verificación de perfil · "+(sub.planId==="annual"?"Anual":"Mensual"),a:sub.amount,s:"Pagado · demo",actorId:id},...ps]);setView(null);goTab("perfil");toast("Verificación de prueba activa hasta "+new Date(sub.expiresAt).toLocaleDateString("es-CL"))}}');
+s=once(s,'<${Explore} pros=${pros} seen=${seen}','<${Explore} pros=${pros.map(p=>({...p,ver:p.ver||!!demoVerified[String(p.id)]}))} seen=${seen}');
+return s;
+});
+update('scripts/smoke-browser.cjs',s=>{const anchor="console.log('BROWSER REVIEW HISTORY PASSED');";return once(s,anchor,anchor+`\nconst reviewBack=w.document.querySelector('.ov .hd button');await click(reviewBack);const verifyAction=w.document.querySelector('.pd-verification button');if(verifyAction){await click(verifyAction);if(!rootEl.textContent.includes('$2.990')||!rootEl.textContent.includes('$10.000'))throw Error('Verification plans missing');}\n`)});
+console.log('BETA: priced verification plans, identity before checkout, Wallet card or direct simulated payment, calendar expiry without automatic renewal.');
+})();

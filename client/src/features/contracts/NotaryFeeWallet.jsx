@@ -1,0 +1,9 @@
+import React,{useState} from 'react';
+import {Wallet,Lock,CheckCircle2,ArrowLeft,FileText} from 'lucide-react';
+import {NOTARY_FEE_PER_PARTY,NOTARY_TOTAL,party} from './model.js';
+export function NotaryFeeWallet({job,actor,cards,addCard,onPay,onBack}){
+ const [selected,setSelected]=useState(0),[error,setError]=useState('');const side=party(job,actor?.id),paid=job.formal?.fees?.[side];const clp=n=>'$'+n.toLocaleString('es-CL');
+ return <div className="ct-fee-wallet"><div className="card ct-sign"><h3><Wallet size={23}/> Mi Wallet</h3><span className="tag">Trámite notarial · DEMO</span><h4>{job.project}</h4><div className="row sp"><span>Autorización de ambas firmas</span><b>{clp(NOTARY_TOTAL)} CLP</b></div><div className="row sp"><span>Tu parte del trámite (50%)</span><b>{clp(NOTARY_FEE_PER_PARTY)} CLP</b></div><p className="mut">Pago separado de los hitos de la obra. Tarifa ilustrativa, no vinculante. No se realiza ningún cobro real.</p></div>
+ {paid?<div className="card ct-success"><CheckCircle2 size={20}/> Pago de prueba registrado: {clp(paid.amount)} CLP</div>:<div className="card ct-sign"><h3>Selecciona tu tarjeta de prueba</h3>{cards.map((card,i)=><button className={'ct-option '+(selected===i?'selected':'')} key={i} onClick={()=>setSelected(i)}><Wallet size={20}/><span><b>{card.b} •••• {card.l}</b><small>Exp. {card.e}</small></span>{selected===i&&<CheckCircle2 size={18}/>}</button>)}<button className="btn out" onClick={addCard}>+ Agregar tarjeta de prueba</button><button className="btn" disabled={!cards[selected]||!side} onClick={()=>{try{onPay(cards[selected]);setError('')}catch(e){setError(e.message)}}}><Lock size={17}/> Simular pago de {clp(NOTARY_FEE_PER_PARTY)}</button>{error&&<p role="alert" className="cl-error">{error}</p>}</div>}
+ <button className="btn out" onClick={onBack}>Volver al contrato</button></div>
+}

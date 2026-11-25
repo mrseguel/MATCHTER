@@ -1,0 +1,3 @@
+(function(){
+ const fs=require('node:fs');const p='client/src/features/settings/Appearance.jsx';const s=fs.readFileSync(p,'utf8');const i=s.indexOf("'Mi cuenta'");console.log('SETTINGS INSPECT: '+s.slice(i-450,i+850));const app=fs.readFileSync('client/src/App.jsx','utf8');console.log('APP SETTINGS: '+app.split('\n').filter(x=>x.includes('onWallet=')||x.includes('const notices=')||x.includes('const [disputes,')||x.includes('const [account,')).join('\n'));
+})();

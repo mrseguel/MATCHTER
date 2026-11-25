@@ -1,103 +1,323 @@
-import React, { useEffect, useMemo, useState } from 'react'
-import {
-  Home, Compass, Heart, ThumbsUp, BriefcaseBusiness, MessageCircle, Star, Wallet,
-  UserRound, Building2, ShieldCheck, AlertCircle, Settings, Search, Bell, Plus,
-  SlidersHorizontal, MapPin, Check, X, ArrowUpRight, ChevronRight, Menu, Hammer,
-  Paintbrush, Zap, Wrench, Trees, HardHat, ClipboardList, Clock3, Camera, Send,
-  BadgeCheck, CreditCard, FileText, MoreHorizontal, Eye, Filter, CalendarDays
-} from 'lucide-react'
-import { getProfessionals, createInteraction } from './api'
+import React, { useRef, useState, useEffect } from 'react'
+import { DEMO_CLIENT, DEMO_CLIENTS, DEMO_PROJECTS, ROLE_PROFILE_IDS, DEMO_JOBS, DEMO_CHATS, demoPortrait } from './demoData.js'
+import { createProject as saveProject, createPrivateRequest as savePrivateRequest, updatePrivateRequest } from './api.js'
+import { buildProfileRequest, buildProjectInterestRequest, canRespondToRequest, requestDedupeKey, submitRequestWithApi, decideRequestWithApi } from './requestFlow.js'
+import { Admin } from './components/Admin.jsx'
+import {html, PROS, FL0, CARDS, Landing, Explore, Messages, Contract, ContractsTab, NotaryFlow, Wallet, WalletTab, Chat, Profile, Security, MatchScreen, ProView, Overlay, FavoriteProfiles, IMG} from './approved/visual.js'
+import { Profile as DemoProfile } from './components/Profile.jsx'
+import { Projects } from './components/Projects.jsx'
+import { PrivateRequests } from './components/PrivateRequests.jsx'
+import { RequestForm } from './components/RequestForm.jsx'
+import { Community, DEMO_CLIPS } from './features/community/Community.jsx'
+import { Quoter } from './features/quotes/Quoter.jsx'
+import { demoOffers } from './features/quotes/model.js'
+import './features/quotes/quotes.css'
+import { Portfolio, seedPortfolio } from './features/portfolio/Portfolio.jsx'
+import './features/portfolio/portfolio.css'
+import './features/community/community.css'
 
-const initialPros = [
- {id:'p1',name:'Carlos Muñoz',role:'Maestro constructor',company:'CM Construcciones',verified:true,category:'Obra gruesa',rating:4.9,reviews:38,works:24,zone:'Temuco · Labranza',distance:'4,2 km',price:'Desde $85.000',bio:'Ampliaciones, radieres y remodelaciones. Trabajo con planificación, orden y terminaciones cuidadas.',avatar:'CM',color:'from-slate-700 to-slate-500',tags:['Ampliaciones','Radieres','Remodelación'],photos:['Casa en Labranza','Radier residencial','Ampliación segundo piso']},
- {id:'p2',name:'Instalaciones Sur',role:'Empresa especializada',company:'Instalaciones Sur SpA',verified:true,category:'Electricidad',rating:4.8,reviews:26,works:41,zone:'Temuco · Padre Las Casas',distance:'6,1 km',price:'Visita técnica',bio:'Instalaciones eléctricas domiciliarias, tableros, normalizaciones y proyectos SEC.',avatar:'IS',color:'from-blue-700 to-cyan-500',tags:['Electricidad','Tableros','SEC'],photos:['Tablero eléctrico','Iluminación interior','Canalización']},
- {id:'p3',name:'Javiera Antilef',role:'Maestra independiente',company:'JA Terminaciones',verified:false,category:'Pintura',rating:5.0,reviews:17,works:19,zone:'Temuco · Fundo El Carmen',distance:'3,5 km',price:'Cotización sin costo',bio:'Pintura interior y exterior, empastado y recuperación de superficies. Detalle y limpieza.',avatar:'JA',color:'from-rose-500 to-orange-400',tags:['Pintura','Empastado','Terminaciones'],photos:['Living renovado','Fachada','Dormitorio']},
- {id:'p4',name:'SurGas Servicios',role:'Técnico especialista',company:'SurGas',verified:true,category:'Gasfitería',rating:4.7,reviews:52,works:67,zone:'Temuco · Centro',distance:'2,8 km',price:'Desde $35.000',bio:'Reparaciones sanitarias, redes de agua, calefont y mantenciones domiciliarias.',avatar:'SG',color:'from-emerald-600 to-teal-400',tags:['Gasfitería','Sanitario','Mantención'],photos:['Baño remodelado','Instalación sanitaria','Calefont']},
- {id:'p5',name:'Maderas Cautín',role:'Contratista',company:'Maderas Cautín Ltda.',verified:true,category:'Carpintería',rating:4.6,reviews:21,works:15,zone:'Temuco · Cajón',distance:'8,4 km',price:'A convenir',bio:'Estructuras de madera, techumbres, terrazas y revestimientos exteriores.',avatar:'MC',color:'from-amber-700 to-yellow-500',tags:['Carpintería','Techumbre','Terrazas'],photos:['Terraza en madera','Techumbre','Revestimiento']}
-]
-const categories = [
- ['Todos',Compass],['Obra gruesa',Hammer],['Electricidad',Zap],['Gasfitería',Wrench],
- ['Pintura',Paintbrush],['Carpintería',Trees],['Techumbres',Home],['Remodelaciones',Building2]
-]
-const nav = [
- {label:'General',items:[['Inicio',Home],['Descubrir profesionales',Compass],['Mensajes',MessageCircle,'3']]},
- {label:'Mi actividad',items:[['Favoritos',Heart],['Mis likes',ThumbsUp],['Mis servicios',BriefcaseBusiness],['Reclamos',AlertCircle]]},
- {label:'Mi cuenta',items:[['Mi perfil',UserRound],['Wallet',Wallet],['Calificaciones',Star]]}
-]
-const money = n => new Intl.NumberFormat('es-CL',{style:'currency',currency:'CLP',maximumFractionDigits:0}).format(n)
-function Avatar({initials,color='from-blue-600 to-indigo-500',size='md'}) {
- const sizes={sm:'w-9 h-9 text-xs',md:'w-12 h-12 text-sm',lg:'w-20 h-20 text-xl'}
- return <div className={`${sizes[size]} rounded-2xl bg-gradient-to-br ${color} text-white font-bold grid place-items-center shrink-0 shadow-sm`}>{initials}</div>
-}
-function Pill({children,green=false}) { return <span className={`inline-flex items-center gap-1 rounded-full px-2.5 py-1 text-[11px] font-semibold ${green?'bg-emerald-50 text-emerald-700':'bg-slate-100 text-slate-600'}`}>{children}</span> }
-function SectionTitle({eyebrow,title,subtitle,action}) { return <div className="flex items-end justify-between gap-3 mb-6"><div><p className="text-[11px] font-bold uppercase tracking-[.16em] text-brand mb-2">{eyebrow}</p><h2 className="text-2xl font-bold tracking-tight text-ink">{title}</h2>{subtitle&&<p className="text-sm text-slate-500 mt-1">{subtitle}</p>}</div>{action}</div> }
-function Stat({label,value,delta,icon:Icon}) { return <div className="panel p-4"><div className="flex justify-between items-start"><span className="text-xs text-slate-500">{label}</span><span className="p-2 rounded-xl bg-blue-50 text-brand"><Icon size={17}/></span></div><div className="text-2xl font-bold text-ink mt-3">{value}</div><div className="text-[11px] text-emerald-600 mt-1">{delta}</div></div> }
+export function App() {
+  const [account, setAccount] = useState(null)
+  const [role, setRole] = useState('Cliente')
+  const [activeClientId, setActiveClientId] = useState(DEMO_CLIENT.id)
+  const [activeProviderId, setActiveProviderId] = useState(ROLE_PROFILE_IDS['Maestro o contratista'][0])
+  const [tab, setTab] = useState('explorar')
+  const [adminTab, setAdminTab] = useState('res')
+  const [pros, setPros] = useState(()=>PROS.map(p=>({...p,avatar:p.id===1?IMG.carlos:demoPortrait(p)})))
+  const [seen, setSeen] = useState([])
+  const [saved, setSaved] = useState([])
+  const [likes, setLikes] = useState([])
+  const [filters, setFilters] = useState(FL0)
+  const [projects, setProjects] = useState(DEMO_PROJECTS)
+  const [requests, setRequests] = useState([])
+  const [jobs, setJobs] = useState(()=>DEMO_JOBS.map(j=>({...j})))
+  const [priceEntries,setPriceEntries]=useState(()=>demoOffers.map(x=>({...x})))
+  const [portfolio,setPortfolio]=useState(()=>seedPortfolio(IMG,DEMO_CLIPS))
+  const mediaUrls=useRef(new Set())
+  const [avatarOverrides,setAvatarOverrides]=useState({})
+  const [verificationRequests,setVerificationRequests]=useState({})
+  useEffect(()=>()=>{mediaUrls.current.forEach(url=>URL.revokeObjectURL(url));mediaUrls.current.clear()},[])
+  const [matches, setMatches] = useState([])
+  const [match, setMatch] = useState(null)
+  const [view, setView] = useState(null)
+  const [requestDraft, setRequestDraft] = useState(null)
+  const handlingRequests = useRef(new Set())
+  const submittedRequestKeys = useRef(new Set())
+  const submittingRequestKeys = useRef(new Set())
+  const [message, setMessage] = useState('')
+  const [disputes, setDisputes] = useState([
+    { id: 1024, title: 'Ampliación Habitación', from: 'Carlos Muñoz', step: 1, files: ['Foto_obra_demo.jpg'], checks: [true, true, false, false] },
+  ])
+  const [payments, setPayments] = useState([
+    { id: 'P-301', p: 'Cocina · Luis Vera', a: 650000, s: 'En custodia · demo' },
+  ])
+  const [chats, setChats] = useState(()=>DEMO_CHATS)
+  const [privacy, setPrivacy] = useState([0, 1, 2, 0])
+  const [filtersOpen, setFiltersOpen] = useState(false)
+  const [communityInboxSignal,setCommunityInboxSignal]=useState(0)
+  const [cards, setCards] = useState(CARDS)
+  const addCard = () => { setCards(cs => [...cs, {b:cs.length%2?'Mastercard':'VISA', l:String(1000+cs.length*1111).slice(-4), e:'12/30', c:'#4a5570'}]); toast('Tarjeta de demostración agregada') }
 
-export default function App(){
- const [active,setActive]=useState('Inicio')
- const [role,setRole]=useState('Cliente')
- const [pros,setPros]=useState(initialPros)
- const [index,setIndex]=useState(0)
- const [category,setCategory]=useState('Todos')
- const [query,setQuery]=useState('')
- const [favorites,setFavorites]=useState(['p2'])
- const [likes,setLikes]=useState(['p1','p4'])
- const [matches,setMatches]=useState(['p2'])
- const [toast,setToast]=useState('')
- const [showFilters,setShowFilters]=useState(false)
- const [profile,setProfile]=useState(null)
- const [messages,setMessages]=useState([{from:'them',text:'Hola, gracias por contactarnos. ¿En qué sector de Temuco sería el trabajo?'}])
- const [message,setMessage]=useState('')
- const [claims,setClaims]=useState([{id:'R-0241',title:'Atraso en visita técnica',status:'En revisión',date:'12 nov 2026',person:'Instalaciones Sur'},{id:'R-0198',title:'Diferencia en terminaciones',status:'Cerrado',date:'03 oct 2026',person:'Servicios del Sur'}])
- const [wallet,setWallet]=useState([{brand:'VISA',last:'4242',name:'Tarjeta personal',expiry:'08/28'}])
- const [serviceStatus,setServiceStatus]=useState('Todos')
- const [rating,setRating]=useState(5)
- const [modal,setModal]=useState('')
- const [searchLoading,setSearchLoading]=useState(false)
+  const toast = text => {
+    setMessage(text)
+    window.setTimeout(() => setMessage(''), 2600)
+  }
+  const withAvatar=p=>p&&avatarOverrides[String(p.id)]?{...p,avatar:avatarOverrides[String(p.id)],customAvatar:true}:p
+  const activeClient = withAvatar(DEMO_CLIENTS.find(client => String(client.id) === String(activeClientId)) || DEMO_CLIENT)
+  const clientById = id => DEMO_CLIENTS.find(client => String(client.id) === String(id))
+  const profileById = id => withAvatar([...pros, ...DEMO_CLIENTS].find(profile => String(profile.id) === String(id)))
+  const roleProfile = profileById(role === 'Cliente' ? null : activeProviderId)
+  const ownProfile=role==='Cliente'?activeClient:roleProfile
+  const editPhoto=file=>{if(!ownProfile||!['image/jpeg','image/png','image/webp'].includes(file.type)||file.size>10*1024*1024){toast('Elige una foto JPG, PNG o WebP de hasta 10 MB');return}const id=String(ownProfile.id),url=URL.createObjectURL(file),previous=avatarOverrides[id];mediaUrls.current.add(url);if(previous){URL.revokeObjectURL(previous);mediaUrls.current.delete(previous)}setAvatarOverrides(ps=>({...ps,[id]:url}));if(role!=='Cliente')setPros(ps=>ps.map(p=>String(p.id)===id?{...p,avatar:url,customAvatar:true}:p));toast('Foto actualizada en esta sesión')}
+  const ownerMedia=id=>portfolio.filter(p=>id!=null&&String(p.ownerId)===String(id))
+  const addPortfolio=(files,caption,project)=>{if(!ownProfile)return;const uid=()=>globalThis.crypto?.randomUUID?.()||Date.now()+'-'+Math.random().toString(36).slice(2);const groupId=project?uid():null;const items=Array.from(files).map(file=>{const url=URL.createObjectURL(file);mediaUrls.current.add(url);return {id:uid(),ownerId:String(ownProfile.id),kind:file.type.startsWith('image/')?'image':'video',url,caption:project?file.name:caption,local:true,projectId:groupId,projectTitle:project?.title,projectDescription:project?.description}});setPortfolio(ps=>[...ps,...items])}
+  const removePortfolio=id=>{const item=ownerMedia(ownProfile?.id).find(p=>p.id===id);if(!item)return;if(item.local){URL.revokeObjectURL(item.url);mediaUrls.current.delete(item.url)}setPortfolio(ps=>ps.filter(p=>p!==item))}
+  const contactForJob = job => {
+    if (role === 'Cliente') return profileById(job.providerId) || DEMO_CLIENT
+    const profile = profileById(job.clientId)
+    if (profile) return profile
+    const owner = projects.find(project => String(project.ownerId) === String(job.clientId))
+    return owner ? { ...(clientById(owner.ownerId) || DEMO_CLIENT), id: owner.ownerId, name: owner.ownerName } : DEMO_CLIENT
+  }
+  const currentRequests = role === 'Cliente'
+    ? requests.filter(request => String(request.clientId) === String(activeClient.id))
+    : requests.filter(request => String(request.recipientId) === String(activeProviderId) || String(request.senderId) === String(activeProviderId))
 
- useEffect(()=>{ getProfessionals().then(data=>{if(data?.length)setPros(data)}).catch(()=>{}) },[])
- useEffect(()=>{ if(toast){const t=setTimeout(()=>setToast(''),2600);return()=>clearTimeout(t)} },[toast])
- const filtered=useMemo(()=>pros.filter(p=>(category==='Todos'||p.category===category||p.tags.includes(category)) && (`${p.name} ${p.company} ${p.category} ${p.zone}`).toLowerCase().includes(query.toLowerCase())),[pros,category,query])
- const current=filtered[index % Math.max(filtered.length,1)] || pros[0]
- const notify=(s)=>setToast(s)
- const toggleFavorite=(id)=>setFavorites(v=>v.includes(id)?v.filter(x=>x!==id):[...v,id])
- const like=(p)=>{if(!p)return;setLikes(v=>v.includes(p.id)?v:[...v,p.id]);setMatches(v=>v.includes(p.id)?v:[...v,p.id]);notify(`¡Interés registrado con ${p.name}!`);createInteraction({clientUserId:'demo-client',professionalId:p.id,type:'like'}).catch(()=>{});setIndex(i=>i+1)}
- const pass=()=>setIndex(i=>i+1)
- const go=(name)=>{setActive(name);setProfile(null)}
- const card=(p,compact=false)=><div key={p.id} className="panel p-4 flex gap-3"><Avatar initials={p.avatar} color={p.color}/><div className="min-w-0 flex-1"><div className="flex flex-wrap items-center gap-2"><b className="text-sm text-ink">{p.name}</b>{p.verified&&<BadgeCheck size={15} className="text-blue-600"/>}</div><p className="text-xs text-slate-500 mt-0.5">{p.role} · {p.category}</p><div className="flex flex-wrap gap-2 mt-2"><span className="text-xs text-amber-600 flex items-center gap-1"><Star size={12} fill="currentColor"/>{p.rating} ({p.reviews})</span><span className="text-xs text-slate-400 flex items-center gap-1"><MapPin size={12}/>{p.zone}</span></div>{!compact&&<p className="text-xs text-slate-500 mt-2 line-clamp-2">{p.bio}</p>}<div className="flex gap-2 mt-3"><button onClick={()=>setProfile(p)} className="btn-outline text-xs py-2">Ver perfil</button><button onClick={()=>{setMatches(v=>v.includes(p.id)?v:[...v,p.id]);notify('Conversación habilitada')}} className="btn-primary text-xs py-2">Contactar</button></div></div></div>
- const pageHeader=(eyebrow,title,subtitle)=><SectionTitle eyebrow={eyebrow} title={title} subtitle={subtitle}/>
- const renderDiscover=()=> <><SectionTitle eyebrow="Encuentra tu próximo match" title="Profesionales para tu proyecto" subtitle="Explora perfiles, revisa trabajos y conecta con quienes te interesen." action={<button className="btn-outline" onClick={()=>setShowFilters(!showFilters)}><SlidersHorizontal size={15}/> Filtros</button>}/><div className="flex gap-2 overflow-x-auto pb-3 mb-4">{categories.map(([c,I])=><button key={c} onClick={()=>{setCategory(c);setIndex(0)}} className={`chip ${category===c?'chip-active':''}`}><I size={14}/>{c}</button>)}</div>{showFilters&&<div className="panel p-4 mb-4 grid sm:grid-cols-3 gap-3"><label className="text-xs text-slate-500">Comuna / sector<select className="field mt-1"><option>Temuco y alrededores</option><option>Padre Las Casas</option><option>Labranza</option><option>Freire</option></select></label><label className="text-xs text-slate-500">Tipo de proveedor<select className="field mt-1"><option>Todos</option><option>Maestro independiente</option><option>Contratista</option><option>Empresa</option></select></label><label className="text-xs text-slate-500">Calificación mínima<select className="field mt-1"><option>Cualquiera</option><option>4 estrellas o más</option><option>4,5 estrellas o más</option></select></label></div>}<div className="grid lg:grid-cols-[1fr_300px] gap-5"><div className="panel overflow-hidden"><div className="relative h-64 sm:h-80 bg-gradient-to-br from-slate-100 via-blue-50 to-slate-200 p-6 flex items-end"><div className="absolute inset-0 opacity-40" style={{backgroundImage:'linear-gradient(135deg, transparent 48%, #fff 49%, #fff 51%, transparent 52%)',backgroundSize:'34px 34px'}}/><div className="absolute top-5 left-5"><Pill green><span className="w-1.5 h-1.5 rounded-full bg-emerald-500"/> Disponible en Temuco</Pill></div><div className="relative flex items-end gap-4"><Avatar initials={current.avatar} color={current.color} size="lg"/><div><h3 className="text-xl font-bold text-ink">{current.name}</h3><p className="text-sm text-slate-600">{current.role}</p><div className="flex gap-2 mt-2"><Pill><Star size={11} fill="#d99b20" className="text-amber-500"/>{current.rating} · {current.reviews} opiniones</Pill>{current.verified&&<Pill green><BadgeCheck size={12}/> Verificado</Pill>}</div></div></div></div><div className="p-5"><div className="flex justify-between items-start"><div><p className="text-xs font-semibold text-brand uppercase tracking-wider">{current.category}</p><p className="text-sm text-slate-500 mt-1">{current.zone} · {current.distance}</p></div><b className="text-sm text-ink">{current.price}</b></div><p className="text-sm text-slate-600 leading-6 mt-3">{current.bio}</p><div className="flex flex-wrap gap-2 mt-3">{current.tags.map(t=><Pill key={t}>{t}</Pill>)}</div><div className="flex gap-3 mt-5"><button onClick={pass} className="flex-1 btn-outline justify-center"><X size={17}/> Pasar</button><button onClick={()=>toggleFavorite(current.id)} className={`btn-outline justify-center ${favorites.includes(current.id)?'text-rose-600 border-rose-200':''}`}><Heart size={17} fill={favorites.includes(current.id)?'currentColor':'none'}/></button><button onClick={()=>like(current)} className="flex-1 btn-primary justify-center"><ThumbsUp size={16}/> Me interesa</button></div><button onClick={()=>setProfile(current)} className="w-full text-center text-xs text-brand font-semibold mt-4">Ver perfil y portafolio completo <ChevronRight size={13} className="inline"/></button></div></div><div className="space-y-4"><div className="panel p-4"><h4 className="font-bold text-sm text-ink">Tu búsqueda</h4><div className="relative mt-3"><Search size={15} className="absolute left-3 top-3 text-slate-400"/><input className="field pl-9" placeholder="Especialidad o profesional" value={query} onChange={e=>{setQuery(e.target.value);setIndex(0)}}/></div><div className="mt-4 flex justify-between text-xs text-slate-500"><span>Perfiles disponibles</span><b className="text-ink">{filtered.length}</b></div><div className="mt-2 flex justify-between text-xs text-slate-500"><span>Coincidencias</span><b className="text-ink">{matches.length}</b></div></div><div className="panel p-4"><h4 className="font-bold text-sm text-ink mb-3">Perfiles sugeridos</h4>{filtered.slice(0,3).map(p=><button key={p.id} onClick={()=>setProfile(p)} className="w-full text-left flex items-center gap-2 py-2 border-b last:border-0 border-slate-100"><Avatar initials={p.avatar} color={p.color} size="sm"/><span className="min-w-0 flex-1"><b className="block text-xs truncate">{p.name}</b><span className="text-[11px] text-slate-400">{p.category}</span></span><ChevronRight size={14} className="text-slate-400"/></button>)}</div></div></div></>
- const renderHome=()=> <><div className="rounded-3xl bg-gradient-to-r from-[#172846] to-[#315fbd] p-6 sm:p-8 text-white mb-6 relative overflow-hidden"><div className="relative z-10 max-w-xl"><Pill green>MATCHTER · TEMUCO</Pill><h2 className="text-2xl sm:text-3xl font-bold mt-4 leading-tight">Tu próximo proyecto comienza con una buena conexión.</h2><p className="text-blue-100 text-sm mt-3 max-w-md">Descubre profesionales, revisa sus trabajos y contrata con mayor claridad y confianza.</p><button onClick={()=>go('Descubrir profesionales')} className="mt-5 bg-white text-ink rounded-xl px-4 py-3 text-sm font-bold inline-flex items-center gap-2">Explorar profesionales <ArrowUpRight size={16}/></button></div><div className="absolute -right-10 -bottom-24 w-72 h-72 rounded-full border-[38px] border-white/10"/><div className="absolute right-14 top-8 opacity-20"><Building2 size={120}/></div></div><div className="grid sm:grid-cols-2 xl:grid-cols-4 gap-3 mb-6"><Stat label="Profesionales explorados" value="128" delta="+12 esta semana" icon={HardHat}/><Stat label="Tus favoritos" value={favorites.length} delta="Perfiles guardados" icon={Heart}/><Stat label="Conexiones" value={matches.length} delta="Interés mutuo / contacto" icon={MessageCircle}/><Stat label="Servicios activos" value="2" delta="1 requiere tu atención" icon={BriefcaseBusiness}/></div><div className="grid lg:grid-cols-[1.3fr_1fr] gap-5"><div><div className="flex justify-between items-center mb-3"><h3 className="font-bold text-ink">Explora por especialidad</h3><button className="text-xs text-brand font-semibold" onClick={()=>go('Descubrir profesionales')}>Ver todas</button></div><div className="grid grid-cols-2 sm:grid-cols-4 gap-3">{categories.slice(1).map(([c,I],i)=><button onClick={()=>{setCategory(c);go('Descubrir profesionales')}} className="panel p-4 text-left hover:border-blue-200 transition" key={c}><span className="w-10 h-10 rounded-xl bg-blue-50 text-brand grid place-items-center"><I size={19}/></span><b className="block text-xs mt-3">{c}</b><span className="text-[11px] text-slate-400">{[18,12,21,16,9,11,14][i]} profesionales</span></button>)}</div></div><div><h3 className="font-bold text-ink mb-3">Actividad reciente</h3><div className="panel p-4 space-y-4">{[['Tu favorito Instalaciones Sur publicó un nuevo proyecto','Hace 2 horas',Camera],['Carlos Muñoz respondió a tu solicitud','Ayer',MessageCircle],['Tu evaluación fue publicada','12 nov',Star]].map(([t,d,I])=><div className="flex gap-3" key={t}><span className="w-9 h-9 rounded-xl bg-slate-100 grid place-items-center text-slate-500"><I size={16}/></span><div className="flex-1"><p className="text-xs text-slate-700">{t}</p><span className="text-[11px] text-slate-400">{d}</span></div></div>)}</div></div></div></>
- const renderProfile=()=>profile?<div><button onClick={()=>setProfile(null)} className="text-xs text-brand font-semibold mb-4">← Volver a resultados</button><div className="panel overflow-hidden"><div className="h-36 bg-gradient-to-r from-slate-200 via-blue-100 to-slate-100"/><div className="px-5 pb-6"><div className="-mt-10 flex flex-wrap items-end gap-4"><Avatar initials={profile.avatar} color={profile.color} size="lg"/><div className="flex-1 pt-2"><div className="flex gap-2 items-center"><h2 className="text-xl font-bold">{profile.name}</h2>{profile.verified&&<BadgeCheck className="text-blue-600" size={18}/>}</div><p className="text-sm text-slate-500">{profile.role} · {profile.company}</p></div><button className="btn-primary" onClick={()=>{setMatches(v=>v.includes(profile.id)?v:[...v,profile.id]);notify('Solicitud de contacto enviada')}}><MessageCircle size={15}/> Contactar</button></div><div className="grid sm:grid-cols-3 gap-3 mt-6"><Stat label="Calificación" value={`${profile.rating} / 5`} delta={`${profile.reviews} evaluaciones`} icon={Star}/><Stat label="Trabajos" value={profile.works} delta="En portafolio" icon={BriefcaseBusiness}/><Stat label="Zona" value="Temuco" delta={profile.zone} icon={MapPin}/></div><h3 className="font-bold mt-7 mb-2">Acerca de</h3><p className="text-sm text-slate-600 leading-6">{profile.bio}</p><h3 className="font-bold mt-6 mb-3">Especialidades</h3><div className="flex flex-wrap gap-2">{profile.tags.map(t=><Pill key={t}>{t}</Pill>)}</div><h3 className="font-bold mt-6 mb-3">Portafolio de proyectos</h3><div className="grid sm:grid-cols-3 gap-3">{profile.photos.map((p,i)=><div className="rounded-2xl bg-gradient-to-br from-slate-100 to-blue-100 h-36 flex flex-col justify-end p-3" key={p}><Camera className="text-slate-400 mb-auto" size={18}/><b className="text-xs text-slate-700">{p}</b><span className="text-[10px] text-slate-400">Proyecto de muestra · Temuco</span></div>)}</div></div></div></div>:renderDiscover()
- const renderSaved=(ids,title,sub)=> <><SectionTitle eyebrow="Tu red MATCHTER" title={title} subtitle={sub}/><div className="grid lg:grid-cols-2 gap-3">{pros.filter(p=>ids.includes(p.id)).map(p=>card(p))}{!pros.some(p=>ids.includes(p.id))&&<div className="panel p-8 text-center text-sm text-slate-500">Todavía no tienes perfiles en esta sección.</div>}</div></>
- const renderMessages=()=> <><SectionTitle eyebrow="Comunicación" title="Mensajes" subtitle="Coordina visitas, comparte antecedentes y conversa dentro de MATCHTER."/><div className="panel grid md:grid-cols-[260px_1fr] min-h-[460px] overflow-hidden"><div className="border-r border-slate-100 p-3"><p className="text-xs font-bold text-slate-400 px-2 py-2">CONVERSACIONES</p>{pros.filter(p=>matches.includes(p.id)).map(p=><button key={p.id} className="w-full flex gap-2 items-center p-2 rounded-xl hover:bg-slate-50 text-left"><Avatar initials={p.avatar} color={p.color} size="sm"/><span className="flex-1 min-w-0"><b className="block text-xs">{p.name}</b><span className="text-[11px] text-slate-400">Conversación reciente</span></span><span className="w-2 h-2 bg-emerald-400 rounded-full"/></button>)}</div><div className="flex flex-col"><div className="p-4 border-b border-slate-100"><b className="text-sm">Centro de conversaciones</b><p className="text-xs text-slate-400">Tus conversaciones y acuerdos</p></div><div className="flex-1 p-5 space-y-3">{messages.map((m,i)=><div key={i} className={`flex ${m.from==='me'?'justify-end':''}`}><div className={`max-w-[80%] rounded-2xl p-3 text-sm ${m.from==='me'?'bg-brand text-white':'bg-slate-100 text-slate-700'}`}>{m.text}</div></div>)}<div className="bg-emerald-50 rounded-xl p-3 text-xs text-emerald-800"><b>Consejo de seguridad</b><p className="mt-1">Deja los alcances, plazos y acuerdos importantes registrados en la plataforma.</p></div></div><form className="p-3 border-t border-slate-100 flex gap-2" onSubmit={e=>{e.preventDefault();if(message.trim()){setMessages(v=>[...v,{from:'me',text:message}]);setMessage('')}}}><input className="field" placeholder="Escribe un mensaje..." value={message} onChange={e=>setMessage(e.target.value)}/><button className="btn-primary"><Send size={16}/></button></form></div></div></>
- const renderClaims=()=> <><SectionTitle eyebrow="Soporte y confianza" title="Reclamos" subtitle="Seguimiento transparente de situaciones reportadas." action={<button onClick={()=>setModal('claim')} className="btn-primary"><Plus size={15}/> Nuevo reclamo</button>}/><div className="grid sm:grid-cols-3 gap-3 mb-5"><Stat label="Abiertos" value={claims.filter(c=>c.status!=='Cerrado').length} delta="En seguimiento" icon={Clock3}/><Stat label="Cerrados" value={claims.filter(c=>c.status==='Cerrado').length} delta="Resueltos" icon={Check}/><Stat label="Por revisar" value="1" delta="Requiere antecedentes" icon={AlertCircle}/></div><div className="panel divide-y divide-slate-100">{claims.map(c=><div key={c.id} className="p-4 flex flex-wrap gap-3 items-center"><div className="w-10 h-10 rounded-xl bg-amber-50 text-amber-600 grid place-items-center"><AlertCircle size={18}/></div><div className="flex-1"><b className="text-sm">{c.title}</b><p className="text-xs text-slate-400 mt-1">{c.id} · {c.person} · {c.date}</p></div><Pill green={c.status==='Cerrado'}>{c.status}</Pill><button className="text-xs text-brand font-semibold" onClick={()=>notify(`Detalle de ${c.id}`)}>Ver detalle</button></div>)}</div></>
- const renderServices=()=> <><SectionTitle eyebrow="Contrataciones" title="Mis servicios" subtitle="Trabajos, acuerdos, etapas y evaluaciones asociadas a tus contrataciones."/><div className="flex gap-2 mb-4">{['Todos','En curso','Completados'].map(s=><button onClick={()=>setServiceStatus(s)} className={`chip ${serviceStatus===s?'chip-active':''}`} key={s}>{s}</button>)}</div><div className="space-y-3">{[{name:'Remodelación de baño',pro:'Carlos Muñoz',status:'En curso',date:'Inicio 18 nov 2026',progress:65,amount:'$1.850.000'},{name:'Normalización tablero eléctrico',pro:'Instalaciones Sur',status:'Completados',date:'Finalizado 02 nov 2026',progress:100,amount:'$420.000'}].filter(s=>serviceStatus==='Todos'||s.status===serviceStatus).map((s,i)=><div className="panel p-5" key={s.name}><div className="flex flex-wrap justify-between gap-3"><div><Pill green={s.status==='Completados'}>{s.status}</Pill><h3 className="font-bold mt-2">{s.name}</h3><p className="text-xs text-slate-500 mt-1">{s.pro} · {s.date}</p></div><b className="text-sm">{s.amount}</b></div><div className="h-2 bg-slate-100 rounded-full mt-5 overflow-hidden"><div className="h-full bg-brand rounded-full" style={{width:`${s.progress}%`}}/></div><div className="flex justify-between text-[11px] text-slate-400 mt-2"><span>Avance del trabajo</span><b>{s.progress}%</b></div><div className="flex gap-2 mt-4"><button onClick={()=>go('Mensajes')} className="btn-outline text-xs">Ver conversación</button>{s.progress===100?<button onClick={()=>setModal('review')} className="btn-primary text-xs"><Star size={14}/> Evaluar servicio</button>:<button onClick={()=>notify('Acuerdo de trabajo abierto')} className="btn-primary text-xs"><FileText size={14}/> Ver acuerdo</button>}</div></div>)}</div></>
- const renderWallet=()=> <><SectionTitle eyebrow="Pagos" title="Wallet" subtitle="Administra tus medios de pago. Los datos reales de tarjetas deberán tokenizarse con un proveedor habilitado." action={<button onClick={()=>setModal('card')} className="btn-primary"><Plus size={15}/> Agregar tarjeta</button>}/><div className="grid md:grid-cols-2 gap-4">{wallet.map(w=><div className="rounded-2xl bg-gradient-to-br from-[#1b2c4d] to-[#4169b2] p-5 text-white min-h-44 flex flex-col justify-between" key={w.last}><div className="flex justify-between"><span className="text-xs tracking-widest opacity-80">MATCHTER WALLET</span><CreditCard/></div><div><p className="text-xl tracking-[.2em]">•••• •••• •••• {w.last}</p><div className="flex justify-between mt-4 text-xs"><span>{w.name}</span><span>{w.expiry}</span></div></div><b className="text-right text-lg">{w.brand}</b></div>)}<button onClick={()=>setModal('card')} className="border-2 border-dashed border-slate-200 rounded-2xl min-h-44 text-slate-400 flex flex-col items-center justify-center gap-2 hover:border-brand hover:text-brand"><Plus/><span className="text-sm font-semibold">Agregar medio de pago</span></button></div><div className="panel p-4 mt-5 flex gap-3"><ShieldCheck className="text-emerald-600 shrink-0"/><div><b className="text-sm">Tus datos financieros protegidos</b><p className="text-xs text-slate-500 mt-1">Este prototipo utiliza tarjetas ficticias. En producción, MATCHTER no almacenará números CVV ni datos sensibles de tarjeta: se integrará tokenización del proveedor de pagos.</p></div></div></>
- const renderProfileAccount=()=> <><SectionTitle eyebrow="Cuenta" title="Mi perfil" subtitle="Administra tus antecedentes y la información visible para otros usuarios."/><div className="panel p-5"><div className="flex gap-4 items-center"><Avatar initials="MS" size="lg" color="from-slate-700 to-blue-600"/><div><h3 className="font-bold">Marcelo Seguel</h3><p className="text-xs text-slate-500">Cliente · Temuco, Región de La Araucanía</p><Pill green><Check size={12}/> Correo verificado</Pill></div></div><div className="grid sm:grid-cols-2 gap-4 mt-6">{[['Nombre completo','Marcelo Seguel'],['Correo electrónico','marcelo@email.cl'],['Teléfono','+56 9 8765 4321'],['Comuna','Temuco'],['Tipo de cuenta','Cliente particular'],['Privacidad','Perfil público limitado']].map(([l,v])=><label className="text-xs text-slate-500" key={l}>{l}<input className="field mt-1" defaultValue={v}/></label>)}</div><button onClick={()=>notify('Cambios guardados en la sesión de demostración')} className="btn-primary mt-5">Guardar cambios</button></div></>
- const renderRatings=()=> <><SectionTitle eyebrow="Reputación" title="Calificaciones" subtitle="Opiniones recibidas y evaluaciones realizadas tras servicios registrados."/><div className="grid md:grid-cols-2 gap-4"><div className="panel p-5"><p className="text-xs text-slate-500">Tu calificación como cliente</p><div className="text-4xl font-bold mt-2">4,9 <span className="text-amber-500 text-2xl">★</span></div><p className="text-xs text-slate-400">Basada en 3 evaluaciones recibidas</p></div><div className="panel p-5"><p className="text-xs text-slate-500">Evaluaciones realizadas</p><div className="text-4xl font-bold mt-2">2</div><p className="text-xs text-slate-400">Vinculadas a contrataciones registradas</p></div></div><div className="panel p-4 mt-4"><b className="text-sm">Tu actividad de reputación</b><p className="text-xs text-slate-500 mt-2">Las reseñas de MATCHTER deben estar asociadas a una contratación verificable para aportar confianza a la comunidad.</p></div></>
- const renderCompany=()=> <><SectionTitle eyebrow="Espacio profesional" title="Panel de empresa" subtitle="Administra tu presencia pública y tu operación privada en MATCHTER."/><div className="panel p-5 mb-4"><div className="flex flex-wrap justify-between gap-3"><div className="flex gap-3"><Avatar initials="CR" color="from-blue-700 to-indigo-500" size="lg"/><div><div className="flex items-center gap-2"><h3 className="font-bold">Constructora Río Cautín SpA</h3><BadgeCheck className="text-blue-600"/></div><p className="text-xs text-slate-500">Empresa constructora · Temuco</p><Pill green>Identidad de demostración verificada</Pill></div></div><button onClick={()=>notify('Flujo de verificación pendiente de integración')} className="btn-outline text-xs"><ShieldCheck size={14}/> Gestionar verificación</button></div><div className="grid sm:grid-cols-3 gap-3 mt-6"><Stat label="Visitas al perfil" value="246" delta="+18% este mes" icon={Eye}/><Stat label="Solicitudes recibidas" value="14" delta="5 por responder" icon={MessageCircle}/><Stat label="Calificación" value="4,8/5" delta="32 evaluaciones" icon={Star}/></div></div><div className="grid lg:grid-cols-2 gap-4"><div className="panel p-5"><h3 className="font-bold text-sm">Perfil público</h3><p className="text-xs text-slate-500 mt-1">Información visible para potenciales clientes.</p><div className="space-y-3 mt-4 text-xs">{[['Razón social','Constructora Río Cautín SpA'],['RUT','77.123.456-7 (ficticio)'],['Nombre de fantasía','Río Cautín Construcciones'],['Zona de trabajo','Temuco y Padre Las Casas'],['Especialidades','Obra gruesa · Remodelación · Ampliaciones']].map(([a,b])=><div key={a}><span className="text-slate-400">{a}</span><b className="block mt-1">{b}</b></div>)}</div><button onClick={()=>notify('Edición de perfil público habilitada en demo')} className="btn-outline mt-4 text-xs">Editar perfil público</button></div><div className="panel p-5"><h3 className="font-bold text-sm">Información privada</h3><p className="text-xs text-slate-500 mt-1">Solo visible para administradores autorizados de la empresa.</p><div className="space-y-3 mt-4 text-xs">{[['Representante legal','Rodrigo Seguel'],['Correo administrativo','contacto@riocautin.demo'],['Teléfono','+56 9 5555 0101'],['Dirección','Temuco, Araucanía'],['Estado documental','Pendiente de validación real']].map(([a,b])=><div key={a}><span className="text-slate-400">{a}</span><b className="block mt-1">{b}</b></div>)}</div><button onClick={()=>notify('Datos privados guardados en sesión demo')} className="btn-outline mt-4 text-xs">Editar datos privados</button></div></div></>
- const renderContent=()=>{
- if(profile)return renderProfile()
- switch(active){
- case 'Inicio':return renderHome()
- case 'Descubrir profesionales':return renderDiscover()
- case 'Favoritos':return renderSaved(favorites,'Mis favoritos','Perfiles que guardaste para volver a revisarlos.')
- case 'Mis likes':return renderSaved(likes,'Mis likes','Profesionales a quienes expresaste interés.')
- case 'Mensajes':return renderMessages()
- case 'Reclamos':return renderClaims()
- case 'Mis servicios':return renderServices()
- case 'Wallet':return renderWallet()
- case 'Mi perfil':return renderProfileAccount()
- case 'Calificaciones':return renderRatings()
- case 'Panel empresa':return renderCompany()
- default:return renderHome()
- }}
- return <div className="min-h-screen bg-[#f7f9fc] text-ink">
- <aside className="hidden lg:flex fixed inset-y-0 left-0 w-[250px] bg-white border-r border-slate-100 flex-col z-20"><div className="px-6 pt-7 pb-6"><div className="flex items-center gap-2"><div className="w-9 h-9 rounded-xl bg-brand text-white grid place-items-center"><span className="font-black text-lg">M</span></div><div><div className="font-black tracking-tight text-xl">MATCHTER</div><div className="text-[9px] text-slate-400 tracking-[.18em]">CONSTRUCCIÓN QUE CONECTA</div></div></div></div><div className="px-4 mb-4"><div className="bg-slate-50 rounded-xl p-2 flex gap-1"><button onClick={()=>setRole('Cliente')} className={`flex-1 text-xs py-2 rounded-lg font-semibold ${role==='Cliente'?'bg-white shadow-sm text-brand':'text-slate-500'}`}>Cliente</button><button onClick={()=>setRole('Empresa')} className={`flex-1 text-xs py-2 rounded-lg font-semibold ${role==='Empresa'?'bg-white shadow-sm text-brand':'text-slate-500'}`}>Empresa</button></div></div><nav className="px-3 flex-1 overflow-y-auto">{nav.map(group=><div className="mb-5" key={group.label}><p className="px-3 text-[10px] font-bold uppercase tracking-[.16em] text-slate-400 mb-2">{group.label}</p>{group.items.map(([name,I,badge])=><button key={name} onClick={()=>go(name)} className={`nav-item ${active===name?'nav-active':''}`}><I size={17}/><span>{name}</span>{badge&&<span className="ml-auto bg-blue-50 text-brand rounded-full px-2 py-0.5 text-[10px]">{badge}</span>}</button>)}</div>)}{role==='Empresa'&&<button onClick={()=>go('Panel empresa')} className={`nav-item ${active==='Panel empresa'?'nav-active':''}`}><Building2 size={17}/>Panel empresa</button>}</nav><div className="p-4"><div className="rounded-2xl bg-slate-50 p-3"><div className="flex items-center gap-2"><Avatar initials={role==='Cliente'?'MS':'RC'} size="sm"/><div><b className="block text-xs">{role==='Cliente'?'Marcelo Seguel':'Río Cautín SpA'}</b><span className="text-[10px] text-slate-400">{role} · Temuco</span></div></div><button onClick={()=>notify('Configuración de cuenta')} className="text-[11px] text-slate-500 mt-3 flex items-center gap-2"><Settings size={13}/> Configuración</button></div></div></aside>
- <main className="lg:ml-[250px] min-h-screen"><header className="sticky top-0 z-10 bg-white/90 backdrop-blur border-b border-slate-100 px-4 sm:px-7 py-3 flex items-center justify-between"><div className="flex items-center gap-3"><div className="lg:hidden w-8 h-8 rounded-lg bg-brand text-white grid place-items-center font-black">M</div><div><p className="text-xs text-slate-400">Viernes, 20 de noviembre de 2026</p><p className="font-bold text-sm">{active}</p></div></div><div className="flex items-center gap-2"><div className="hidden sm:flex items-center gap-2 bg-slate-50 rounded-xl px-3 py-2 w-56"><Search size={15} className="text-slate-400"/><input className="bg-transparent outline-none text-xs w-full" placeholder="Buscar en MATCHTER..."/></div><button onClick={()=>notify('No tienes notificaciones nuevas')} className="w-9 h-9 rounded-xl border border-slate-100 grid place-items-center text-slate-500 relative"><Bell size={17}/><span className="absolute top-1.5 right-1.5 w-1.5 h-1.5 bg-rose-500 rounded-full"/></button><div className="hidden sm:block"><Avatar initials={role==='Cliente'?'MS':'RC'} size="sm"/></div></div></header><div className="max-w-[1400px] mx-auto p-4 sm:p-7 pb-24 lg:pb-8">{role==='Empresa'&&active!=='Panel empresa'&&<div className="mb-5 rounded-xl bg-blue-50 border border-blue-100 p-3 flex items-center justify-between"><p className="text-xs text-blue-800">Estás visualizando la experiencia de cliente. Cambia a Panel empresa para administrar tu negocio.</p><button onClick={()=>go('Panel empresa')} className="text-xs font-bold text-brand">Ir al panel</button></div>}{renderContent()}</div></main>
- <nav className="lg:hidden fixed bottom-0 inset-x-0 bg-white border-t border-slate-100 px-2 py-2 z-20 flex justify-around">{[['Inicio',Home],['Descubrir profesionales',Compass],['Favoritos',Heart],['Mensajes',MessageCircle],['Mi perfil',UserRound]].map(([n,I])=><button onClick={()=>go(n)} key={n} className={`flex flex-col items-center gap-1 px-2 py-1 text-[9px] ${active===n?'text-brand':'text-slate-400'}`}><I size={19}/>{n==='Descubrir profesionales'?'Explorar':n==='Mi perfil'?'Perfil':n}</button>)}</nav>
- {toast&&<div className="fixed bottom-20 lg:bottom-6 right-4 bg-ink text-white px-4 py-3 rounded-xl shadow-xl text-xs z-50 flex items-center gap-2"><Check size={15} className="text-emerald-400"/>{toast}</div>}
- {modal&&<div className="fixed inset-0 bg-slate-900/40 z-40 grid place-items-center p-4" onClick={()=>setModal('')}><div className="bg-white rounded-2xl p-5 w-full max-w-md shadow-2xl" onClick={e=>e.stopPropagation()}><div className="flex justify-between items-center mb-4"><h3 className="font-bold">{modal==='card'?'Agregar tarjeta':modal==='claim'?'Nuevo reclamo':'Evaluar servicio'}</h3><button onClick={()=>setModal('')}><X size={18}/></button></div>{modal==='card'?<form onSubmit={e=>{e.preventDefault();setWallet(v=>[...v,{brand:'VISA',last:'1111',name:'Nueva tarjeta demo',expiry:'12/29'}]);setModal('');notify('Tarjeta de demostración agregada')}} className="space-y-3"><p className="text-xs text-slate-500">Demostración: no ingreses datos reales de tarjeta.</p><input className="field" placeholder="Nombre de la tarjeta" required/><input className="field" placeholder="Últimos 4 dígitos ficticios" maxLength="4" required/><button className="btn-primary w-full justify-center">Guardar tarjeta de prueba</button></form>:modal==='claim'?<form onSubmit={e=>{e.preventDefault();setClaims(v=>[{id:`R-0${250+v.length}`,title:'Nuevo reclamo ingresado',status:'Nuevo',date:'20 nov 2026',person:'Solicitud del usuario'},...v]);setModal('');notify('Reclamo registrado en la demostración')}} className="space-y-3"><input className="field" placeholder="Título del reclamo" required/><select className="field"><option>Servicio / profesional involucrado</option>{pros.map(p=><option key={p.id}>{p.name}</option>)}</select><textarea className="field min-h-24" placeholder="Describe lo ocurrido..." required/><button className="btn-primary w-full justify-center">Enviar reclamo</button></form>:<div><p className="text-sm text-slate-500">¿Cómo evaluarías tu experiencia?</p><div className="flex gap-2 my-4">{[1,2,3,4,5].map(n=><button key={n} onClick={()=>setRating(n)}><Star size={27} className={n<=rating?'text-amber-400 fill-amber-400':'text-slate-200'}/></button>)}</div><textarea className="field min-h-24" placeholder="Cuéntanos cómo fue el servicio..."/><button onClick={()=>{setModal('');notify(`Evaluación de ${rating} estrellas registrada en demo`)}} className="btn-primary w-full justify-center mt-3">Publicar evaluación</button></div>}</div></div>}
- </div>
+  const openProfileRequest = profile => setRequestDraft({ kind: 'profile', provider: profile, client: activeClient })
+
+  const act = (profile, action) => {
+    if (action === 'save') {
+      setSaved(previous => previous.includes(profile.id) ? previous : [...previous, profile.id])
+      setSeen(previous => previous.includes(profile.id) ? previous : [...previous, profile.id])
+      toast('Perfil guardado en favoritos')
+      return
+    }
+    if (action === 'like') {
+      openProfileRequest(profile)
+      return
+    }
+    setSeen(previous => previous.includes(profile.id) ? previous : [...previous, profile.id])
+  }
+
+  const changeRole = nextRole => {
+    setRole(nextRole)
+    if (ROLE_PROFILE_IDS[nextRole]?.length) setActiveProviderId(ROLE_PROFILE_IDS[nextRole][0])
+    setTab(nextRole === 'Cliente' ? 'explorar' : 'proyectos')
+    setView(null)
+    setMatch(null)
+    toast(`Perfil de demostración activo: ${nextRole}`)
+  }
+
+  const changeProvider = nextProviderId => {
+    setActiveProviderId(nextProviderId)
+    setTab('solicitudes')
+    setView(null)
+    setRequestDraft(null)
+    setMatch(null)
+    toast('Perfil proveedor de demostración actualizado')
+  }
+
+  const changeClient = nextClientId => {
+    setActiveClientId(nextClientId)
+    setTab('solicitudes')
+    setView(null)
+    setRequestDraft(null)
+    setMatch(null)
+    toast('Cliente activo de demostración actualizado')
+  }
+
+  const createPublicProject = async projectData => {
+    const project = {
+      ...projectData,
+      id: `project-${Date.now()}`,
+      ownerId: activeClient.id,
+      ownerName: activeClient.name,
+      photo: 'https://images.unsplash.com/photo-1556912172-45b7abe8b7e1?auto=format&fit=crop&w=1200&q=85',
+    }
+    try {
+      const confirmedProject = await saveProject(project)
+      if (!confirmedProject?.id) throw new Error('La API no devolvió el proyecto creado')
+      setProjects(previous => previous.some(item => String(item.id) === String(confirmedProject.id)) ? previous : [confirmedProject, ...previous])
+      toast('Proyecto publicado por la API; disponible en esta sesión')
+      return true
+    } catch (error) {
+      toast(`No se pudo publicar el proyecto: ${error.message}`)
+      return false
+    }
+  }
+
+  const expressInterest = project => {
+    const providerId = roleProfile?.id
+    if (!providerId) return
+    const duplicateKey = requestDedupeKey({ clientId: project.ownerId, providerId, projectId: project.id, projectTitle: project.title })
+    if (requests.some(request => request.dedupeKey === duplicateKey) || matches.some(item => item.dedupeKey === duplicateKey)) {
+      toast('Ya existe una solicitud para este proyecto y perfil')
+      return
+    }
+    setRequestDraft({ kind: 'project_interest', project, provider: roleProfile, role })
+  }
+
+  const submitRequest = async details => {
+    if (!requestDraft) return false
+    const request = requestDraft.kind === 'project_interest'
+      ? buildProjectInterestRequest({ ...requestDraft, details })
+      : buildProfileRequest({ ...requestDraft, details })
+    const key = request.dedupeKey
+    if (submittedRequestKeys.current.has(key) || submittingRequestKeys.current.has(key) || requests.some(item => item.dedupeKey === key) || matches.some(item => item.dedupeKey === key)) {
+      setRequestDraft(null)
+      toast('Ya existe una solicitud o Match para este proyecto y perfil')
+      return false
+    }
+    request.id = `request-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`
+    request.senderName = requestDraft.kind === 'project_interest' ? requestDraft.provider.name : requestDraft.client.name
+    request.recipientName = requestDraft.kind === 'project_interest' ? requestDraft.project.ownerName : requestDraft.provider.name
+    submittingRequestKeys.current.add(key)
+    try {
+      const confirmedRequest = await submitRequestWithApi(request, savePrivateRequest)
+      submittedRequestKeys.current.add(key)
+      setRequests(previous => previous.some(item => item.dedupeKey === key) ? previous : [confirmedRequest, ...previous])
+      if (requestDraft.kind === 'profile') {
+        setSeen(previous => previous.includes(requestDraft.provider.id) ? previous : [...previous, requestDraft.provider.id])
+        setLikes(previous => previous.includes(requestDraft.provider.id) ? previous : [...previous, requestDraft.provider.id])
+      }
+      setRequestDraft(null)
+      toast('La API confirmó la solicitud pendiente. Aún no hay Match, trabajo ni chat.')
+      return true
+    } catch (error) {
+      toast(`No se pudo enviar la solicitud: ${error.message}`)
+      return false
+    } finally {
+      submittingRequestKeys.current.delete(key)
+    }
+  }
+
+  const decideRequest = async (requestId, status) => {
+    const request = requests.find(item => item.id === requestId)
+    const actor = { role, clientId: activeClient.id, profileIds: role === 'Cliente' ? [] : [activeProviderId] }
+    if (!request || !canRespondToRequest(request, actor)) {
+      toast('Solo el destinatario de esta solicitud puede responder')
+      return
+    }
+    if (handlingRequests.current.has(requestId)) return
+    handlingRequests.current.add(requestId)
+    try {
+      const actorId = String(role === 'Cliente' ? activeClient.id : activeProviderId)
+      const confirmed = await decideRequestWithApi({
+        request,
+        status,
+        actor,
+        actorId,
+        matches,
+        jobs,
+        updateRequest: updatePrivateRequest,
+        now: new Date().toISOString(),
+      })
+      setRequests(previous => previous.map(item => item.id === requestId ? confirmed.request : item))
+      if (status === 'accepted') {
+        setMatches(previous => previous.some(item => item.dedupeKey === confirmed.match.dedupeKey) ? previous : [...previous, confirmed.match])
+        setJobs(previous => previous.some(item => item.projectRef === confirmed.job.projectRef) ? previous : [confirmed.job, ...previous])
+        setChats(previous => previous[confirmed.job.id] ? previous : { ...previous, [confirmed.job.id]: confirmed.conversation })
+        const counterpart = role === 'Cliente'
+          ? profileById(request.providerId)
+          : { ...(clientById(request.clientId) || DEMO_CLIENT), id: request.clientId, name: request.clientName }
+        setMatch({ profile: counterpart || DEMO_CLIENT, jobId: confirmed.job.id })
+        toast('La API confirmó el Match. El trabajo y el chat son simulaciones de esta sesión.')
+      } else {
+        toast('La API confirmó el rechazo. No se creó un Match.')
+      }
+    } catch (error) {
+      toast(`No se pudo ${status === 'accepted' ? 'aceptar' : 'rechazar'} la solicitud: ${error.message}`)
+    } finally {
+      handlingRequests.current.delete(requestId)
+    }
+  }
+
+  const send = (jobId, text) => {
+    const job = jobs.find(item => item.id === jobId)
+    if (!job?.demoSeed && (!job?.matchId || !matches.some(item => item.id === job.matchId))) {
+      toast('El chat se habilita cuando la solicitud haya sido aceptada')
+      return
+    }
+    const body = String(text || '').trim()
+    if (!body) return
+    setChats(previous => ({ ...previous, [jobId]: [...(previous[jobId] || []), { me: true, t: body }] }))
+    window.setTimeout(() => setChats(previous => ({
+      ...previous,
+      [jobId]: [...(previous[jobId] || []), { me: false, t: 'Gracias por el mensaje. Esta es una respuesta automática de la demo.' }],
+    })), 700)
+  }
+
+  const pay = (job, stage, card) => {
+    if (!job.notarized || job.paid >= 3) { toast('El contrato de demostración debe estar certificado y tener un hito pendiente'); return }
+    setJobs(previous => previous.map(item => item.id === job.id ? { ...item, paid: Math.min(3, item.paid + 1) } : item))
+    setPayments(previous => [{ id: `P-${303 + previous.length}`, p: `${job.project} · ${card.b}`, a: stage[2], s: 'En custodia · demo' }, ...previous])
+    setView({ t: 'contract', id: job.id })
+    toast('Hito marcado como pagado en la sesión de demostración')
+  }
+
+  const openDispute = job => {
+    const person = contactForJob(job)
+    const dispute = {
+      id: 1025 + disputes.length,
+      title: job.project,
+      from: person.name,
+      step: 0,
+      files: [],
+      checks: [false, false, false, false],
+    }
+    setDisputes(previous => [dispute, ...previous])
+    setView(null)
+    setTab('seguridad')
+    toast('Reclamo creado en esta sesión de demostración')
+  }
+
+  if (!account) return html`<${Landing} onEnter=${nextAccount => {
+    const canonicalRole = ({'Perfil clientes':'Cliente','Perfil maestros':'Maestro o contratista','Profesionales y contratistas':'Profesional','Perfil empresas':'Empresa'})[nextAccount.type] || nextAccount.type
+    setAccount({...nextAccount, type:canonicalRole})
+    setRole(canonicalRole)
+    if (ROLE_PROFILE_IDS[canonicalRole]?.length) setActiveProviderId(ROLE_PROFILE_IDS[canonicalRole][0])
+    setTab(canonicalRole === 'Cliente' ? 'explorar' : 'proyectos')
+  }}/>`
+
+  if (role === 'admin') return html`<${Admin}
+    pros=${pros} setPros=${setPros} jobs=${jobs} disputes=${disputes} setDisputes=${setDisputes}
+    pays=${payments} setPays=${setPayments} requests=${requests} tab=${adminTab} setTab=${setAdminTab}
+    exit=${() => setRole(account.type)}
+  />`
+
+ const SUB={videos:'Match Play',cotizador:'Cotizador inteligente',proyectos:'Proyectos',solicitudes:'Solicitudes',mensajes:'Mensajes',wallet:'Wallet',contratos:'Contratos',trabajos:'Portafolio',perfil:'Mi perfil',seguridad:'Reclamos'};
+ const NAV=[['videos',html`<svg viewBox="0 0 24 24" width="1em" height="1em" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><rect x="3" y="4" width="18" height="16" rx="4"/><path d="m10 8 6 4-6 4Z"/></svg>`,'Match Play'],['contratos','📄','Contratos'],['cotizador',html`<svg viewBox="0 0 24 24" width="1em" height="1em" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><rect x="5" y="2.5" width="14" height="19" rx="2"/><path d="M8 7h8M8 12h1M15 12h1M8 16h1M15 16h1"/></svg>`,'Cotizador'],['explorar','🧭','Explorar'],['mensajes','💬','Mensajes'],['seguridad','🛡️','Reclamos'],['perfil','👤','Mi perfil']];
+  const uiJobs=jobs.filter(item=>role==='Cliente'?String(item.clientId)===String(activeClient.id):String(item.providerId)===String(activeProviderId)).map(item=>({...item,pid:item.id}))
+  const uiContacts=uiJobs.map(item=>{const p=contactForJob(item);return {...p,avatar:demoPortrait(p),id:item.id}})
+  const j=view&&uiJobs.find(item=>item.id===view.id)
+  const vp=view?.t==='pro'?profileById(view.id):j?contactForJob(j):null
+  const goTab=k=>{setView(null);setTab(k==='explorar'&&role!=='Cliente'?'proyectos':k)}
+ return html`<div className="app">
+  ${tab!=='videos'&&html`<div className="hd"><button className="chip" style=${{width:44}} onClick=${()=>{if(['trabajos','wallet'].includes(tab)){goTab('perfil');return}setAccount(null);setView(null);setMatch(null);setRequestDraft(null)}}>←</button><span className="logo">MATCHTER${SUB[tab]?html`<small>${SUB[tab]}</small>`:''}</span>${tab==='wallet'?html`<button className="chip" style=${{minWidth:44,borderRadius:'50%'}} onClick=${()=>toast('Pago protegido: tus fondos quedan en custodia hasta dar tu conformidad')}>?</button>`:tab==='explorar'?html`<button className="chip" style=${{minWidth:44}} onClick=${()=>setFiltersOpen(f=>!f)}>🎚️${(filters.cats.length+['inm','ver','top','emp'].filter(k=>filters[k]).length+(filters.dist?1:0))||''}</button>`:html`<span style=${{width:44}}></span>`}</div>`}
+  <div className=${'main'+(tab==='explorar'?' fit':'')+(tab==='videos'?' community-main':'')}>
+   <div hidden=${tab!=='videos'} className="community-mount"><${Community} active=${tab==='videos'} actor=${role==='Cliente'?activeClient:roleProfile} role=${role} profiles=${pros} clients=${DEMO_CLIENTS} inboxSignal=${communityInboxSignal} onOpenProfile=${p=>setView({t:'pro',id:p.id})}/></div>
+   ${tab==='explorar'&&role==='Cliente'&&html`<${Explore} pros=${pros} seen=${seen} act=${act} setView=${setView} saved=${saved} filt=${filtersOpen} setFilt=${setFiltersOpen} fl=${filters} setFl=${setFilters}/>`}
+      ${tab === 'proyectos' && html`<${Projects} role=${role} projects=${projects} requests=${currentRequests} clientId=${activeClient.id} providerId=${roleProfile?.id} onCreate=${createPublicProject} onInterest=${expressInterest}/>`}
+      ${tab === 'solicitudes' && html`<${PrivateRequests} role=${role} requests=${currentRequests} clientId=${activeClient.id} profileIds=${role === 'Cliente' ? [] : [activeProviderId]} onAccept=${id => decideRequest(id, 'accepted')} onReject=${id => decideRequest(id, 'rejected')}/>`}
+   ${tab==='cotizador'&&html`<${Quoter} key=${String(ownProfile?.id)} role=${role} actor=${ownProfile} profiles=${pros} entries=${priceEntries} setEntries=${setPriceEntries} onProfile=${p=>setView({t:'pro',id:p.id})} onContact=${p=>openProfileRequest(p)}/>`}
+   ${tab==='trabajos'&&html`<${Portfolio} key=${String(ownProfile?.id)} owner=${ownProfile} items=${ownerMedia(ownProfile?.id)} editable=${true} onAdd=${addPortfolio} onRemove=${removePortfolio}/>`}
+   ${tab==='mensajes'&&html`<${React.Fragment}><button className="btn out" style=${{marginBottom:10}} onClick=${()=>{goTab('videos');setCommunityInboxSignal(n=>n+1)}}>💬 Mensajes de Match Play</button><${Messages} jobs=${uiJobs} pros=${uiContacts} chats=${chats} setView=${setView}/><//>`}
+   ${tab==='contratos'&&html`<${ContractsTab} jobs=${uiJobs} pros=${uiContacts} setView=${setView}/>`}
+   ${tab==='wallet'&&html`<${WalletTab} jobs=${uiJobs} pros=${uiContacts} pay=${pay} cards=${cards} addCard=${addCard} setView=${setView}/>`}
+   ${tab==='perfil'&&html`<${React.Fragment}><button className="btn out" style=${{marginBottom:10}} onClick=${()=>setView({t:'favorites'})}>♥ Perfiles guardados (${saved.length})</button><div className="profile-shortcuts"><button className="card" onClick=${()=>goTab('trabajos')}><span>💼</span><b>Portafolio</b><span aria-hidden="true">›</span></button><button className="card" onClick=${()=>goTab('wallet')}><span>💳</span><b>Wallet</b><span aria-hidden="true">›</span></button></div><${Profile} person=${ownProfile} onEditPhoto=${editPhoto} verification=${verificationRequests[String(ownProfile?.id)]} onRequestVerification=${()=>{if(ownProfile){setVerificationRequests(v=>({...v,[String(ownProfile.id)]:'pending'}));toast('Solicitud de verificación simulada enviada')}}} priv=${privacy} setPriv=${setPrivacy} onAdmin=${()=>setRole('admin')}/><div className="card"><b>Gestión de demostración</b><p className="mut">Los perfiles, cifras y servicios de esta vista previa son ilustrativos.</p><div className="wrap"><button className="chip" onClick=${()=>setTab('proyectos')}>Proyectos</button><button className="chip" onClick=${()=>setTab('solicitudes')}>Solicitudes (${currentRequests.filter(r=>r.status==='pending').length})</button><button className="chip" onClick=${()=>setView({t:'demo-profile'})}>Cambiar perfil de demostración</button></div></div><//>`}
+   ${tab==='seguridad'&&html`<${Security} disputes=${disputes} setDisputes=${setDisputes} toast=${toast}/>`}
+  </div>
+  <div className="nav community-nav">${NAV.map(([k,i,l])=>html`<button key=${k} className=${(tab===k||(k==='explorar'&&role!=='Cliente'&&tab==='proyectos')||(k==='perfil'&&['wallet','trabajos'].includes(tab)))?'on':''} onClick=${()=>goTab(k)}><span>${i}</span>${l}${k==='mensajes'&&uiJobs.some(item=>(chats[item.id]||[]).length)&&html`<i className="badge">${uiJobs.filter(item=>(chats[item.id]||[]).length).length}</i>`}</button>`)}</div>
+  ${view&&view.t==='favorites'&&html`<${FavoriteProfiles} profiles=${pros.filter(p=>saved.includes(p.id))} onBack=${()=>setView(null)} onOpen=${p=>setView({t:'pro',id:p.id})} onAct=${act} onRemove=${p=>setSaved(s=>s.filter(id=>id!==p.id))}/>`}
+${view?.t === 'demo-profile' && html`<${Overlay} title="Gestión de perfil demo" onBack=${()=>setView(null)}><${DemoProfile} role=${role} clientProfile=${activeClient} clientOptions=${DEMO_CLIENTS} onClientChange=${changeClient} activeProvider=${roleProfile} providerOptions=${pros.filter(item => ROLE_PROFILE_IDS[role]?.includes(item.id))} onProviderChange=${changeProvider} priv=${privacy} setPriv=${setPrivacy} onRoleChange=${changeRole} onSecurity=${() => setTab('seguridad')} onAdmin=${() => setRole('admin')} savedProfiles=${pros.filter(item => saved.includes(item.id))} likedProfiles=${pros.filter(item => likes.includes(item.id))} onOpenProfile=${id => setView({t:'pro',id})} onRemoveFavorite=${id => setSaved(previous => previous.filter(item => item !== id))}/><//>`}
+  ${view&&view.t==='pro'&&vp&&html`<${ProView} p=${vp} onBack=${()=>setView(null)} act=${act} portfolioItems=${ownerMedia(vp.id)} onPortfolio=${()=>setView({t:'portfolio',id:vp.id,from:'profile'})}/>`}
+  ${view?.t==='portfolio'&&profileById(view.id)&&html`<${Overlay} title="Portafolio" onBack=${()=>setView(view.from==='explore'?null:{t:'pro',id:view.id})} footer=${role==='Cliente'&&String(view.id)!==String(activeClient.id)&&pros.some(p=>String(p.id)===String(view.id))?html`<div className="acts" style=${{flexShrink:0,margin:0,padding:'12px 14px max(12px,env(safe-area-inset-bottom))',borderTop:'1px solid var(--line)',background:'var(--card)'}}>${[['pass','✕','Pasar'],['save','♥','Guardar perfil'],['like','👍','Me interesa']].map(([action,icon,label])=>html`<button key=${action} className=${'act'+(action==='like'?' big':'')} style=${{border:0,background:'transparent',padding:0,cursor:'pointer',fontFamily:'inherit'}} onClick=${()=>{const p=profileById(view.id);if(!p)return;act(p,action);if(action!=='like')setView(null)}}><b aria-hidden="true">${icon}</b>${label}</button>`)}</div>`:null}><${Portfolio} key=${String(view.id)} owner=${profileById(view.id)} items=${ownerMedia(view.id)}/><//>`}
+  ${view&&view.t==='contract'&&j&&vp&&html`<${Contract} j=${j} p=${vp} onBack=${()=>setView(null)} setJobs=${setJobs} setView=${setView} openDispute=${openDispute}/>`}
+  ${view&&view.t==='wallet'&&j&&vp&&j.paid<3&&j.notarized&&html`<${Wallet} j=${j} p=${vp} onBack=${()=>setView({t:'contract',id:view.id})} pay=${pay} cards=${cards} addCard=${addCard}/>`}
+  ${view&&view.t==='notary'&&j&&vp&&html`<${NotaryFlow} j=${j} p=${vp} onBack=${()=>setView({t:'contract',id:view.id})} onPatch=${patch=>setJobs(js=>js.map(x=>x.id===j.id?{...x,...patch}:x))}/>`}
+  ${view&&view.t==='chat'&&j&&vp&&html`<${Chat} p=${vp} msgs=${chats[view.id]} send=${(_id,t)=>send(j.id,t)} onBack=${()=>setView(null)}/>`}
+  ${match&&html`<${MatchScreen} p=${match.profile} onContract=${()=>{setView({t:'contract',id:match.jobId});setMatch(null);setTab('contratos')}} onClose=${()=>setMatch(null)}/>`}
+    ${requestDraft && html`<${RequestForm} draft=${requestDraft} onClose=${() => setRequestDraft(null)} onSubmit=${submitRequest}/>`}
+  ${message&&html`<div className="toast">${message}</div>`}
+ </div>`;
 }

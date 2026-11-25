@@ -1,0 +1,16 @@
+const fs=require('node:fs');
+const app='client/src/App.jsx',css='client/src/features/community/matchplay-public-profile.css';
+let a=fs.readFileSync(app,'utf8');
+const old="<span className=\"matchplay-nav-wordmark\">MATCHPLAY</span>";
+if(a.split(old).length!==2)throw Error('Unexpected central wordmark');
+a=a.replace(old,"<span className=\"matchplay-nav-wordmark\">MPLAY</span>");
+const start=a.indexOf('<div className="nav community-nav">');
+const end=a.indexOf("</button>`)}</div>",start);
+if(start<0||end<0)throw Error('Navigation block missing');
+const needle="</button>`)}</div>";
+const updated=needle.slice(0,-6)+"<${MplayWelcome} active=${tab==='videos'}/>"+'</div>';
+a=a.slice(0,end)+updated+a.slice(end+needle.length);
+a='import {MplayWelcome} from "./features/community/MplayWelcome.jsx";\n'+a;
+fs.writeFileSync(app,a);
+fs.appendFileSync(css,"\n.community-nav{--mplay-diameter:clamp(58px,17vw,74px);display:grid;grid-template-columns:repeat(3,minmax(0,1fr)) var(--mplay-diameter) repeat(3,minmax(0,1fr));column-gap:0;align-items:center;position:relative;flex-shrink:0}\n.community-nav button:nth-child(4){box-sizing:border-box!important;justify-self:center;align-self:center;flex:none!important;width:var(--mplay-diameter)!important;min-width:var(--mplay-diameter)!important;max-width:var(--mplay-diameter)!important;height:var(--mplay-diameter)!important;min-height:var(--mplay-diameter)!important;max-height:var(--mplay-diameter)!important;aspect-ratio:1/1;border-radius:50%!important;margin:-17px 0 0!important;padding:0!important;box-shadow:0 5px 13px #0005,0 2px 5px #0002;gap:3px}\n.community-nav button:nth-child(4) .matchplay-nav-wordmark{font-size:12px;line-height:1.1;letter-spacing:0;font-weight:500;text-align:center;white-space:nowrap}\n.community-nav button:nth-child(4) .matchplay-nav-play{font-size:24px;line-height:1}\n.mplay-welcome{position:absolute;left:50%;bottom:calc(100% + 22px);transform:translateX(-50%);width:max-content;max-width:min(245px,calc(100% - 28px));background:#fff;color:#171717;border-radius:12px;box-shadow:0 5px 24px #17213a26,0 1px 4px #0001;padding:12px 15px;font-size:13px;line-height:1.4;text-align:center;font-weight:500;z-index:12;pointer-events:none;animation:mplay-welcome-fade 5s ease both}\n.mplay-welcome strong{color:var(--o,#ff5a00);font-weight:750}\n.mplay-welcome:after{content:\"\";position:absolute;bottom:-7px;left:calc(50% - 8px);width:16px;height:16px;background:#fff;transform:rotate(45deg);border-radius:2px;box-shadow:3px 3px 5px #17213a0d}\n@keyframes mplay-welcome-fade{0%{opacity:0;transform:translate(-50%,5px)}6%,90%{opacity:1;transform:translate(-50%,0)}100%{opacity:0;transform:translate(-50%,-3px)}}\n@media(prefers-reduced-motion:reduce){.mplay-welcome{animation:none}}\n@media(max-width:360px){.community-nav button:nth-child(4) .matchplay-nav-wordmark{font-size:11px}.community-nav button:nth-child(4) .matchplay-nav-play{font-size:22px}}\n");
+console.log('MATCHTER: fixed identical circle dimensions, abbreviated MPLAY and five-second welcome hint.');

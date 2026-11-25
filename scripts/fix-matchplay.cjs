@@ -1,0 +1,24 @@
+const fs=require('node:fs');
+const vp='client/src/approved/visual.js', cp='client/src/features/community/Community.jsx';
+let v=fs.readFileSync(vp,'utf8'),c=fs.readFileSync(cp,'utf8');
+const swipe=v.indexOf('function SwipeCard(');const after=v.indexOf('\nfunction ',swipe+1);
+if(swipe<0||after<0)throw Error('SwipeCard not found');
+const start=v.indexOf('<div className="acts"',swipe);
+if(start<0||start>=after)throw Error('Approved action bar not found');
+const tags=/<\/?div\b[^>]*>/g;tags.lastIndex=start;let depth=0,end=-1,m;
+while((m=tags.exec(v))&&m.index<after){depth+=m[0].startsWith('</')?-1:1;if(depth===0){end=tags.lastIndex;break;}}
+if(end<0)throw Error('Action bar bounds not found');
+const actions=v.slice(start,end);
+if(!['Pasar','Me interesa','onAct'].every(x=>actions.includes(x)))throw Error('Wrong action bar: '+actions.slice(0,350));
+console.log('MATCHTER shared original action markup: '+actions.slice(0,1000));
+v=v.slice(0,start)+'<${ExploreActionBar} p=${p} onAct=${onAct}/>'+v.slice(end);
+v+='\nexport function ExploreActionBar({p,onAct}) {return html`'+actions+'`;}\n';
+fs.writeFileSync(vp,v);
+const anchor="${panel.type==='author'&&author&&html`";
+const first=c.indexOf(anchor);
+const next=c.indexOf("${panel.type==='",first+anchor.length);
+if(first<0||next<0||!c.slice(first,next).includes('Ver portafolio'))throw Error('Author panel unexpected');
+const newPanel="${panel.type==='author'&&author&&html`<${MatchplayPublicProfile} author=${author} posts=${posts.filter(p=>identity(p.author)===identity(author.id)&&!(hidden[me]||[]).includes(p.id))} isProvider=${profiles.some(p=>identity(p.id)===identity(author.id))} canQuote=${mayHire(role,me,author.id,profiles)} canMessage=${identity(author.id)!==me} onBack=${close} onOptions=${()=>show({type:'options'})} onProfessional=${()=>onOpenProfile(author)} onMessage=${()=>show({type:'message',author:identity(author.id)})} onQuote=${body=>{setThreads(s=>sendSocialMessage(s,me,identity(author.id),body,uid()));show({type:'message',author:identity(author.id),service:true})}}/>`}\n   ";
+c=c.slice(0,first)+newPanel+c.slice(next);
+c='import { MatchplayPublicProfile } from "./MatchplayPublicProfile.jsx";\n'+c;
+fs.writeFileSync(cp,c);console.log('MATCHTER: legacy author sheet replaced by full-screen public profile; existing author triggers and social thread model reused.');

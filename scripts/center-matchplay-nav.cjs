@@ -1,0 +1,12 @@
+const fs=require('node:fs');
+const app='client/src/App.jsx',css='client/src/features/community/matchplay-public-profile.css';
+let a=fs.readFileSync(app,'utf8');
+const first="['videos',null,'MATCHPLAY']", center="['explorar','🧭','Explorar']";
+if(a.split(first).length!==2||a.split(center).length!==2)throw Error('Unexpected navigation entries');
+a=a.replace(first,'__MATCHPLAY_SWAP__').replace(center,first).replace('__MATCHPLAY_SWAP__',center);
+fs.writeFileSync(app,a);
+/* Remove the previous first-child featured styles rather than applying them to Explore. */
+let s=fs.readFileSync(css,'utf8');
+s=s.replace(/\.community-nav button:first-child[^{}]*\{[^{}]*\}/g,'');
+fs.writeFileSync(css,s+"\n/* Centre the featured Match Play action; preserve all other nav styles and positions. */\n.community-nav{display:grid;grid-template-columns:repeat(3,minmax(0,1fr)) auto repeat(3,minmax(0,1fr));align-items:center;gap:0;position:relative;padding-top:6px}\n.community-nav button:first-child{background:none;color:var(--mut)!important;border-radius:0;margin:0;padding:0 1px;font-size:10px;align-self:auto;justify-content:center;gap:2px}\n.community-nav button:first-child.on{color:var(--o)!important;font-weight:700}\n.community-nav button:nth-child(4){width:clamp(58px,17.4vw,76px);height:clamp(58px,17.4vw,76px);border-radius:50%;background:#000;color:#fff!important;border:0;padding:0;margin:-19px 3px 0;align-self:center;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:3px;box-shadow:0 3px 10px #0003;z-index:1}\n.community-nav button:nth-child(4) .matchplay-nav-play{font-size:24px;line-height:1;color:#fff;display:flex;align-items:center;justify-content:center}\n.community-nav button:nth-child(4) .matchplay-nav-wordmark{font-size:clamp(8px,2.35vw,11px);font-weight:500;letter-spacing:0;line-height:1.1;white-space:nowrap;color:#fff;text-align:center}\n.community-nav button:nth-child(4):focus-visible{outline:2px solid var(--o);outline-offset:3px}\n@media(max-width:360px){.community-nav button:first-child{font-size:9.5px}.community-nav button:nth-child(4){margin-left:1px;margin-right:1px}.community-nav button:nth-child(4) .matchplay-nav-play{font-size:22px}}\n");
+console.log('MATCHTER: Explore first, circular MATCHPLAY centered; original upper gradient retained.');

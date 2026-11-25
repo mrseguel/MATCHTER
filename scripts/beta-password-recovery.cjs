@@ -1,0 +1,11 @@
+(function(){
+ const fs=require('node:fs'),file='client/src/features/auth/AuthPreview.jsx';
+ let s=fs.readFileSync(file,'utf8');
+ function once(old,next){if(s.split(old).length!==2)throw Error('Unexpected auth anchor: '+old.slice(0,100));s=s.replace(old,next)}
+ once("step==='login'?'Iniciar sesión':'Crear cuenta'","step==='recover'?'Recuperar contraseña':step==='login'?'Iniciar sesión':'Crear cuenta'");
+ once("{step==='role'?<>","{step==='recover'?<form className=\"beta-auth-form\" onSubmit={e=>{e.preventDefault();setError('La recuperación por correo aún no está habilitada en esta Beta. No se ha enviado ningún mensaje.')}}><p className=\"mut\">Ingresa el correo electrónico asociado a tu cuenta para recuperar tu contraseña.</p>{field('email','Correo electrónico',{required:true,type:'email',autoCapitalize:'none',autoCorrect:'off',maxLength:254,placeholder:'cuenta@example.test'})}<small className=\"mut\">Vista previa: el envío de correos de recuperación se activará al conectar la autenticación real.</small>{error&&<p className=\"beta-auth-error\" role=\"status\">{error}</p>}<button type=\"submit\" className=\"btn\">Enviar enlace de recuperación</button><button type=\"button\" className=\"beta-auth-switch\" onClick={()=>change('login')}>Volver a iniciar sesión</button></form>:step==='role'?<>");
+ once("{step==='register'&&<label>Confirmar contraseña","{step==='login'&&<button type=\"button\" className=\"beta-auth-forgot\" onClick={()=>{const email=form.email;change('recover');setForm({...initial,email})}}>¿Olvidaste tu contraseña?</button>}\n {step==='register'&&<label>Confirmar contraseña");
+ fs.writeFileSync(file,s);
+ fs.appendFileSync('client/src/features/auth/auth.css','\n.beta-auth-forgot{align-self:start;justify-self:end;background:none;border:0;color:var(--o);font-size:12px;font-weight:500;cursor:pointer;padding:0 0 2px;line-height:1.5;text-align:right}.beta-auth-forgot:hover{text-decoration:underline}.beta-auth-forgot:focus-visible{outline:2px solid var(--o);outline-offset:3px;border-radius:3px}\n');
+ console.log('BETA: password recovery preview with email field, explicit unavailable delivery, return to login.');
+})();
