@@ -5,12 +5,14 @@ import helmet from 'helmet'
 import morgan from 'morgan'
 import { repository } from './repository.js'
 import { requestQueryFilters } from './requestQuery.js'
+import {createAuthRouter} from './authPreviewRoutes.js'
 
 const app = express()
 app.use(helmet())
 app.use(cors({ origin: process.env.CLIENT_ORIGIN?.split(',') || 'http://localhost:5173' }))
 app.use(express.json({ limit: '1mb' }))
 app.use(morgan('dev'))
+app.use('/api/auth-preview',createAuthRouter())
 
 app.get('/api/health', (_req, res) => res.json({ status: 'ok', app: 'MATCHTER API', environment: process.env.NODE_ENV || 'development' }))
 app.get('/api/dashboard', async (_req, res) => res.json(await repository.dashboard()))
