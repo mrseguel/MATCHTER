@@ -1,6 +1,7 @@
 import React,{useEffect,useState,useRef} from 'react'
 import {createPreviewAuthClient} from './authSdk.js'
 import './authIntegration.css'
+import {displayRole} from './realAuthFlow.js'
 const roles=['Cliente','Maestro o contratista','Profesional','Empresa']
 const callbackURL='https://matchter-beta-auth.vercel.app/'
 export default function AuthIntegration(){
@@ -55,7 +56,7 @@ export default function AuthIntegration(){
  <button disabled={busy}>{busy?'Verificando…':'Verificar código'}</button></form>
  <button className="mai-secondary" disabled={busy} onClick={resend}>Solicitar un código nuevo</button>
  <button className="mai-secondary" disabled={busy} onClick={()=>{setMode('login');setOtp('');setError('');setNotice('')}}>Volver a iniciar sesión</button></>:session?.user?<><h2>Sesión iniciada</h2><p>{session.user.email}</p>
- {session.user.emailVerified!==true?<><p>Debes verificar tu correo antes de crear un perfil.</p><button disabled={busy} onClick={()=>{setEmail(session.user.email);setMode('verify');setOtp('')}}>Ingresar código de verificación</button></>:profile?<><p>Perfil persistente: <b>{profile.role}</b></p><button disabled={busy} onClick={()=>run(()=>refresh(client))}>Comprobar cuenta guardada</button></>:<form onSubmit={e=>{e.preventDefault();run(async()=>{setProfile(await accountRequest(client,'onboard',{role}));setNotice('Perfil guardado en Neon')})}}><label>Tipo de cuenta<select value={role} onChange={e=>setRole(e.target.value)}>{roles.map(r=><option key={r}>{r}</option>)}</select></label><button disabled={busy}>Guardar perfil de prueba</button></form>}
+ {session.user.emailVerified!==true?<><p>Debes verificar tu correo antes de crear un perfil.</p><button disabled={busy} onClick={()=>{setEmail(session.user.email);setMode('verify');setOtp('')}}>Ingresar código de verificación</button></>:profile?<><p>Perfil persistente: <b>{displayRole(profile.role)}</b></p><button disabled={busy} onClick={()=>run(()=>refresh(client))}>Comprobar cuenta guardada</button></>:<form onSubmit={e=>{e.preventDefault();run(async()=>{setProfile(await accountRequest(client,'onboard',{role}));setNotice('Perfil guardado en Neon')})}}><label>Tipo de cuenta<select value={role} onChange={e=>setRole(e.target.value)}>{roles.map(r=><option key={r} value={r}>{displayRole(r)}</option>)}</select></label><button disabled={busy}>Guardar perfil de prueba</button></form>}
  <button className="mai-secondary" disabled={busy} onClick={()=>run(async()=>{const r=await client.signOut();if(r.error)throw Error('No se pudo cerrar la sesión');setSession(null);setProfile(null);setPassword('')})}>Cerrar sesión</button></>:<><h2>{mode==='register'?'Crear cuenta':'Iniciar sesión'}</h2><form onSubmit={submit}>
  {mode==='register'&&<label>Nombre de prueba<input required value={name} maxLength={80} onChange={e=>setName(e.target.value)} autoComplete="name"/></label>}
  <label>Correo electrónico<input type="email" required value={email} onChange={e=>setEmail(e.target.value)} autoComplete="email"/></label>
