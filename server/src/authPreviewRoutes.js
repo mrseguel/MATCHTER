@@ -1,5 +1,6 @@
 import express from 'express'
 import pg from 'pg'
+import {createProfileDetailsService} from './profileDetails.js'
 import {createProfilesService} from './accountProfiles.js'
 import {createIdentityVerifier,createAccountService,AuthError} from './identityAccounts.js'
 
@@ -18,7 +19,7 @@ export function createAuthRouter(env=process.env, dependencies={}) {
     pool=new pg.Pool({connectionString:dbUrl.href,ssl:{rejectUnauthorized:true},max:2,connectionTimeoutMillis:8000,idleTimeoutMillis:3000,statement_timeout:5000,application_name:'matchter-auth-preview'})
     pool.on('error',()=>console.error('Matchter auth pool error'))
     const verifyIdentity=createIdentityVerifier({issuer:auth.origin,audience:auth.origin,jwksUrl:jwks.href,algorithms:['EdDSA']})
-    service={...createAccountService({db:pool,verifyIdentity}),profiles:createProfilesService({db:pool,verifyIdentity})}
+    service={...createAccountService({db:pool,verifyIdentity}),profiles:createProfilesService({db:pool,verifyIdentity}),details:createProfileDetailsService({db:pool,verifyIdentity})}
     return service
   }
   router.use((req,res,next)=>{
@@ -41,5 +42,7 @@ export function createAuthRouter(env=process.env, dependencies={}) {
   router.post('/onboard',handle((svc,req)=>svc.onboard(req.get('authorization'),req.body)))
   router.get('/profiles',handle((svc,req)=>svc.profiles.list(req.get('authorization'))))
   router.post('/profiles/switch',handle((svc,req)=>svc.profiles.switch(req.get('authorization'),req.body)))
+  router.get('/profiles/details',handle((svc,req)=>svc.details.get(req.get('authorization'),req.query.role)))
+  router.post('/profiles/details',handle((svc,req)=>svc.details.save(req.get('authorization'),req.body)))
   return router
 }
