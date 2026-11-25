@@ -1,6 +1,6 @@
 import React,{useEffect,useRef,useState} from 'react'
 import {ArrowLeftRight,Check,ChevronDown,UserRound} from 'lucide-react'
-import {ACCOUNT_TYPES,roleForLabel} from './realAuthFlow.js'
+import {ACCOUNT_TYPES,roleForLabel,displayRole} from './realAuthFlow.js'
 import {RoleIcon} from './AuthPreview.jsx'
 import './profileSwitch.css'
 const types=ACCOUNT_TYPES.map(t=>({label:t[1],role:roleForLabel(t[1]),icon:t[0]}))
@@ -14,7 +14,7 @@ export function ProfileSwitchIntro({onClose}){
   <div className="mt-intro-example" aria-label="Ejemplo del selector de perfiles">
    <small>Mi perfil · Ejemplo</small>
    <div className="mt-example-person"><span className="mt-example-avatar"><UserRound size={23}/></span><div><strong>Tu nombre</strong><small>Cliente</small></div><span className="mt-example-switch"><ArrowLeftRight size={14}/> Cambiar perfil <ChevronDown size={13}/></span></div>
-   <div className="mt-example-menu">{types.map(t=><div key={t.role}><RoleIcon type={t.label} fallback={t.icon}/><span>{t.role}</span>{t.role==='Cliente'?<Check size={15} className="mt-orange"/>:<ArrowLeftRight size={15}/>}</div>)}</div>
+   <div className="mt-example-menu">{types.map(t=><div key={t.role}><RoleIcon type={t.label} fallback={t.icon}/><span>{displayRole(t.role)}</span>{t.role==='Cliente'?<Check size={15} className="mt-orange"/>:<ArrowLeftRight size={15}/>}</div>)}</div>
   </div>
   <button ref={button} type="button" className="mt-primary" onClick={onClose}>Entendido, elegir mi perfil</button>
  </section></div>
@@ -37,10 +37,10 @@ export function ProfileSwitchPanel({client,session,profile,onLogout,busy:parentB
  async function select(role){setBusy(true);setError('');setNotice('');try{setData(await profileRequest(client,'/switch',{role}));setOpen(false);setNotice('Perfil activo actualizado.')}catch(e){setError(e.message)}finally{setBusy(false)}}
  const blocked=busy||parentBusy
  return <main className="mai-page"><section className="mai-card mt-profile-card"><h1>Matchter</h1><p className="mai-note">Integración privada · Tu identidad y tus perfiles se guardan realmente. Los módulos de servicios aún no están vinculados a esta cuenta.</p>
- <h2>Mi perfil</h2><div className="mt-person"><span className="mt-example-avatar"><UserRound size={27}/></span><div className="mt-person-name"><strong>{session?.user?.name||'Mi cuenta'}</strong><small>{active}</small></div><button type="button" className="mt-switch" aria-expanded={open} disabled={blocked||!data} onClick={()=>setOpen(v=>!v)}><ArrowLeftRight size={15}/> Cambiar perfil <ChevronDown size={15}/></button></div>
+ <h2>Mi perfil</h2><div className="mt-person"><span className="mt-example-avatar"><UserRound size={27}/></span><div className="mt-person-name"><strong>{session?.user?.name||'Mi cuenta'}</strong><small>{displayRole(active)}</small></div><button type="button" className="mt-switch" aria-expanded={open} disabled={blocked||!data} onClick={()=>setOpen(v=>!v)}><ArrowLeftRight size={15}/> Cambiar perfil <ChevronDown size={15}/></button></div>
  <p className="mt-email">{session?.user?.email}</p>
- {open&&<div className="mt-profile-menu"><strong>Cambiar perfil</strong>{types.map(t=>{const current=active===t.role;return <button key={t.role} type="button" disabled={blocked||current} onClick={()=>select(t.role)}><RoleIcon type={t.label} fallback={t.icon}/><span>{t.role}<small>{current?'Activo':'Cambiar a este perfil'}</small></span>{current?<Check size={18} className="mt-orange"/>:<ArrowLeftRight size={17}/>}</button>})}</div>}
+ {open&&<div className="mt-profile-menu"><strong>Cambiar perfil</strong>{types.map(t=>{const current=active===t.role;return <button key={t.role} type="button" disabled={blocked||current} onClick={()=>select(t.role)}><RoleIcon type={t.label} fallback={t.icon}/><span>{displayRole(t.role)}<small>{current?'Activo':'Cambiar a este perfil'}</small></span>{current?<Check size={18} className="mt-orange"/>:<ArrowLeftRight size={17}/>}</button>})}</div>}
  {(error||parentError)&&<p className="mai-error" role="alert">{error||parentError}</p>}{notice&&<p className="mai-notice" role="status">{notice}</p>}
- <p>Perfil persistente: <strong>{active}</strong></p><button type="button" disabled={blocked} onClick={load}>Comprobar cuenta guardada</button><button type="button" className="mai-secondary" disabled={blocked} onClick={onLogout}>Cerrar sesión</button>
+ <p>Perfil persistente: <strong>{displayRole(active)}</strong></p><button type="button" disabled={blocked} onClick={load}>Comprobar cuenta guardada</button><button type="button" className="mai-secondary" disabled={blocked} onClick={onLogout}>Cerrar sesión</button>
  </section></main>
 }
