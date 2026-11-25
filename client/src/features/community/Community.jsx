@@ -1,6 +1,6 @@
 import React,{useState,useEffect,useRef} from 'react'
 import {html} from '../../lib/html.js'
-import {Play,Pause,SlidersHorizontal,Heart,MessageCircle,UserPlus,UserCheck,Send,Plus,Flag,X,Film,Briefcase,Mail,Trash2,Volume2,VolumeX,Share2} from 'lucide-react'
+import {Play,Pause,SlidersHorizontal,Heart,MessageCircle,UserPlus,UserCheck,Send,Plus,Flag,X,Film,Briefcase,Mail,Trash2,Volume2,VolumeX,Share2,HelpCircle,Bookmark} from 'lucide-react'
 import {identity,pairKey,toggleMember,mayHire,sendSocialMessage,decideSocialMessage,servicePrompt} from './model.js'
 
 const uid=()=>globalThis.crypto?.randomUUID?.()||Date.now()+'-'+Math.random().toString(36).slice(2)
@@ -50,6 +50,12 @@ export const DEMO_CLIPS=[
 ]
 
 
+const OFFICIAL_AUTHOR={id:'matchter-official',name:'MATCHTER',role:'Cuenta oficial',loc:'MATCHPLAY',bio:'Tutoriales, novedades y consejos de MATCHTER.'}
+const welcomeFiles=import.meta.glob('./matchplay-bienvenida.mp4',{eager:true,query:'?url',import:'default'})
+const welcomeUrl=welcomeFiles['./matchplay-bienvenida.mp4']
+const WELCOME_POST={id:'matchter-welcome-v1',author:OFFICIAL_AUTHOR.id,category:'Tutorial',caption:'¡Bienvenido a MATCHPLAY! Descubre una nueva forma de vivir la construcción. Desliza hacia arriba para explorar.',url:welcomeUrl,official:true,likes:[],comments:[]}
+const visitedKey=me=>'matchplay-welcome-v1:'+me
+
 function Video({post,active}){
  const ref=useRef(null),[muted,setMuted]=useState(false),[failed,setFailed]=useState(false),[playing,setPlaying]=useState(false),[feedback,setFeedback]=useState(null)
  const feedbackTimer=useRef(null),manualPause=useRef(false),visible=useRef(false),attempt=useRef(0),wantsAudio=useRef(true)
@@ -74,9 +80,28 @@ function Video({post,active}){
 }
 export function Community({active,actor,role,profiles,clients,inboxSignal=0,onOpenProfile}){
  const me=identity(actor?.id)
- const people=[...profiles,...clients]
+ const people=[...profiles,...clients,OFFICIAL_AUTHOR]
  const person=id=>people.find(p=>identity(p.id)===identity(id))
- const [posts,setPosts]=useState(()=>DEMO_CLIPS.map(p=>({...p,likes:[],comments:[],sample:true})))
+ const [posts,setPosts]=useState(()=>[...(welcomeUrl?[WELCOME_POST]:[]),...DEMO_CLIPS.map(p=>({...p,likes:[],comments:[],sample:true}))])
+ const [welcomeVisible,setWelcomeVisible]=useState(false)
+ const [saved,setSaved]=useState({})
+ const welcomeVisits=useRef(new Set())
+ const feedRef=useRef(null)
+ const firstFrame=useRef(null)
+ useEffect(()=>{
+  if(!active||!me||!welcomeUrl){setWelcomeVisible(false);return}
+  let seen=welcomeVisits.current.has(me)
+  try{seen=seen||localStorage.getItem(visitedKey(me))==='1'}catch{}
+  setWelcomeVisible(!seen)
+  if(!seen){
+   welcomeVisits.current.add(me)
+   try{localStorage.setItem(visitedKey(me),'1')}catch{}
+   setMode('all')
+   firstFrame.current=requestAnimationFrame(()=>{if(feedRef.current)feedRef.current.scrollTop=0})
+  }
+  return()=>{if(firstFrame.current!==null)cancelAnimationFrame(firstFrame.current)}
+ },[active,me])
+ const openWelcome=()=>{if(!welcomeUrl)return;close();setMode('all');setWelcomeVisible(true);requestAnimationFrame(()=>{if(feedRef.current)feedRef.current.scrollTop=0})}
  const [follows,setFollows]=useState({})
  const [threads,setThreads]=useState({})
  const [hidden,setHidden]=useState({})
@@ -94,7 +119,7 @@ export function Community({active,actor,role,profiles,clients,inboxSignal=0,onOp
  const post=posts.find(p=>p.id===panel?.postId)
  const author=person(panel?.author)
  const currentThread=panel?.author?threads[pairKey(me,panel.author)]:null
- const visible=posts.filter(p=>!(hidden[me]||[]).includes(p.id)&&(mode==='all'||(mode==='following'&&followed.includes(p.author))||(mode==='mine'&&p.author===me)))
+ const visible=posts.filter(p=>!(hidden[me]||[]).includes(p.id)&&(p.official?(mode==='all'&&welcomeVisible)||(mode==='following'&&followed.includes(p.author)):(mode==='all'||(mode==='following'&&followed.includes(p.author))||(mode==='mine'&&p.author===me)))).sort((a,b)=>Number(!!b.official)-Number(!!a.official))
  const updatePost=(id,fn)=>setPosts(ps=>ps.map(p=>p.id===id?fn(p):p))
  const show=p=>{setPanel(p);setDraft('');setError('');setShareNotice('')}
  useEffect(()=>{if(inboxSignal!==seenInbox.current){seenInbox.current=inboxSignal;show({type:'inbox'})}},[inboxSignal])
@@ -130,19 +155,19 @@ export function Community({active,actor,role,profiles,clients,inboxSignal=0,onOp
  const myThreads=Object.entries(threads).filter(([,t])=>t.participants.includes(me))
  return html`<section className="cm" aria-label="Match Play">
   <header className="cm-overlay-header">
-   <div className="cm-brand-row"><button className="cm-options cm-publish-overlay" aria-label="Publicar video" onClick=${()=>show({type:'upload'})}><span>Publicar</span></button><div className="cm-brand logo" aria-label="Match Play">MATCHPLAY</div><span aria-hidden="true"></span></div>
+   <div className="cm-brand-row"><button className="cm-options cm-publish-overlay" aria-label="Publicar video" onClick=${()=>show({type:'upload'})}><span>Publicar</span></button><div className="cm-brand logo" aria-label="Match Play">MATCHPLAY</div><span style=${{justifySelf:'end'}}>${welcomeUrl&&html`<button className="cm-options" aria-label="Ver tutorial de MATCHPLAY" title="Tutorial de MATCHPLAY" onClick=${openWelcome}><${HelpCircle} size=${22}/></button>`}</span></div>
    <div className="cm-tabs cm-overlay-tabs" role="group" aria-label="Filtrar videos">${[['all','Para ti'],['following','Siguiendo'],['mine','Mis videos']].map(([k,label])=>html`<button key=${k} className=${mode===k?'selected':''} aria-pressed=${mode===k} onClick=${()=>{setMode(k);const feed=document.querySelector('.cm-feed');if(feed)feed.scrollTop=0}}>${label}</button>`)}</div>
   </header>
-  <div className="cm-feed">${visible.length?visible.map(p=>{
+  <div className="cm-feed" ref=${feedRef}>${visible.length?visible.map(p=>{
    const a=person(p.author),own=p.author===me,liked=p.likes.includes(me),following=followed.includes(p.author)
-   return html`<article className="cm-video" key=${p.id}><${Video} post=${p} active=${active&&!panel}/><div className="cm-shade"></div>${!own&&html`<button className="cm-follow-top" aria-pressed=${following} aria-label=${following?'Dejar de seguir':'Seguir'} onClick=${()=>setFollows(f=>({...f,[me]:toggleMember(f[me]||[],p.author)}))}><span>${following?'Seguido':'Seguir'}</span></button>`}<div className="cm-caption"><div className="cm-author-row"><button className="cm-author" onClick=${()=>show({type:'author',author:p.author})}>@${a?.name||'Perfil'} </button>${mayHire(role,me,p.author,profiles)&&html`<button className="cm-contact" onClick=${()=>show({type:'message',author:p.author,service:true})}>Contactar</button>`}</div><small>${a?.role||'Cliente'} · ${p.category}</small><p>${p.caption}</p>${p.sample&&html`<div className="cm-credit">Video ilustrativo · no corresponde a trabajos del perfil demo. <a href=${p.source} target="_blank" rel="noopener noreferrer">${p.credit} / Pexels ↗</a></div>`}</div>
-   <div className="cm-actions"><button aria-label="Me gusta video" aria-pressed=${liked} className=${liked?'liked':''} onClick=${()=>updatePost(p.id,x=>({...x,likes:toggleMember(x.likes,me)}))}><${Heart} fill=${liked?'currentColor':'none'}/><small>${p.likes.length}</small></button><button aria-label="Comentarios" onClick=${()=>show({type:'comments',postId:p.id})}><${MessageCircle}/><small>${p.comments.length}</small></button>${!own&&html`<button aria-label="Mensaje privado" onClick=${()=>show({type:'message',author:p.author})}><${Send}/><small>Mensaje</small></button>`}<button aria-label="Compartir publicación" onClick=${()=>sharePost(p)}><${Share2}/><small>Compartir</small></button><button aria-label=${own?'Eliminar publicación':'Reportar u ocultar'} onClick=${()=>show({type:own?'delete':'report',postId:p.id})}>${own?html`<${Trash2}/>`:html`<${Flag}/>`}</button></div></article>`
+   return html`<article className="cm-video" key=${p.id}><${Video} post=${p} active=${active&&!panel}/><div className="cm-shade"></div>${!own&&html`<button className="cm-follow-top" aria-pressed=${following} aria-label=${following?'Dejar de seguir':'Seguir'} onClick=${()=>setFollows(f=>({...f,[me]:toggleMember(f[me]||[],p.author)}))}><span>${following?'Seguido':'Seguir'}</span></button>`}<div className="cm-caption"><div className="cm-author-row"><button className="cm-author" onClick=${()=>show({type:'author',author:p.author})}>@${a?.name||'Perfil'} ${p.official?'✓':''}</button>${mayHire(role,me,p.author,profiles)&&html`<button className="cm-contact" onClick=${()=>show({type:'message',author:p.author,service:true})}>Contactar</button>`}</div><small>${a?.role||'Cliente'} · ${p.category}${p.official?' · Publicación fijada':''}</small><p>${p.caption}</p>${p.sample&&html`<div className="cm-credit">Video ilustrativo · no corresponde a trabajos del perfil demo. <a href=${p.source} target="_blank" rel="noopener noreferrer">${p.credit} / Pexels ↗</a></div>`}</div>
+   <div className="cm-actions"><button aria-label="Me gusta video" aria-pressed=${liked} className=${liked?'liked':''} onClick=${()=>updatePost(p.id,x=>({...x,likes:toggleMember(x.likes,me)}))}><${Heart} fill=${liked?'currentColor':'none'}/><small>${p.likes.length}</small></button><button aria-label="Comentarios" onClick=${()=>show({type:'comments',postId:p.id})}><${MessageCircle}/><small>${p.comments.length}</small></button>${!own&&!p.official&&html`<button aria-label="Mensaje privado" onClick=${()=>show({type:'message',author:p.author})}><${Send}/><small>Mensaje</small></button>`}<button aria-label="Guardar publicación" aria-pressed=${(saved[me]||[]).includes(p.id)} onClick=${()=>setSaved(x=>({...x,[me]:toggleMember(x[me]||[],p.id)}))}><${Bookmark} fill=${(saved[me]||[]).includes(p.id)?'currentColor':'none'}/><small>Guardar</small></button><button aria-label="Compartir publicación" onClick=${()=>sharePost(p)}><${Share2}/><small>Compartir</small></button>${!p.official&&html`<button aria-label=${own?'Eliminar publicación':'Reportar u ocultar'} onClick=${()=>show({type:own?'delete':'report',postId:p.id})}>${own?html`<${Trash2}/>`:html`<${Flag}/>`}</button>`}</div></article>`
   }):html`<div className="cm-empty"><${Film} size=${36}/><h3>${mode==='following'?'Aún no sigues perfiles con publicaciones':'Todavía no hay videos aquí'}</h3><button className="btn out" onClick=${()=>setMode('all')}>Ver Match Play</button></div>`}</div>
   ${panel&&html`<div className="cm-modal"><div className="cm-sheet"><div className="cm-row cm-heading"><h3>${({options:'Match Play',upload:'Publicar video',comments:'Comentarios',author:'Perfil de Match Play',message:'Mensaje privado',inbox:'Mensajes de Match Play',report:'Reportar publicación',delete:'Eliminar publicación',share:'Compartir publicación'})[panel.type]}</h3><button className="cm-icon" aria-label="Cerrar" onClick=${close}><${X}/></button></div>
    ${panel.type==='options'&&html`<div className="cm-form"><div className="cm-tabs">${[['all','Para ti'],['following','Siguiendo'],['mine','Mis videos']].map(([k,label])=>html`<button key=${k} className=${mode===k?'selected':''} onClick=${()=>{setMode(k);close()}}>${label}</button>`)}</div><button className="btn" onClick=${()=>show({type:'upload'})}>+ Publicar video</button><button className="btn out" onClick=${()=>show({type:'inbox'})}>Mensajes de Match Play</button><p className="mut">Demo local: publicaciones e interacciones duran esta sesión. No ingreses datos privados.</p></div>`}
    ${panel.type==='upload'&&html`<form className="cm-form" onSubmit=${publish}><label>Video de construcción<input name="video" type="file" accept="video/mp4,video/webm,video/quicktime,video/x-m4v" required/></label><label>Especialidad<select name="category">${categories.map(c=>html`<option key=${c}>${c}</option>`)}</select></label><label>Descripción<textarea name="caption" maxLength="500" required placeholder="Muéstranos tu trabajo, un avance o el resultado final"/></label><label className="cm-check"><input type="checkbox" required/> Tengo permiso para compartir este video y no expongo información privada de terceros.</label><p className="mut">Máximo 3 minutos y 40 MB en esta demo. El archivo no se envía a un servidor.</p><button className="btn">Publicar</button></form>`}
    ${panel.type==='comments'&&post&&html`<div>${post.comments.map(c=>html`<div className="cm-comment" key=${c.id}><b>${person(c.author)?.name||'Perfil'}</b><p>${c.body}</p></div>`)}${!post.comments.length&&html`<p className="mut">Sé la primera persona en comentar.</p>`}<form className="cm-form" onSubmit=${e=>{e.preventDefault();if(!draft.trim())return;updatePost(post.id,x=>({...x,comments:[...x.comments,{id:uid(),author:me,body:draft.trim()}]}));setDraft('')}}><textarea value=${draft} onChange=${e=>setDraft(e.target.value)} maxLength="500" placeholder="Escribe un comentario" required/><button className="btn">Comentar</button></form></div>`}
-   ${panel.type==='author'&&author&&html`<div><h3>${author.name}</h3><p className="mut">${author.role} · ${author.loc}</p><p>${author.bio}</p><p>${Object.values(follows).filter(ids=>ids.includes(identity(author.id))).length} seguidores · ${posts.filter(p=>p.author===identity(author.id)).length} publicaciones</p>${mayHire(role,me,author.id,profiles)&&html`<button className="btn out" onClick=${()=>show({type:'message',author:identity(author.id),service:true})}>Consultar servicio</button>`}${profiles.some(p=>identity(p.id)===identity(author.id))&&html`<button className="btn out" onClick=${()=>{close();onOpenProfile(author)}}>Ver portafolio</button>`}${identity(author.id)!==me&&html`<button className="btn out" onClick=${()=>show({type:'message',author:identity(author.id)})}>Enviar mensaje</button>`}</div>`}
+   ${panel.type==='author'&&author&&html`<div><h3>${author.name}</h3><p className="mut">${author.role} · ${author.loc}</p><p>${author.bio}</p><p>${Object.values(follows).filter(ids=>ids.includes(identity(author.id))).length} seguidores · ${posts.filter(p=>p.author===identity(author.id)).length} publicaciones</p>${mayHire(role,me,author.id,profiles)&&html`<button className="btn out" onClick=${()=>show({type:'message',author:identity(author.id),service:true})}>Consultar servicio</button>`}${profiles.some(p=>identity(p.id)===identity(author.id))&&html`<button className="btn out" onClick=${()=>{close();onOpenProfile(author)}}>Ver portafolio</button>`}${identity(author.id)===OFFICIAL_AUTHOR.id&&welcomeUrl&&html`<button className="btn" onClick=${openWelcome}>▶ Ver publicación fijada: tutorial</button>`}${identity(author.id)!==me&&identity(author.id)!==OFFICIAL_AUTHOR.id&&html`<button className="btn out" onClick=${()=>show({type:'message',author:identity(author.id)})}>Enviar mensaje</button>`}</div>`}
    ${panel.type==='inbox'&&html`<div>${myThreads.length?myThreads.map(([k,t])=>{const other=t.participants.find(x=>x!==me);return html`<button className="cm-inbox" key=${k} onClick=${()=>show({type:'message',author:other})}><b>${person(other)?.name||'Perfil'}</b><small>${t.status==='pending'?'Solicitud pendiente':t.status==='accepted'?'Conversación':'Solicitud rechazada'}</small></button>`}):html`<p className="mut">Aún no tienes mensajes sociales.</p>`}</div>`}
    ${panel.type==='message'&&author&&html`<div><b>${author.name}</b><p className="mut">Conversación privada. No crea un Match ni un contrato.</p>${currentThread?.messages.map(m=>html`<p className=${'cm-message '+(m.from===me?'own':'')} key=${m.id}>${m.body}</p>`)}${currentThread?.status==='pending'&&currentThread.recipient===me?html`<div className="cm-row"><button className="btn" onClick=${()=>setThreads(s=>decideSocialMessage(s,pairKey(me,panel.author),me,'accepted'))}>Aceptar</button><button className="btn out" onClick=${()=>setThreads(s=>decideSocialMessage(s,pairKey(me,panel.author),me,'rejected'))}>Rechazar</button></div>`:currentThread?.status==='pending'?html`<p className="mut">Esperando aceptación.</p>`:currentThread?.status==='rejected'?html`<p className="mut">Solicitud rechazada.</p>`:html`<form className="cm-form" onSubmit=${e=>{e.preventDefault();send()}}>${mayHire(role,me,author.id,profiles)&&html`<div className="cm-quick"><button type="button" className="chip" onClick=${()=>setDraft(servicePrompt('quote'))}>Solicitar presupuesto</button><button type="button" className="chip" onClick=${()=>setDraft(servicePrompt('project'))}>Hablar sobre un proyecto</button></div>`}<textarea value=${draft} onChange=${e=>setDraft(e.target.value)} maxLength="1000" placeholder="Escribe un mensaje" required/><button className="btn">${currentThread?'Enviar':'Enviar solicitud de mensaje'}</button></form>`}</div>`}
    ${panel.type==='share'&&html`<div className="cm-form"><p className="mut">Puedes compartir la descripción. Los videos de esta demo no tienen un enlace público permanente.</p><textarea readOnly value=${panel.text}/><button className="btn" onClick=${copyShare}>Copiar descripción</button>${shareNotice&&html`<p role="status">${shareNotice}</p>`}</div>`}
