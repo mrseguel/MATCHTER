@@ -1,5 +1,5 @@
 import React,{useEffect,useRef,useState} from 'react'
-import {ArrowLeftRight,Check,ChevronDown,Plus,UserRound,X,Info} from 'lucide-react'
+import {ArrowLeftRight,Check,ChevronDown,UserRound} from 'lucide-react'
 import {ACCOUNT_TYPES,roleForLabel} from './realAuthFlow.js'
 import {RoleIcon} from './AuthPreview.jsx'
 import './profileSwitch.css'
@@ -8,13 +8,13 @@ export function ProfileSwitchIntro({onClose}){
  const button=useRef(null)
  useEffect(()=>{button.current?.focus()},[])
  return <div className="mt-intro-layer" role="presentation"><section className="mt-intro" role="alertdialog" aria-modal="true" aria-labelledby="mt-intro-title" aria-describedby="mt-intro-copy" onKeyDown={e=>{if(e.key==='Escape'){e.stopPropagation();onClose()}if(e.key==='Tab'){e.preventDefault();button.current?.focus()}}} onClick={e=>e.stopPropagation()}>
-  <div className="mt-intro-top"><span className="mt-intro-icon"><ArrowLeftRight size={23}/></span><span className="mt-intro-tag">UNA CUENTA, VARIOS PERFILES</span></div>
+  <div className="mt-intro-top"><span className="mt-intro-icon"><ArrowLeftRight size={23}/></span><span className="mt-intro-tag">UNA CUENTA, CUATRO PERFILES</span></div>
   <h2 id="mt-intro-title">Tu elección es solo el comienzo</h2>
-  <p id="mt-intro-copy">Elige tu perfil inicial. Podrás agregar otros perfiles y cambiar entre ellos desde <strong>“Mi perfil”</strong>, junto a tu foto y nombre, sin cerrar sesión ni crear otra cuenta.</p>
+  <p id="mt-intro-copy">Elige tu perfil inicial. Podrás cambiarlo en cualquier momento desde <strong>“Mi perfil”</strong>, usando el botón junto a tu foto y nombre, sin cerrar sesión ni crear otra cuenta.</p>
   <div className="mt-intro-example" aria-label="Ejemplo del selector de perfiles">
    <small>Mi perfil · Ejemplo</small>
    <div className="mt-example-person"><span className="mt-example-avatar"><UserRound size={23}/></span><div><strong>Tu nombre</strong><small>Cliente</small></div><span className="mt-example-switch"><ArrowLeftRight size={14}/> Cambiar perfil <ChevronDown size={13}/></span></div>
-   <div className="mt-example-menu">{types.map(t=><div key={t.role}><RoleIcon type={t.label} fallback={t.icon}/><span>{t.role}</span>{t.role==='Cliente'?<Check size={15} className="mt-orange"/>:<Plus size={15}/>}</div>)}</div>
+   <div className="mt-example-menu">{types.map(t=><div key={t.role}><RoleIcon type={t.label} fallback={t.icon}/><span>{t.role}</span>{t.role==='Cliente'?<Check size={15} className="mt-orange"/>:<ArrowLeftRight size={15}/>}</div>)}</div>
   </div>
   <button ref={button} type="button" className="mt-primary" onClick={onClose}>Entendido, elegir mi perfil</button>
  </section></div>
@@ -29,18 +29,17 @@ async function profileRequest(client,path,body){
  return data
 }
 export function ProfileSwitchPanel({client,session,profile,onLogout,busy:parentBusy,error:parentError}){
- const [data,setData]=useState(null),[busy,setBusy]=useState(false),[error,setError]=useState(''),[notice,setNotice]=useState(''),[open,setOpen]=useState(false),[confirm,setConfirm]=useState(null)
+ const [data,setData]=useState(null),[busy,setBusy]=useState(false),[error,setError]=useState(''),[notice,setNotice]=useState(''),[open,setOpen]=useState(false)
  const initial=useRef(false)
  const active=data?.activeRole||profile.role
  async function load(){setBusy(true);setError('');try{setData(await profileRequest(client,''))}catch(e){setError(e.message)}finally{setBusy(false)}}
  useEffect(()=>{if(!initial.current){initial.current=true;load()}},[])
- async function select(role,add){setBusy(true);setError('');setNotice('');try{setData(await profileRequest(client,add?'/add':'/switch',{role}));setConfirm(null);setOpen(false);setNotice(add?'Perfil agregado y activado.':'Perfil activo actualizado.')}catch(e){setError(e.message)}finally{setBusy(false)}}
+ async function select(role){setBusy(true);setError('');setNotice('');try{setData(await profileRequest(client,'/switch',{role}));setOpen(false);setNotice('Perfil activo actualizado.')}catch(e){setError(e.message)}finally{setBusy(false)}}
  const blocked=busy||parentBusy
  return <main className="mai-page"><section className="mai-card mt-profile-card"><h1>Matchter</h1><p className="mai-note">Integración privada · Tu identidad y tus perfiles se guardan realmente. Los módulos de servicios aún no están vinculados a esta cuenta.</p>
- <h2>Mi perfil</h2><div className="mt-person"><span className="mt-example-avatar"><UserRound size={27}/></span><div className="mt-person-name"><strong>{session?.user?.name||'Mi cuenta'}</strong><small>{active}</small></div><button type="button" className="mt-switch" aria-expanded={open} disabled={blocked||!data} onClick={()=>{setOpen(v=>!v);setConfirm(null)}}><ArrowLeftRight size={15}/> Cambiar perfil <ChevronDown size={15}/></button></div>
+ <h2>Mi perfil</h2><div className="mt-person"><span className="mt-example-avatar"><UserRound size={27}/></span><div className="mt-person-name"><strong>{session?.user?.name||'Mi cuenta'}</strong><small>{active}</small></div><button type="button" className="mt-switch" aria-expanded={open} disabled={blocked||!data} onClick={()=>setOpen(v=>!v)}><ArrowLeftRight size={15}/> Cambiar perfil <ChevronDown size={15}/></button></div>
  <p className="mt-email">{session?.user?.email}</p>
- {open&&<div className="mt-profile-menu"><strong>Mis perfiles</strong>{types.map(t=>{const exists=data.profiles.some(p=>p.role===t.role),current=active===t.role;return <button key={t.role} type="button" disabled={blocked||current} onClick={()=>exists?select(t.role,false):setConfirm(t.role)}><RoleIcon type={t.label} fallback={t.icon}/><span>{t.role}<small>{current?'Activo':exists?'Cambiar a este perfil':'Agregar perfil'}</small></span>{current?<Check size={18} className="mt-orange"/>:exists?<ArrowLeftRight size={17}/>:<Plus size={18}/>}</button>})}</div>}
- {confirm&&<div className="mt-confirm"><strong>Agregar perfil {confirm}</strong><p>Conservarás tu cuenta y tus perfiles existentes. {confirm==='Empresa'?'Este perfil no acredita una empresa ni autoriza a representarla. Deberás completar sus antecedentes y validación más adelante.':'Podrás completar sus antecedentes más adelante.'}</p><button type="button" className="mt-primary" disabled={blocked} onClick={()=>select(confirm,true)}>Agregar y activar</button><button type="button" className="mai-secondary" disabled={blocked} onClick={()=>setConfirm(null)}>Cancelar</button></div>}
+ {open&&<div className="mt-profile-menu"><strong>Cambiar perfil</strong>{types.map(t=>{const current=active===t.role;return <button key={t.role} type="button" disabled={blocked||current} onClick={()=>select(t.role)}><RoleIcon type={t.label} fallback={t.icon}/><span>{t.role}<small>{current?'Activo':'Cambiar a este perfil'}</small></span>{current?<Check size={18} className="mt-orange"/>:<ArrowLeftRight size={17}/>}</button>})}</div>}
  {(error||parentError)&&<p className="mai-error" role="alert">{error||parentError}</p>}{notice&&<p className="mai-notice" role="status">{notice}</p>}
  <p>Perfil persistente: <strong>{active}</strong></p><button type="button" disabled={blocked} onClick={load}>Comprobar cuenta guardada</button><button type="button" className="mai-secondary" disabled={blocked} onClick={onLogout}>Cerrar sesión</button>
  </section></main>
