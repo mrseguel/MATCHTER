@@ -43,7 +43,8 @@ export default function AuthLanding(){
  </Context.Provider>
 }
 
-function RealAuthModal({mode,types,onClose}){
+function RealAuthModal({mode,onClose}){
+ const types=ACCOUNT_TYPES
  const ctx=useContext(Context),client=ctx.client
  const [step,setStep]=useState(ctx.session?(ctx.session.user.emailVerified?'finish':'verify'):mode==='Crear cuenta'?'role':'login')
  const [label,setLabel]=useState(''),[first,setFirst]=useState(''),[last,setLast]=useState(''),[email,setEmail]=useState(ctx.session?.user?.email||''),[password,setPassword]=useState(''),[confirm,setConfirm]=useState(''),[show,setShow]=useState(false),[otp,setOtp]=useState(''),[pending,setPending]=useState(null),[localSession,setLocalSession]=useState(ctx.session),[busy,setBusy]=useState(false),[error,setError]=useState(''),[notice,setNotice]=useState('')
