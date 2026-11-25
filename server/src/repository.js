@@ -80,11 +80,16 @@ export class MockRepository {
     if (duplicate?.status === 'pending') return { duplicate: true, request: duplicate }
     if (duplicate || this.matches.some(match => match.dedupeKey === dedupeKey)) return { conflict: true, request: duplicate }
 
+    if (data.id && this.privateRequests.some(request => String(request.id) === String(data.id))) return { conflict: true }
     const item = {
+      requestKind, senderId, senderRole, recipientId, recipientRole, clientId, providerId,
+      projectTitle, description, specifications, location,
+      clientName: data.clientName, providerName: data.providerName, projectId: data.projectId,
+      projectBudget: data.projectBudget, zone: data.zone, antecedents: data.antecedents,
+      senderName: data.senderName, recipientName: data.recipientName, message: data.message,
       id: data.id || `request_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`,
       status: 'pending',
       createdAt: new Date().toISOString(),
-      ...data,
       dedupeKey,
       budget: data.budget === '' || data.budget == null ? null : Number(data.budget),
     }

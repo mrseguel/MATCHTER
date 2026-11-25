@@ -135,3 +135,14 @@ test('dos proyectos distintos del mismo cliente pueden compartir título sin col
   assert.equal(repo.privateRequests.length, 2)
   assert.equal(repo.matches.length, 0)
 })
+
+test('el servidor controla el estado inicial y conserva la identidad de cada solicitud', async () => {
+  const repo = createRepo()
+  const request = await repo.createPrivateRequest(profileInvitation({ status: 'accepted', acceptedAt: 'ayer' }))
+  assert.equal(request.status, 'pending')
+  assert.equal(request.acceptedAt, undefined)
+  assert.equal(repo.matches.length, 0)
+  const collision = await repo.createPrivateRequest(profileInvitation({ description: 'Otro proyecto' }))
+  assert.equal(collision.conflict, true)
+  assert.equal(repo.privateRequests.length, 1)
+})
