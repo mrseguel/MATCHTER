@@ -1,6 +1,7 @@
 import {test} from 'node:test'
 import assert from 'node:assert/strict'
-import {createAuthClient,BetterAuthVanillaAdapter} from '@neondatabase/auth'
+import {createAuthClient} from '@neondatabase/auth'
+import {BetterAuthVanillaAdapter} from '@neondatabase/auth/vanilla/adapters'
 import {createPreviewAuthClient} from './features/auth/authSdk.js'
 test('pinned Neon SDK has usable email sign-up and sign-in methods',()=>{
  const raw=createAuthClient('https://auth.example.test',{adapter:BetterAuthVanillaAdapter()})
