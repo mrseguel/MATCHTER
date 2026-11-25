@@ -1,3 +1,4 @@
+import {ACCOUNT_TYPES as TYPES} from '../profileRoles.js';
 import {demoPortrait} from '../demoData.js'
 import React, { useState, useRef, useEffect } from "react";
 import htm from "htm";
@@ -300,7 +301,7 @@ function Admin({pros,setPros,jobs,disputes,setDisputes,pays,setPays,tab,setTab,e
  </div><div className="nav">${T.map(([k,i,l])=>html`<button key=${k} className=${tab===k?'on':''} onClick=${()=>setTab(k)}><span>${i}</span>${l}</button>`)}</div></div>`;
 }
 
-const TYPES=[['👤','Perfil clientes','Busca y contrata profesionales para tu proyecto'],['🔨','Perfil maestros','Ofrece tus servicios de obra y oficios'],['📐','Profesionales y contratistas','Arquitectos, ingenieros y contratistas independientes'],['🏢','Perfil empresas','Constructoras y empresas que buscan o ofrecen proyectos']];
+
 function Landing({onEnter}){
  const [auth,setAuth]=useState(null);const [more,setMore]=useState(false);const [impactOpen,setImpactOpen]=useState(false);
  const SP=['Carpintería','Electricidad','Gasfitería','Pintura','Albañilería','Arquitectura'];
