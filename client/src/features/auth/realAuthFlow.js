@@ -1,14 +1,5 @@
-export const ACCOUNT_TYPES=Object.freeze([
- ['👤','Perfil clientes','Busca y contrata profesionales para tu proyecto'],
- ['🔨','Maestro individual','Ofrece tus servicios de obra y oficios de forma independiente'],
- ['📐','Profesional o contratista','Arquitectos, ingenieros y contratistas independientes'],
- ['🏢','Perfil empresas','Constructoras y empresas que buscan o ofrecen proyectos']
-].map(Object.freeze))
-export const ROLE_BY_LABEL=Object.freeze({'Perfil clientes':'Cliente','Maestro individual':'Maestro o contratista','Profesional o contratista':'Profesional','Perfil empresas':'Empresa'})
-// Legacy database role keys remain stable; these are presentation labels only.
-const DISPLAY_BY_ROLE=Object.freeze({'Cliente':'Cliente','Maestro o contratista':'Maestro individual','Profesional':'Profesional o contratista','Empresa':'Empresa'})
-export const displayRole=role=>DISPLAY_BY_ROLE[role]||role
-export function roleForLabel(label){if(!Object.hasOwn(ROLE_BY_LABEL,label))throw Error('Selecciona un tipo de cuenta válido');return ROLE_BY_LABEL[label]}
+import {ROLE_BY_LABEL,roleForLabel} from '../../profileRoles.js'
+export {ACCOUNT_TYPES,ROLE_BY_LABEL,displayRole,roleForLabel} from '../../profileRoles.js'
 export const canonicalEmail=email=>String(email||'').trim().toLowerCase()
 export function pendingRoleFor(pending,user){return pending&&canonicalEmail(pending.email)===canonicalEmail(user?.email)&&user?.emailVerified===true?roleForLabel(pending.label):null}
 export async function accountRequest(client,path,body,fetcher=fetch){
