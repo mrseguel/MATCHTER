@@ -21,7 +21,8 @@ export function createIdentityVerifier({issuer,audience,jwksUrl,algorithms=['EdD
       const {payload}=await jwtVerify(token[1],resolver,{issuer,audience,algorithms,requiredClaims:['iss','aud','sub','exp','iat'],maxTokenAge:'15m',clockTolerance:5})
       if(typeof payload.sub!=='string'||!payload.sub.trim()||payload.sub.length>255)throw Error('Invalid subject')
       // Require the identity provider's verified-email claim before onboarding.
-      if(payload.email_verified!==true)throw new AuthError(403,'Verifica tu correo electrónico')
+      if(payload.emailVerified!==true)throw new AuthError(403,'Verifica tu correo electrónico')
+      if(payload.banned===true)throw new AuthError(403,'Cuenta suspendida')
       return Object.freeze({issuer:payload.iss,subject:payload.sub})
     } catch(error) {
       if(error instanceof AuthError)throw error
