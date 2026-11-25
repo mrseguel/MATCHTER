@@ -5,11 +5,12 @@ import {BetterAuthVanillaAdapter} from '@neondatabase/auth/vanilla/adapters'
 export function createPreviewAuthClient(url){
  const sdk=createAuthClient(url,{adapter:BetterAuthVanillaAdapter()})
  const candidates=[sdk,sdk?.adapter,sdk?.auth]
- const auth=candidates.find(c=>c&&typeof c.signUp?.email==='function'&&typeof c.signIn?.email==='function'&&typeof c.getSession==='function'&&typeof c.signOut==='function')
+ const auth=candidates.find(c=>c&&typeof c.signUp?.email==='function'&&typeof c.signIn?.email==='function'&&typeof c.getSession==='function'&&typeof c.signOut==='function'&&typeof c.emailOtp?.verifyEmail==='function'&&typeof c.emailOtp?.sendVerificationOtp==='function')
  if(!auth)throw Error('El SDK no expone las operaciones de autenticación esperadas.')
  return {
   signUp:{email:args=>auth.signUp.email(args)},
   signIn:{email:args=>auth.signIn.email(args)},
+  emailOtp:{verifyEmail:args=>auth.emailOtp.verifyEmail(args),sendVerificationOtp:args=>auth.emailOtp.sendVerificationOtp(args)},
   getSession:()=>auth.getSession(),
   signOut:()=>auth.signOut(),
   async getJWTToken(){
