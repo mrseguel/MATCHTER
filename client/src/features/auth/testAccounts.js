@@ -1,6 +1,7 @@
+import {ACCOUNT_TYPES} from '../../profileRoles.js';
 // Preview-only: never authenticate real accounts here.
 const accounts=new Map();
-export const roles=['Perfil clientes','Perfil maestros','Profesionales y contratistas','Perfil empresas'];
+export const roles=ACCOUNT_TYPES.map(t=>t[1]);
 const clean=v=>String(v??'').trim();
 export const normalise=v=>clean(v).toLowerCase();
 export function validRut(value){
