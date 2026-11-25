@@ -7,7 +7,7 @@ const issuer='https://identity.example.test',audience='matchter-integration',jwk
 const {publicKey,privateKey}=await generateKeyPair('ES256')
 const verifier=createIdentityVerifier({issuer,audience,jwksUrl,algorithms:['ES256']},publicKey)
 async function token({sub='person-1',iss=issuer,aud=audience,verified=true,exp='5m',key=privateKey}={}) {
-  return 'Bearer '+await new SignJWT({email_verified:verified,role:'admin'}).setProtectedHeader({alg:'ES256'}).setIssuer(iss).setAudience(aud).setSubject(sub).setIssuedAt().setExpirationTime(exp).sign(key)
+  return 'Bearer '+await new SignJWT({emailVerified:verified,role:'admin'}).setProtectedHeader({alg:'ES256'}).setIssuer(iss).setAudience(aud).setSubject(sub).setIssuedAt().setExpirationTime(exp).sign(key)
 }
 test('valid signed identity ignores arbitrary role claim',async()=>{
   assert.deepEqual(await verifier(await token()),{issuer,subject:'person-1'})
