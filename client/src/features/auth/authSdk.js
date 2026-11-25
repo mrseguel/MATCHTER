@@ -1,4 +1,5 @@
-import {createAuthClient,BetterAuthVanillaAdapter} from '@neondatabase/auth'
+import {createAuthClient} from '@neondatabase/auth'
+import {BetterAuthVanillaAdapter} from '@neondatabase/auth/vanilla/adapters'
 // The pinned SDK may expose its Better Auth instance under adapter.
 // Validate the concrete API shape before enabling the form.
 export function createPreviewAuthClient(url){
