@@ -40,7 +40,6 @@ export function createAuthRouter(env=process.env, dependencies={}) {
   router.get('/me',handle((svc,req)=>svc.me(req.get('authorization'))))
   router.post('/onboard',handle((svc,req)=>svc.onboard(req.get('authorization'),req.body)))
   router.get('/profiles',handle((svc,req)=>svc.profiles.list(req.get('authorization'))))
-  router.post('/profiles/add',handle((svc,req)=>svc.profiles.add(req.get('authorization'),req.body)))
   router.post('/profiles/switch',handle((svc,req)=>svc.profiles.switch(req.get('authorization'),req.body)))
   return router
 }
