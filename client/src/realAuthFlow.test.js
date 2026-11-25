@@ -1,8 +1,11 @@
 import {test} from 'node:test'
 import assert from 'node:assert/strict'
-import {ACCOUNT_TYPES,roleForLabel,pendingRoleFor,completeIdentity,accountRequest} from './features/auth/realAuthFlow.js'
+import {ACCOUNT_TYPES,roleForLabel,displayRole,pendingRoleFor,completeIdentity,accountRequest} from './features/auth/realAuthFlow.js'
 test('approved four profile labels map to four distinct immutable roles',()=>{
  assert.deepEqual(ACCOUNT_TYPES.map(t=>roleForLabel(t[1])),['Cliente','Maestro o contratista','Profesional','Empresa'])
+ assert.deepEqual(ACCOUNT_TYPES.map(t=>displayRole(roleForLabel(t[1]))),['Cliente','Maestro individual','Profesional o contratista','Empresa'])
+ assert.equal(roleForLabel('Maestro individual'),'Maestro o contratista')
+ assert.equal(roleForLabel('Profesional o contratista'),'Profesional')
  assert.throws(()=>roleForLabel('admin'))
  assert.throws(()=>roleForLabel('__proto__'))
 })
