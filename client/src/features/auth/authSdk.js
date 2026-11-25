@@ -1,12 +1,10 @@
-import {createAuthClient} from '@neondatabase/auth'
 import {BetterAuthVanillaAdapter} from '@neondatabase/auth/vanilla/adapters'
-// The pinned SDK may expose its Better Auth instance under adapter.
-// Validate the concrete API shape before enabling the form.
-export function createPreviewAuthClient(url){
- const sdk=createAuthClient(url,{adapter:BetterAuthVanillaAdapter()})
- const candidates=[sdk,sdk?.adapter,sdk?.auth]
- const auth=candidates.find(c=>c&&typeof c.signUp?.email==='function'&&typeof c.signIn?.email==='function'&&typeof c.getSession==='function'&&typeof c.signOut==='function'&&typeof c.emailOtp?.verifyEmail==='function'&&typeof c.emailOtp?.sendVerificationOtp==='function')
- if(!auth)throw Error('El SDK no expone las operaciones de autenticación esperadas.')
+const isJWT=token=>typeof token==='string'&&/^[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+$/.test(token)
+// The public Better Auth client is a dynamic proxy. Checking arbitrary method
+// names on that proxy is not a valid capability check. Use the concrete adapter.
+export function wrapAuthAdapter(adapter){
+ if(!adapter||typeof adapter.getBetterAuthInstance!=='function'||typeof adapter.getJWTToken!=='function')throw Error('Adaptador de autenticación incompatible')
+ const auth=adapter.getBetterAuthInstance()
  return {
   signUp:{email:args=>auth.signUp.email(args)},
   signIn:{email:args=>auth.signIn.email(args)},
@@ -14,18 +12,18 @@ export function createPreviewAuthClient(url){
   getSession:()=>auth.getSession(),
   signOut:()=>auth.signOut(),
   async getJWTToken(){
-   if(typeof sdk.getJWTToken==='function'){
-    const token=await sdk.getJWTToken();if(typeof token==='string'&&token.split('.').length===3)return token
-   }
    const session=await auth.getSession()
-   if(session.error)throw Error('No se pudo recuperar la sesión')
+   if(session.error||!session.data?.user)throw Error('No se pudo recuperar la sesión de Neon')
    const token=session.data?.session?.access_token
-   if(typeof token==='string'&&token.split('.').length===3)return token
-   if(typeof auth.token==='function'){
-    const result=await auth.token();if(result.error)throw Error('No se pudo obtener el token de sesión')
-    return result.data?.token||null
-   }
-   return null
+   if(isJWT(token))return token
+   try{
+    const jwt=await adapter.getJWTToken(false)
+    if(isJWT(jwt))return jwt
+   }catch(e){throw Error('Neon no entregó el token de acceso'+(e?.status?' (HTTP '+e.status+')':'')+'. Vuelve a iniciar sesión.')}
+   throw Error('Neon no entregó un token de acceso válido. Vuelve a iniciar sesión.')
   }
  }
+}
+export function createPreviewAuthClient(url){
+ return wrapAuthAdapter(BetterAuthVanillaAdapter()(url))
 }
