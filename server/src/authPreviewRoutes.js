@@ -65,5 +65,7 @@ export function createAuthRouter(env=process.env, dependencies={}) {
   router.get('/messages/stages',handle((s,r)=>s.messages.stages(r.get('authorization'),r.query)))
   router.post('/messages/stages',handle((s,r)=>s.messages.changeStage(r.get('authorization'),r.body)))
   router.get('/messages/workflow',handle((s,r)=>s.messages.workflow(r.get('authorization'),r.query)))
+  router.get('/messages/coordination',handle((s,r)=>s.messages.coordination(r.get('authorization'),r.query)))
+  router.post('/messages/coordination',handle((s,r)=>s.messages.changeCoordination(r.get('authorization'),r.body)))
   return router
 }
