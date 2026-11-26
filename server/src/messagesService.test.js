@@ -30,5 +30,21 @@ test('accepted Match participants alone can read and send; retries are idempoten
  await assert.rejects(s.send('a',{...body,body:'Otro'}),e=>e.status===409)
  assert.equal((await s.history('b',{role:'Profesional',requestId:r})).messages[0].me,false)
  assert.equal((await s.history('a',{role:'Cliente',requestId:r})).messages[0].me,true)
+ const quote={role:'Cliente',requestId:r,clientMessageId:c,request:{kind:'quote',note:'Materiales y mano de obra'}}
+ const visit={role:'Profesional',requestId:r,clientMessageId:c,request:{kind:'visit',date:'2026-11-27',time:'10:00',note:'Revisar terreno'}}
+ await assert.rejects(s.send('b',{...quote,role:'Profesional'}),e=>e.status===403)
+ const q=(await s.send('a',quote)).message
+ assert.equal(q.kind,'quote');assert.equal(q.request.note,'Materiales y mano de obra')
+ const v=(await s.send('b',visit)).message
+ assert.equal(v.kind,'visit');assert.equal(v.request.date,'2026-11-27')
+ assert.equal((await s.send('b',visit)).message.request.time,'10:00')
+ await assert.rejects(s.send('b',{...visit,request:{...visit.request,time:'11:00'}}),e=>e.status===409)
+ const history=(await s.history('a',{role:'Cliente',requestId:r})).messages
+ assert.equal(history.find(x=>x.kind==='visit').me,false)
+ assert.equal(history.find(x=>x.kind==='quote').me,true)
+ await assert.rejects(s.send('a',{...body,body:'MATCHTER_REQUEST_V1:{}'}),e=>e.status===400)
+ assert.throws(()=>validateMessage({...visit,request:{kind:'visit',date:'2026-02-30'}}),e=>e.status===400)
+ assert.throws(()=>validateMessage({...visit,request:{kind:'visit',time:'10:00'}}),e=>e.status===400)
+
  await assert.rejects(s.list('forged','Cliente'),e=>e.status===401)
 })
