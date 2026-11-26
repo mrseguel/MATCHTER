@@ -3,6 +3,7 @@ import {Messages,Chat,Overlay} from '../../approved/visual.js'
 import {messagesRequest} from './messagesApi.js'
 import {RealProjectAgreement} from './RealProjectAgreement.jsx'
 import {RealContractDemo} from './RealContractDemo.jsx'
+import {RealProjectReview} from './RealProjectReview.jsx'
 import {RealStageDemo} from './RealStageDemo.jsx'
 const merge=(a,b)=>[...new Map([...a,...b].map(m=>[m.id,m])).values()].sort((x,y)=>String(x.createdAt).localeCompare(String(y.createdAt))||x.id.localeCompare(y.id))
 const display=m=>({...m,t:m.body})
@@ -45,15 +46,15 @@ function Thread({client,role,thread,onBack}){
   }finally{sending.current=false}
  }
  const p={id:thread.id,name:thread.peerName,e:'👤',c:'#e6e9ef'}
- const context={client,role,requestId:thread.id}
+ const context={client,role,requestId:thread.id,providerLabel:workflow?.providerLabel||({'Maestro o contratista':'Maestro/contratista',Profesional:'Profesional',Empresa:'Empresa'}[role==='Cliente'?thread.peerRole:role]||'Contraparte')}
  const openWorkflow=target=>{setScreen(target);refreshWorkflow()}
  const job={id:thread.id,project:thread.project,agreementRequired:true,clientId:'client',providerId:'provider',agreementContext:context,workflow,workflowError,openWorkflow,refreshWorkflow,coordination,changeCoordination}
  const actor={id:role==='Cliente'?'client':'provider'}
- const documents=[['agreement','Acuerdo previo',true],['contract','Contrato escrito',!!workflow?.contract||!!(workflow?.agreement?.confirmed?.client&&workflow?.agreement?.confirmed?.provider)],['notary','Trámite notarial',workflow?.notaryAvailable],['stages','Etapas y pagos',workflow?.stagesAvailable]]
+ const documents=[['agreement','Acuerdo previo',true],['contract','Contrato escrito',!!workflow?.contract||!!(workflow?.agreement?.confirmed?.client&&workflow?.agreement?.confirmed?.provider)],['notary','Trámite notarial',workflow?.notaryAvailable],['stages',workflow?.complete?'Proyecto recibido conforme':'Etapas y pagos',workflow?.stagesAvailable],['review','Calificación',workflow?.complete&&(role==='Cliente'||!!workflow?.review)]]
  if(screen)return <Overlay title={documents.find(d=>d[0]===screen)?.[1]||'Proyecto'} onBack={()=>{setScreen(null);refreshWorkflow();load(false,true)}}>
  <div className="card wf-chat"><b>{thread.project}</b><p className="mut">Siguiente paso: {workflow?.next?.title||'Comprobando estado…'}</p>{workflow?.next?.target&&workflow.next.target!==screen&&<button className="btn" onClick={()=>openWorkflow(workflow.next.target)}>{workflow.next.title} →</button>}<details><summary>Revisar documentación y avances</summary><div className="wf-documents">{documents.filter(d=>d[2]).map(([target,title])=><button key={target} className="btn out" type="button" disabled={target===screen} onClick={()=>openWorkflow(target)}>{title}</button>)}</div></details></div>
  {workflowError&&<p className="wf-error" role="alert">{workflowError}</p>}
- {screen==='agreement'?<RealProjectAgreement key={thread.id} context={context} project={thread.project} standalone onAdvance={refreshWorkflow}/>:screen==='contract'||screen==='notary'?workflow?.agreement?<RealContractDemo key={screen+workflow.agreement.version} context={context} agreement={workflow.agreement} standalone notaryOnly={screen==='notary'} onAdvance={refreshWorkflow}/>:<p className="mut">Primero confirma el acuerdo.</p>:screen==='stages'&&workflow?.contract&&workflow.stagesAvailable?<RealStageDemo key={workflow.contract.digest} context={context} contract={workflow.contract} onAdvance={refreshWorkflow}/>:<p className="mut">Este paso aún no está habilitado.</p>}
+ {screen==='agreement'?<RealProjectAgreement key={thread.id} context={context} project={thread.project} standalone onAdvance={refreshWorkflow}/>:screen==='contract'||screen==='notary'?workflow?.agreement?<RealContractDemo key={screen+workflow.agreement.version} context={context} agreement={workflow.agreement} standalone notaryOnly={screen==='notary'} onAdvance={refreshWorkflow}/>:<p className="mut">Primero confirma el acuerdo.</p>:screen==='stages'&&workflow?.contract&&workflow.stagesAvailable?<RealStageDemo key={workflow.contract.digest} context={context} contract={workflow.contract} onAdvance={refreshWorkflow} onComplete={()=>{if(role==='Cliente')setScreen('review')}}/>:screen==='review'&&workflow?.contract?<RealProjectReview key={workflow.contract.digest} context={context} contract={workflow.contract} providerName={role==='Cliente'?thread.peerName:undefined} onSaved={refreshWorkflow} onLater={()=>{setScreen(null);refreshWorkflow()}}/>:<p className="mut">Este paso aún no está habilitado.</p>}
  </Overlay>
  const combined=merge(items,workflow?.events||[]).map(display)
  return <>{error&&<p className="mt-real-chat-error" role="alert">{error}</p>}{coordinationError&&<p className="mt-real-chat-error" role="alert">{coordinationError} <button className="chip" onClick={refreshCoordination}>Reintentar</button></p>}<Chat p={p} job={job} actor={actor} msgs={combined} send={send} onBack={onBack} real={true} onRefresh={()=>{load(false);refreshWorkflow();refreshCoordination()}} onOlder={()=>load(true)} hasMore={hasMore} loading={busy}/></>
