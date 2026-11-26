@@ -4,11 +4,11 @@ const cols='stage_no AS "stageNo",amount,funded_at AS "fundedAt",delivered_at AS
 const fail=(status,msg)=>{throw new AuthError(status,msg)}
 export function stageReady(c){return !!(c?.clientSignedAt&&c?.providerSignedAt&&(c.mode==='simple'||c.mode==='notary'&&c.notaryAcceptedAt&&c.notaryDemoPaidAt&&c.notaryDemoFee===DEMO_NOTARY_FEE&&c.notaryDemoAuthorizedAt))}
 export function validateStageAction(b){
- if(!b||typeof b!=='object'||Array.isArray(b)||Object.keys(b).some(k=>!['role','requestId','action','agreementVersion','contractRevision','digest','stageNo','accepted'].includes(k))||!['fund','deliver','release'].includes(b.action)||!Number.isSafeInteger(b.agreementVersion)||b.agreementVersion<1||!Number.isSafeInteger(b.contractRevision)||b.contractRevision<1||!Number.isInteger(b.stageNo)||b.stageNo<1||b.stageNo>3||typeof b.digest!=='string'||!/^[a-f0-9]{64}$/.test(b.digest)||b.accepted!==true)fail(400,'Acción de pago protegido de prueba no válida')
+ if(!b||typeof b!=='object'||Array.isArray(b)||Object.keys(b).some(k=>!['role','requestId','action','agreementVersion','contractRevision','digest','stageNo','accepted'].includes(k))||!['fund','deliver','release'].includes(b.action)||!Number.isSafeInteger(b.agreementVersion)||b.agreementVersion<1||!Number.isSafeInteger(b.contractRevision)||b.contractRevision<1||!Number.isInteger(b.stageNo)||b.stageNo<1||b.stageNo>50||typeof b.digest!=='string'||!/^[a-f0-9]{64}$/.test(b.digest)||b.accepted!==true)fail(400,'Acción de pago protegido de prueba no válida')
 }
 async function rowsFor(db,id,a,c){return (await db.query('SELECT '+cols+' FROM matchter.project_stage_demos WHERE request_id=$1 AND agreement_version=$2 AND contract_revision=$3 ORDER BY stage_no',[id,a.version,c.revision])).rows}
 function state(a,c,rows){
- const stages=a.data.stages.map(([title,date,amount],i)=>{const row=rows.find(r=>r.stageNo===i+1);return {stageNo:i+1,title,date,amount:Number(amount),fundedAt:row?.fundedAt||null,deliveredAt:row?.deliveredAt||null,releasedAt:row?.releasedAt||null}})
+ const stages=a.data.stages.map(([title,date,amount,physicalPercent],i)=>{const row=rows.find(r=>r.stageNo===i+1);return {stageNo:i+1,title,date,amount:Number(amount),...(physicalPercent==null?{}:{physicalPercent}),fundedAt:row?.fundedAt||null,deliveredAt:row?.deliveredAt||null,releasedAt:row?.releasedAt||null}})
  const currentStage=stages.find(s=>!s.releasedAt)?.stageNo||null
  return {demo:true,agreementVersion:a.version,contractRevision:c.revision,digest:c.digest,stages,currentStage,complete:currentStage===null}
 }
@@ -22,6 +22,7 @@ export async function changeStageDemo(db,actor,id,b){
   if(b.agreementVersion!==agreement.version||b.contractRevision!==current.revision||b.digest!==current.digest)fail(409,'El contrato no coincide')
   if(side!==(b.action==='deliver'?'provider':'client'))fail(403,'Acción reservada al perfil correspondiente')
   const rows=await rowsFor(tx,id,agreement,current),before=state(agreement,current,rows),s=before.stages[b.stageNo-1]
+  if(!s)fail(400,'La etapa no existe en el contrato')
   const done=b.action==='fund'?s.fundedAt:b.action==='deliver'?s.deliveredAt:s.releasedAt
   if(!done){
    if(before.currentStage!==b.stageNo)fail(409,'Primero completa el hito anterior')
