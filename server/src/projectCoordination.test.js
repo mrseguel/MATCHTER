@@ -1,0 +1,63 @@
+import test from 'node:test'
+import assert from 'node:assert/strict'
+import {chileTime,transition,cardView,coordinationView,changeCoordination} from './projectCoordination.js'
+const day=86400000,now=Date.parse('2026-11-26T15:00:00Z')
+const base=(kind='visit')=>({messageId:'m',kind,revision:0,requestedBy:'client',quote:null,proposal:null,scheduled:null,reports:{}})
+const act=(s,side,action,extra={},closed=false,t=now)=>transition(s,side,{action,expectedRevision:s.revision,...extra},closed,t)
+test('quote can only be submitted by provider and stays in same card',()=>{
+ const s=base('quote')
+ assert.throws(()=>act(s,'client','quote',{amount:100,detail:'Alcance'}),{status:409})
+ assert.throws(()=>act(s,'provider','quote',{amount:0,detail:'Alcance'}),{status:400})
+ const q=act(s,'provider','quote',{amount:1250000,detail:'Materiales y mano de obra'})
+ assert.equal(q.messageId,s.messageId);assert.equal(q.revision,1);assert.equal(q.quote.amount,1250000)
+ assert.equal(cardView(q,'client',false,now).status,'Cotización realizada')
+ assert.throws(()=>act(q,'provider','quote',{amount:500,detail:'Alcance'}),{status:409})
+ assert.throws(()=>act(s,'provider','quote',{amount:100,detail:'Alcance'},true),{status:409})
+})
+test('visit uses Chile time, counterparty approval and 24-hour rescheduling lock',()=>{
+ assert.equal(chileTime('2026-11-30','10:00'),'2026-11-30T13:00:00.000Z')
+ assert.throws(()=>chileTime('2026-02-30','10:00'),{status:400})
+ assert.throws(()=>chileTime('2026-11-30','25:00'),{status:400})
+ const p=act(base(),'client','propose',{date:'2026-11-30',time:'10:00'})
+ assert.equal(cardView(p,'provider',false,now).canAccept,true)
+ assert.throws(()=>act(p,'client','accept'),{status:409})
+ const scheduled=act(p,'provider','accept')
+ const cutoff=Date.parse(scheduled.scheduled.at)-day
+ assert.equal(cardView(scheduled,'client',true,cutoff-1).canPropose,true)
+ const change=act(scheduled,'provider','propose',{date:'2026-12-02',time:'11:00'},true,cutoff-1)
+ assert.deepEqual(change.scheduled,scheduled.scheduled)
+ assert.throws(()=>act(change,'client','accept',{},true,cutoff),{status:409})
+ const newDate=act(change,'client','accept',{},true,cutoff-1)
+ assert.equal(newDate.scheduled.date,'2026-12-02')
+ assert.equal(newDate.proposal,null)
+ assert.throws(()=>act(scheduled,'client','propose',{date:'2026-12-03',time:'12:00'},false,cutoff),{status:409})
+ assert.throws(()=>transition(p,'provider',{action:'accept',expectedRevision:0},false,now),{status:409})
+})
+test('visit result is role-specific, time-gated, and no-show is an allegation',()=>{
+ const p=act(base(),'provider','propose',{date:'2026-11-30',time:'10:00'}),s=act(p,'client','accept'),start=Date.parse(s.scheduled.at)
+ assert.throws(()=>act(s,'client','report',{outcome:'no_show'},false,start-1),{status:409})
+ assert.throws(()=>act(s,'client','report',{outcome:'not_received'},false,start),{status:400})
+ const client=act(s,'client','report',{outcome:'no_show',note:'No llegó'},true,start)
+ assert.equal(cardView(client,'provider',true,start).status,'Resultado informado por una de las partes')
+ const contested=act(client,'provider','report',{outcome:'not_received',note:'No me abrió'},true,start)
+ assert.equal(cardView(contested,'client',true,start).status,'Incidencia de visita registrada')
+ assert.equal(cardView(contested,'provider',true,start).canReport,false)
+ const attended=act(act(s,'client','report',{outcome:'attended'},true,start),'provider','report',{outcome:'attended'},true,start)
+ assert.equal(cardView(attended,'client',true,start).status,'Visita realizada')
+})
+test('creation buttons disappear once request exists or bilateral agreement is final',()=>{
+ assert.deepEqual(coordinationView({side:'client',closed:false,cards:[]},now),{closed:false,canQuote:true,canVisit:true,cards:{}})
+ assert.equal(coordinationView({side:'provider',closed:false,cards:[]},now).canQuote,false)
+ const q=base('quote')
+ assert.equal(coordinationView({side:'client',closed:false,cards:[q]},now).canQuote,false)
+ assert.equal(coordinationView({side:'client',closed:true,cards:[]},now).canVisit,false)
+})
+test('transaction records only matched participant and exact card revision',async()=>{
+ const calls=[],row={id:'m',senderId:'a',body:'MATCHTER_REQUEST_V1:{"kind":"quote","note":""}',revision:null,state:null}
+ const db={connect:async()=>({release(){},query:async(sql,p)=>{calls.push({sql,p});if(sql.startsWith('SELECT sender_profile_id'))return {rows:p[1]==='b'?[{senderId:'a',recipientId:'b'}]:[]};if(sql.startsWith('SELECT 1'))return {rows:[]};if(sql.startsWith('SELECT m.id'))return {rows:[row]};return {rows:[]}}})}
+ const result=await changeCoordination(db,{id:'b',role:'Empresa'},'r',{messageId:'m',expectedRevision:0,action:'quote',amount:1000,detail:'Alcance acordado'})
+ assert.equal(result.cards.m.quote.amount,1000)
+ assert.ok(calls.some(x=>x.sql.startsWith('INSERT INTO matchter.project_coordination_events')&&x.p[2]==='b'))
+ await assert.rejects(changeCoordination(db,{id:'x',role:'Empresa'},'r',{messageId:'m',expectedRevision:0,action:'quote',amount:1000,detail:'Alcance acordado'}),{status:404})
+ await assert.rejects(changeCoordination(db,{id:'b',role:'Empresa'},'r',{messageId:'other',expectedRevision:0,action:'quote',amount:1000,detail:'Alcance acordado'}),{status:404})
+})
