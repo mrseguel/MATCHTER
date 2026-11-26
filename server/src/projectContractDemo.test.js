@@ -14,7 +14,7 @@ function fake(){
   if(sql.startsWith('SELECT version,data'))return {rows:[a]}
   if(sql.startsWith('SELECT revision,agreement_version'))return {rows:rows.length?[structuredClone(rows.at(-1))]:[]}
   if(sql.startsWith('INSERT INTO matchter.project_contract_demos')){const r={agreementVersion:p[1],revision:p[2],mode:p[3],terms:JSON.parse(p[4]),digest:p[5],createdAt:'now',clientSignedAt:null,providerSignedAt:null,notaryAcceptedAt:null,notaryDemoPaidAt:null,notaryDemoFee:null,notaryDemoAuthorizedAt:null};rows.push(r);return {rows:[structuredClone(r)]}}
-  if(sql.startsWith('UPDATE matchter.project_contract_demos')){const r=rows.at(-1);if(sql.includes('SET service_fee_demo_paid_at')){r.serviceFeePaidAt='confirmed'}else if(sql.includes('SET notary_demo_paid_at')){r.notaryDemoPaidAt='confirmed';r.notaryDemoFee=p[3]}else r[sql.includes('SET notary_demo_authorized_at')?'notaryDemoAuthorizedAt':sql.includes('SET notary_accepted_at')?'notaryAcceptedAt':sql.includes('SET client_signed_at')?'clientSignedAt':'providerSignedAt']='confirmed';return {rows:[structuredClone(r)]}}
+  if(sql.startsWith('UPDATE matchter.project_contract_demos')){const r=rows.at(-1);if(sql.includes('SET service_fee_demo_paid_at')){r.serviceFeePaidAt='confirmed'}else if(sql.includes('SET provider_fee_demo_mode')){r.providerFeeMode=p[3];r.providerFeePaidAt=p[3]==='upfront'?'confirmed':null}else if(sql.includes('SET notary_demo_paid_at')){r.notaryDemoPaidAt='confirmed';r.notaryDemoFee=p[3]}else r[sql.includes('SET notary_demo_authorized_at')?'notaryDemoAuthorizedAt':sql.includes('SET notary_accepted_at')?'notaryAcceptedAt':sql.includes('SET client_signed_at')?'clientSignedAt':'providerSignedAt']='confirmed';return {rows:[structuredClone(r)]}}
   throw Error(sql)
  }
  return {rows,a,query,async connect(){return {query,release(){}}}}
@@ -101,6 +101,14 @@ test('notary simulation requires both signatures, agreed payer, exact demo amoun
  const feePaid=(await changeContractDemo(db,client,id,servicePay)).contract
  assert.ok(feePaid.serviceFeePaidAt)
  assert.deepEqual(await changeContractDemo(db,client,id,servicePay),{agreementVersion:2,contract:feePaid})
+ await assert.rejects(changeContractDemo(db,provider,id,pay),{status:409})
+ const providerPay={...servicePay,action:'payProviderFeeDemo'}
+ await assert.rejects(changeContractDemo(db,client,id,providerPay),{status:403})
+ await assert.rejects(changeContractDemo(db,provider,id,{...providerPay,demoAmount:1}),{status:409})
+ await assert.rejects(changeContractDemo(db,provider,id,{...acceptNotary(c),action:'deferProviderFeeDemo',accepted:true}),{status:409})
+ const ownPaid=(await changeContractDemo(db,provider,id,providerPay)).contract
+ assert.equal(ownPaid.providerFeeMode,'upfront');assert.ok(ownPaid.providerFeePaidAt)
+ assert.deepEqual((await changeContractDemo(db,provider,id,providerPay)).contract,ownPaid)
  const paid=(await changeContractDemo(db,provider,id,pay)).contract
  assert.equal(paid.notaryDemo.paidAmount,DEMO_NOTARY_FEE)
  assert.ok(paid.notaryDemo.paidAt);assert.equal(paid.notaryDemo.authorizedAt,null)
@@ -109,4 +117,27 @@ test('notary simulation requires both signatures, agreed payer, exact demo amoun
  assert.ok(complete.notaryDemo.authorizedAt)
  assert.deepEqual((await changeContractDemo(db,provider,id,auth)).contract,complete)
  assert.deepEqual((await readContractDemo(db,provider,id)).contract,complete)
+})
+
+test('unsigned unilateral draft upgrades only by explicit new revision and cannot be signed stale',async()=>{
+ const db=fake(),old=contractSnapshot(id,agreement,'simple',1,undefined,{version:1,amount:9990})
+ db.rows.push({agreementVersion:2,revision:1,mode:'simple',...old,clientSignedAt:null,providerSignedAt:null})
+ const preview=await readContractDemo(db,client,id)
+ assert.equal(preview.feeUpgradeRequired,true);assert.equal(preview.serviceFee.version,2)
+ await assert.rejects(changeContractDemo(db,client,id,confirm(preview.contract)),{status:409})
+ const newDoc=(await changeContractDemo(db,client,id,choose('simple',1))).contract
+ assert.equal(newDoc.revision,2);assert.equal(newDoc.terms.serviceFee.version,2)
+ assert.equal(db.rows[0].terms.serviceFee.version,1)
+})
+test('provider authorizes deferred deduction once after both signatures, never the client',async()=>{
+ const db=fake();db.a.data.stages=[['Trabajo','2027-02-20',100000]]
+ const c=(await changeContractDemo(db,client,id,choose())).contract
+ const defer={...acceptNotary(c),action:'deferProviderFeeDemo',accepted:true}
+ await assert.rejects(changeContractDemo(db,provider,id,defer),{status:409})
+ await changeContractDemo(db,client,id,confirm(c));await changeContractDemo(db,provider,id,confirm(c))
+ await assert.rejects(changeContractDemo(db,client,id,defer),{status:403})
+ const saved=(await changeContractDemo(db,provider,id,defer)).contract
+ assert.equal(saved.providerFeeMode,'deferred');assert.equal(saved.providerFeePaidAt,null)
+ assert.deepEqual((await changeContractDemo(db,provider,id,defer)).contract,saved)
+ await assert.rejects(changeContractDemo(db,provider,id,{...defer,action:'payProviderFeeDemo',demoAmount:9990}),{status:409})
 })
