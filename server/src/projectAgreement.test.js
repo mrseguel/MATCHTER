@@ -3,7 +3,7 @@ import assert from 'node:assert/strict'
 import {validateAgreementAction,readProjectAgreement,changeProjectAgreement} from './projectAgreement.js'
 const client={id:'client-1',role:'Cliente'},provider={id:'provider-1',role:'Maestro o contratista'},outsider={id:'other',role:'Cliente'}
 const match={id:'match-1',senderId:client.id,recipientId:provider.id}
-const terms={title:'Terraza de madera',scope:'Construcción de terraza y terminaciones según especificaciones.',start:'2026-12-01',end:'2026-12-20',stages:[['Preparación','2026-12-03',100000],['Estructura','2026-12-10',200000],['Entrega','2026-12-20',150000]]}
+const terms={title:'Terraza de madera',scope:'Construcción de terraza y terminaciones según especificaciones.',start:'2026-12-01',end:'2026-12-20',totalAmount:450000,stages:[['Preparación','2026-12-03',100000,25],['Estructura','2026-12-10',200000,50],['Entrega','2026-12-20',150000,25]]}
 const proposal=(expectedVersion=0,data=terms)=>({action:'propose',expectedVersion,data})
 const confirm=expectedVersion=>({action:'confirm',expectedVersion})
 function fakeDB(){
@@ -33,8 +33,8 @@ test('agreement validates real calendar dates, ordered milestones, whole CLP, an
  {...terms,start:'2026-02-30'},
  {...terms,end:'2026-11-30'},
  {...terms,stages:terms.stages.slice(0,2)},
- {...terms,stages:terms.stages.map((s,i)=>i===1?[s[0],'2026-12-01',s[2]]:s)},
- {...terms,stages:terms.stages.map((s,i)=>i===1?[s[0],s[1],1.1]:s)},
+ {...terms,stages:terms.stages.map((s,i)=>i===1?[s[0],'2026-12-01',s[2],s[3]]:s)},
+ {...terms,stages:terms.stages.map((s,i)=>i===1?[s[0],s[1],1.1,s[3]]:s)},
  {...terms,scope:'Corto'}, {...terms,actorId:provider.id}
  ])assert.throws(()=>validateAgreementAction(proposal(0,data)),{status:400})
  assert.throws(()=>validateAgreementAction({action:'confirm',expectedVersion:0}),{status:400})
@@ -65,4 +65,16 @@ test('two proposals based on the same version cannot both succeed',async()=>{
  assert.equal(results.filter(x=>x.status==='fulfilled').length,1)
  assert.equal(results.find(x=>x.status==='rejected').reason.status,409)
  assert.equal(db.rows.length,1)
+})
+
+test('flexible counts 1, 2, 5 and 50 with independent percentages and amounts',()=>{
+ for(const count of [1,2,5,50]){
+  const stages=Array.from({length:count},(_,i)=>['Hito '+(i+1),terms.end,1000+i,100/count])
+  const data={...terms,stages,totalAmount:stages.reduce((n,s)=>n+s[2],0)}
+  assert.deepEqual(validateAgreementAction(proposal(0,data)).data,data)
+ }
+ const stages=[['Uno',terms.start,1000,33.33],['Dos',terms.end,2000,66.67]]
+ const data={...terms,stages,totalAmount:3000}
+ assert.deepEqual(validateAgreementAction(proposal(0,data)).data,data)
+ for(const bad of [{...data,totalAmount:3001},{...data,stages:[]},{...data,stages:Array.from({length:51},()=>stages[0])},{...data,stages:[['Uno',terms.end,3000,99.99]]},{...data,stages:[['Uno',terms.end,3000]]},{...data,stages:[['Uno',terms.start,1000,33.333],['Dos',terms.end,2000,66.667]]}])assert.throws(()=>validateAgreementAction(proposal(0,bad)),{status:400})
 })
