@@ -1,5 +1,6 @@
 import React,{useEffect,useRef,useState} from 'react'
 import {messagesRequest} from './messagesApi.js'
+import {RealContractDemo} from './RealContractDemo.jsx'
 const clp=n=>'$'+Number(n).toLocaleString('es-CL')+' CLP'
 const blank=project=>({title:project||'',scope:'',start:'',end:'',stages:[['','',''],['','',''],['','','']]})
 const ready=a=>!!(a?.confirmed?.client&&a?.confirmed?.provider)
@@ -8,7 +9,7 @@ const fromAgreement=(a,project)=>a?{...a.data,stages:a.data.stages.map(s=>[...s]
 export function RealProjectAgreement({context,project}){
  const {client,role,requestId}=context
  const side=role==='Cliente'?'client':'provider'
- const [agreement,setAgreement]=useState(null),[loaded,setLoaded]=useState(false),[error,setError]=useState(''),[busy,setBusy]=useState(false),[edit,setEdit]=useState(null)
+ const [agreement,setAgreement]=useState(null),[loaded,setLoaded]=useState(false),[error,setError]=useState(''),[busy,setBusy]=useState(false),[edit,setEdit]=useState(null),[showContract,setShowContract]=useState(false)
  const alive=useRef(false),seq=useRef(0),saving=useRef(false),loading=useRef(false)
  const query={requestId}
  async function load(){
@@ -51,7 +52,7 @@ export function RealProjectAgreement({context,project}){
   {agreement.data.stages.map((s,i)=><div className="row sp" key={i}><span>{s[0]} · {s[1]}</span><b>{clp(s[2])}</b></div>)}
   <p><b>Total: {clp(agreement.data.stages.reduce((sum,s)=>sum+s[2],0))}</b></p>
   <div className="wf-status">{['client','provider'].map(k=><span key={k}>{k==='client'?'Cliente':'Prestador'}: {agreement.confirmed[k]?'✓ Conforme':'Pendiente'}</span>)}</div>
-  {ready(agreement)?<p className="mut" role="status">✓ Ambas partes confirmaron esta versión. La firma contractual aún no está habilitada.</p>:<>
+  {ready(agreement)?<><p className="mut" role="status">✓ Ambas partes confirmaron esta versión.</p><button type="button" className="btn" onClick={()=>setShowContract(v=>!v)}>{showContract?'Cerrar documento':'Leer y firmar contrato'}</button>{showContract&&<RealContractDemo key={agreement.version} context={context} agreement={agreement}/>}</>:<>
   {!agreement.confirmed[side]&&<button type="button" className="btn" disabled={busy} onClick={()=>save('confirm',agreement.version)}>Confirmar que acordamos trabajar juntos</button>}
   <button type="button" className="btn out" disabled={busy} onClick={openEdit}>Proponer ajustes al acuerdo</button><p className="mut">Una propuesta nueva requiere confirmación de ambas partes.</p></>}</>:<><p className="mut">Todavía no hay una propuesta registrada.</p><button type="button" className="btn" onClick={openEdit}>Preparar propuesta</button></>}
   {error&&<p className="wf-error" role="alert">{error}</p>}
