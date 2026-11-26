@@ -34,7 +34,7 @@ export function RealSwipe({client,role}){
  function pass(c){if(c&&!busy)setPassed(p=>p.includes(c.id)?p:[...p,c.id])}
  function startInvite(c){if(!c||busy)return;setInvite(c);setDraft(emptyInvite());setError('');setNotice('')}
  async function saveFavorite(c){await run(async()=>{const saved=!c.saved;await swipeRequest(client,'favorite',role,{targetId:c.id,saved});setCards(prev=>tab==='favorites'&&!saved?prev.filter(p=>p.id!==c.id):prev.map(p=>p.id===c.id?{...p,saved}:p));setNotice(saved?'Perfil guardado. No se ha enviado ninguna solicitud.':'Perfil eliminado de favoritos.')})}
- async function send(e){e.preventDefault();await run(async()=>{
+ async function send(e){e.preventDefault();if(e.nativeEvent?.submitter?.dataset?.explicit!=='true')return;await run(async()=>{
   const budget=draft.budget===''?null:Number(draft.budget)
   const d=await swipeRequest(client,'invite',role,{targetId:invite.id,details:{...draft,budget}})
   setNotice(d.duplicate?'Esta solicitud ya existe: '+(statusLabel[d.request.status]||d.request.status)+'.':'Solicitud privada enviada. Habrá Match solo si el destinatario acepta.')
@@ -56,7 +56,7 @@ export function RealSwipe({client,role}){
  <p className="mai-note">Entorno privado · solo perfiles reales que elijan publicar su tarjeta. No se muestran proveedores ficticios.</p>
  <nav className="sw-real-tabs" aria-label="Secciones SWIPE">{(customer?[['discover','Explorar'],['favorites','Favoritos'],['inbox','Solicitudes']]:[['inbox','Solicitudes'],['publish','Mi tarjeta']]).map(([k,l])=><button type="button" key={k} disabled={busy} aria-current={tab===k?'page':undefined} className={tab===k?'on':'mai-secondary'} onClick={()=>navigate(k)}>{l}</button>)}</nav>
  {error&&<p className="mai-error" role="alert">{error}</p>}{notice&&<p className="mai-notice" role="status">{notice}</p>}
- {invite?<form className="sw-real-form" onSubmit={send}>
+ {invite?<form className="sw-real-form" onKeyDown={e=>{if(e.key==='Enter'&&e.target.tagName==='INPUT')e.preventDefault()}} onSubmit={send}>
  <h3>Solicitud privada · {invite.displayName}</h3><p>Describe tu proyecto. No compartas dirección exacta, RUT, datos bancarios ni documentos personales.</p>
  <label>Nombre del proyecto *<input required maxLength={150} value={draft.projectTitle} onChange={field('projectTitle',setDraft)}/></label>
  <label>Descripción *<textarea required rows={4} maxLength={2000} value={draft.description} onChange={field('description',setDraft)}/></label>
@@ -64,7 +64,7 @@ export function RealSwipe({client,role}){
  <label>Ciudad o sector *<input required maxLength={120} value={draft.location} onChange={field('location',setDraft)}/></label>
  <label>Presupuesto aproximado (CLP, opcional)<input type="number" min={0} max={100000000000} step={1} value={draft.budget} onChange={field('budget',setDraft)}/></label>
  <label>Antecedentes adicionales<textarea rows={3} maxLength={1000} value={draft.antecedents} onChange={field('antecedents',setDraft)}/></label>
- <button disabled={busy} type="submit">Enviar solicitud privada</button><button disabled={busy} type="button" className="mai-secondary" onClick={()=>setInvite(null)}>Cancelar</button>
+ <button disabled={busy} type="submit" data-explicit="true">Enviar solicitud privada</button><button disabled={busy} type="button" className="mai-secondary" onClick={()=>setInvite(null)}>Cancelar</button>
  </form>:tab==='discover'?<>
  <form className="sw-real-filters" onSubmit={e=>{e.preventDefault();setPassed([]);setApplied({...filters})}}>
  <label>Especialidad o nombre<input maxLength={120} value={filters.search} onChange={field('search',setFilters)} placeholder="Ej. Electricidad"/></label>
