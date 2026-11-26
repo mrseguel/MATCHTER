@@ -18,3 +18,13 @@ update('client/src/approved/visual.js',[
 ]);
 fs.appendFileSync('client/src/features/lifecycle/workflow.css','\n.wf-chat-request-card{box-sizing:border-box;max-width:88%;width:max-content;min-width:190px;margin:12px auto 12px 0;background:var(--card,#fff);border:1px solid var(--line,#e1e5ec);border-left:3px solid #ff5a00;border-radius:13px;padding:13px;color:inherit;overflow-wrap:anywhere;display:grid;gap:9px}.wf-chat-request-sent{margin-left:auto;margin-right:0}.wf-chat-request-heading{display:flex;align-items:center;gap:8px}.wf-chat-request-heading>span{color:#ff5a00;font-size:20px}.wf-chat-request-project{font-size:13px;border-top:1px solid var(--line,#e1e5ec);padding-top:9px}.wf-chat-request-note{white-space:pre-wrap;margin:0;font-size:14px}.wf-chat-request-status{display:block;color:inherit;opacity:.75;font-size:11px;border-top:1px solid var(--line,#e1e5ec);padding-top:9px}.wf-chat-actions>.btn:only-of-type{grid-column:1/-1}\n');
 console.log('MATCHTER: structured quote/visit cards and role-aware actions.');
+
+/* Real preliminary agreement; keep demo contract/signature paths unchanged. */
+update('client/src/features/lifecycle/Workflow.jsx',[
+ [`disabled={real} title={real?'Contratos reales aún no habilitados':undefined} onClick={()=>{setRequest(null);ready?onContract():setOpen(v=>!v)}}><FileText size={18}/> Leer y firmar contrato`,`disabled={real&&!job.agreementContext} onClick={()=>{setRequest(null);setErr('');real?setOpen(v=>!v):ready?onContract():setOpen(v=>!v)}}><FileText size={18}/> {real?'Preparar acuerdo':'Leer y firmar contrato'}`],
+ [`{real&&<p className="mut">Los contratos reales aún no están habilitados.</p>}`,`{real&&<p className="mut">Confirmen los antecedentes del proyecto antes de preparar el contrato.</p>}`],
+ [`{open&&!ready&&<div className="wf-agreement">`,`{real&&open&&job.agreementContext&&<RealProjectAgreement key={job.id} context={job.agreementContext} project={job.project}/>} {!real&&open&&!ready&&<div className="wf-agreement">`]
+]);
+const workflowPath='client/src/features/lifecycle/Workflow.jsx';
+fs.writeFileSync(workflowPath,"import {RealProjectAgreement} from '../auth/RealProjectAgreement.jsx';\\n".replace('\\n','\n')+fs.readFileSync(workflowPath,'utf8'));
+console.log('MATCHTER: persistent preliminary agreement in the existing chat; no real signature or payment.');
