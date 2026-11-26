@@ -1,12 +1,18 @@
 import React,{useEffect,useRef,useState} from 'react'
 import {Messages,Chat,Overlay} from '../../approved/visual.js'
 import {messagesRequest} from './messagesApi.js'
+import {RealProjectAgreement} from './RealProjectAgreement.jsx'
+import {RealContractDemo} from './RealContractDemo.jsx'
+import {RealStageDemo} from './RealStageDemo.jsx'
 const merge=(a,b)=>[...new Map([...a,...b].map(m=>[m.id,m])).values()].sort((x,y)=>String(x.createdAt).localeCompare(String(y.createdAt))||x.id.localeCompare(y.id))
 const display=m=>({...m,t:m.body})
 function Thread({client,role,thread,onBack}){
  const [items,setItems]=useState([]),[hasMore,setHasMore]=useState(false),[busy,setBusy]=useState(true),[error,setError]=useState('')
+ const [workflow,setWorkflow]=useState(null),[workflowError,setWorkflowError]=useState(''),[screen,setScreen]=useState(null)
+ const workflowSeq=useRef(0)
+ async function refreshWorkflow(){const seq=++workflowSeq.current;try{const data=await messagesRequest(client,'workflow',role,undefined,{requestId:thread.id});if(alive.current&&seq===workflowSeq.current){setWorkflow(data);setWorkflowError('')}}catch(e){if(alive.current&&seq===workflowSeq.current)setWorkflowError(e.message)}}
  const loaded=useRef(false),inFlight=useRef(false),alive=useRef(true),retry=useRef(null),oldest=useRef(null),sending=useRef(false)
- useEffect(()=>{alive.current=true;load(false);const timer=setInterval(()=>load(false,true),8000);return()=>{alive.current=false;clearInterval(timer)}},[thread.id,role,client])
+ useEffect(()=>{alive.current=true;load(false);refreshWorkflow();const timer=setInterval(()=>{load(false,true);refreshWorkflow()},8000);return()=>{alive.current=false;clearInterval(timer)}},[thread.id,role,client])
  async function load(older=false,quiet=false){
   if(inFlight.current||older&&!oldest.current)return
   inFlight.current=true;if(!quiet)setBusy(true)
@@ -35,9 +41,18 @@ function Thread({client,role,thread,onBack}){
   }finally{sending.current=false}
  }
  const p={id:thread.id,name:thread.peerName,e:'👤',c:'#e6e9ef'}
- const job={id:thread.id,project:thread.project,agreementRequired:true,clientId:'client',providerId:'provider',agreementContext:{client,role,requestId:thread.id}}
+ const context={client,role,requestId:thread.id}
+ const openWorkflow=target=>{setScreen(target);refreshWorkflow()}
+ const job={id:thread.id,project:thread.project,agreementRequired:true,clientId:'client',providerId:'provider',agreementContext:context,workflow,workflowError,openWorkflow,refreshWorkflow}
  const actor={id:role==='Cliente'?'client':'provider'}
- return <>{error&&<p className="mt-real-chat-error" role="alert">{error}</p>}<Chat p={p} job={job} actor={actor} msgs={items.map(display)} send={send} onBack={onBack} real={true} onRefresh={()=>load(false)} onOlder={()=>load(true)} hasMore={hasMore} loading={busy}/></>
+ const documents=[['agreement','Acuerdo previo',true],['contract','Contrato escrito',!!workflow?.contract||!!(workflow?.agreement?.confirmed?.client&&workflow?.agreement?.confirmed?.provider)],['notary','Trámite notarial',workflow?.notaryAvailable],['stages','Etapas y pagos',workflow?.stagesAvailable]]
+ if(screen)return <Overlay title={documents.find(d=>d[0]===screen)?.[1]||'Proyecto'} onBack={()=>{setScreen(null);refreshWorkflow();load(false,true)}}>
+ <div className="card wf-chat"><b>{thread.project}</b><p className="mut">Siguiente paso: {workflow?.next?.title||'Comprobando estado…'}</p>{workflow?.next?.target&&workflow.next.target!==screen&&<button className="btn" onClick={()=>openWorkflow(workflow.next.target)}>{workflow.next.title} →</button>}<details><summary>Revisar documentación y avances</summary><div className="wf-documents">{documents.filter(d=>d[2]).map(([target,title])=><button key={target} className="btn out" type="button" disabled={target===screen} onClick={()=>openWorkflow(target)}>{title}</button>)}</div></details></div>
+ {workflowError&&<p className="wf-error" role="alert">{workflowError}</p>}
+ {screen==='agreement'?<RealProjectAgreement key={thread.id} context={context} project={thread.project} standalone onAdvance={refreshWorkflow}/>:screen==='contract'||screen==='notary'?workflow?.agreement?<RealContractDemo key={screen+workflow.agreement.version} context={context} agreement={workflow.agreement} standalone notaryOnly={screen==='notary'} onAdvance={refreshWorkflow}/>:<p className="mut">Primero confirma el acuerdo.</p>:screen==='stages'&&workflow?.contract&&workflow.stagesAvailable?<RealStageDemo key={workflow.contract.digest} context={context} contract={workflow.contract} onAdvance={refreshWorkflow}/>:<p className="mut">Este paso aún no está habilitado.</p>}
+ </Overlay>
+ const combined=merge(items,workflow?.events||[]).map(display)
+ return <>{error&&<p className="mt-real-chat-error" role="alert">{error}</p>}<Chat p={p} job={job} actor={actor} msgs={combined} send={send} onBack={onBack} real={true} onRefresh={()=>{load(false);refreshWorkflow()}} onOlder={()=>load(true)} hasMore={hasMore} loading={busy}/></>
 }
 export function RealMessages({client,role,initialRequestId,onBack}){
  const [threads,setThreads]=useState([]),[active,setActive]=useState(null),[busy,setBusy]=useState(true),[error,setError]=useState('')
