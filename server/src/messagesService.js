@@ -1,3 +1,4 @@
+import {readCoordination,changeCoordination,coordinationContext,coordinationView,chileTime} from './projectCoordination.js'
 import {readWorkflow} from './projectWorkflow.js'
 import {readStageDemo,changeStageDemo} from './projectStageDemo.js'
 import {readContractDemo,changeContractDemo} from './projectContractDemo.js'
@@ -53,6 +54,8 @@ export function createMessagesService({db,verifyIdentity}){
   return rid
  }
  return Object.freeze({
+  async coordination(header,query){const a=await actor(header,query.role);return readCoordination(db,a,id(query.requestId))},
+  async changeCoordination(header,body){const a=await actor(header,body?.role);id(body.messageId);return changeCoordination(db,a,id(body.requestId),body)},
   async workflow(header,query){const a=await actor(header,query.role);return readWorkflow(db,a,id(query.requestId))},
   async stages(header,query){const a=await actor(header,query.role);return readStageDemo(db,a,id(query.requestId))},
   async changeStage(header,body){const a=await actor(header,body?.role);return changeStageDemo(db,a,id(body.requestId),body)},
@@ -81,14 +84,28 @@ export function createMessagesService({db,verifyIdentity}){
   },
   async send(header,body){const a=await actor(header,body?.role),d=validateMessage(body),rid=await match(a,d.requestId)
    if(d.request?.kind==='quote'&&a.role!=='Cliente')throw new AuthError(403,'Solo el cliente puede solicitar una cotización')
-   const row=(await db.query(`INSERT INTO matchter.swipe_messages(request_id,sender_profile_id,client_message_id,body)
+   const write=async(q)=>{
+   const row=(await q.query(`INSERT INTO matchter.swipe_messages(request_id,sender_profile_id,client_message_id,body)
     SELECT r.id,$2,$3,$4 FROM matchter.swipe_requests r WHERE r.id=$1 AND r.status='accepted' AND (r.sender_profile_id=$2 OR r.recipient_profile_id=$2)
     ON CONFLICT(request_id,sender_profile_id,client_message_id) DO NOTHING RETURNING id,body,created_at AS "createdAt",true AS me`,[rid,a.id,d.clientMessageId,d.body])).rows[0]
    if(row)return {message:readMessage(row)}
-   const saved=(await db.query('SELECT '+cols+' FROM matchter.swipe_messages m WHERE request_id=$1 AND sender_profile_id=$2 AND client_message_id=$3',[rid,a.id,d.clientMessageId])).rows[0]
+   const saved=(await q.query('SELECT '+cols+' FROM matchter.swipe_messages m WHERE request_id=$1 AND sender_profile_id=$2 AND client_message_id=$3',[rid,a.id,d.clientMessageId])).rows[0]
    if(!saved)throw new AuthError(404,'Conversación no disponible')
    if(saved.body!==d.body)throw new AuthError(409,'El identificador corresponde a otro mensaje')
    return {message:readMessage(saved)}
+   }
+   if(!d.request)return write(db)
+   const tx=await db.connect()
+   try{
+    await tx.query('BEGIN')
+    const ctx=await coordinationContext(tx,a,rid,true)
+    const saved=(await tx.query('SELECT '+cols+' FROM matchter.swipe_messages m WHERE request_id=$1 AND sender_profile_id=$2 AND client_message_id=$3',[rid,a.id,d.clientMessageId])).rows[0]
+    if(saved){if(saved.body!==d.body)throw new AuthError(409,'El identificador corresponde a otro mensaje');await tx.query('COMMIT');return {message:readMessage(saved)}}
+    const flags=coordinationView(ctx)
+    if(d.request.kind==='quote'?!flags.canQuote:!flags.canVisit)throw new AuthError(409,'Esta solicitud ya existe o la coordinación inicial está cerrada')
+    if(d.request.kind==='visit'&&d.request.date&&d.request.time&&Date.parse(chileTime(d.request.date,d.request.time))<=Date.now())throw new AuthError(400,'Selecciona una fecha de visita futura')
+    const result=await write(tx);await tx.query('COMMIT');return result
+   }catch(e){try{await tx.query('ROLLBACK')}catch{}throw e}finally{tx.release()}
   }
  })
 }
