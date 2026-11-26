@@ -1,5 +1,6 @@
 import express from 'express'
 import pg from 'pg'
+import {createMessagesService} from './messagesService.js'
 import {createSwipeService} from './swipeService.js'
 import {createProfileDetailsService} from './profileDetails.js'
 import {createProfilesService} from './accountProfiles.js'
@@ -20,7 +21,7 @@ export function createAuthRouter(env=process.env, dependencies={}) {
     pool=new pg.Pool({connectionString:dbUrl.href,ssl:{rejectUnauthorized:true},max:2,connectionTimeoutMillis:8000,idleTimeoutMillis:3000,statement_timeout:5000,application_name:'matchter-auth-preview'})
     pool.on('error',()=>console.error('Matchter auth pool error'))
     const verifyIdentity=createIdentityVerifier({issuer:auth.origin,audience:auth.origin,jwksUrl:jwks.href,algorithms:['EdDSA']})
-    service={...createAccountService({db:pool,verifyIdentity}),profiles:createProfilesService({db:pool,verifyIdentity}),details:createProfileDetailsService({db:pool,verifyIdentity}),swipe:createSwipeService({db:pool,verifyIdentity})}
+    service={...createAccountService({db:pool,verifyIdentity}),profiles:createProfilesService({db:pool,verifyIdentity}),details:createProfileDetailsService({db:pool,verifyIdentity}),swipe:createSwipeService({db:pool,verifyIdentity}),messages:createMessagesService({db:pool,verifyIdentity})}
     return service
   }
   router.use((req,res,next)=>{
@@ -54,5 +55,8 @@ export function createAuthRouter(env=process.env, dependencies={}) {
   router.get('/swipe/requests',handle((s,r)=>s.swipe.requests(r.get('authorization'),r.query.role)))
   router.post('/swipe/invite',handle((s,r)=>s.swipe.invite(r.get('authorization'),r.body)))
   router.post('/swipe/respond',handle((s,r)=>s.swipe.respond(r.get('authorization'),r.body)))
+  router.get('/messages',handle((s,r)=>s.messages.list(r.get('authorization'),r.query.role)))
+  router.get('/messages/history',handle((s,r)=>s.messages.history(r.get('authorization'),r.query)))
+  router.post('/messages/send',handle((s,r)=>s.messages.send(r.get('authorization'),r.body)))
   return router
 }
