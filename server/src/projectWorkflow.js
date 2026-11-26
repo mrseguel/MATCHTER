@@ -7,26 +7,22 @@ const clp=n=>'$'+Number(n).toLocaleString('es-CL')+' CLP'
 export function workflowSnapshot({agreements=[],contracts=[],stages=[],side}){
  const events=[]
  const add=(key,at,title,detail,target)=>{if(at)events.push({id:'workflow:'+key,createdAt:stamp(at),kind:'workflow',body:title,event:{title,detail,target,demo:true}})}
- for(const a of agreements){
-  const k='a:'+a.version
-  add(k+':proposed',a.createdAt,'Acuerdo propuesto','Versión '+a.version+' · '+label(a.proposedBy),'agreement')
-  for(const s of ['client','provider'])if(s!==a.proposedBy)add(k+':'+s,a[s+'ConfirmedAt'],'Acuerdo confirmado por '+label(s),'Versión '+a.version,'agreement')
-  add(k+':both',both(a.clientConfirmedAt,a.providerConfirmedAt),'Acuerdo confirmado por ambas partes','Versión '+a.version,'agreement')
+ const agreed=agreements.filter(a=>a.clientConfirmedAt&&a.providerConfirmedAt).at(-1)
+ const formal=agreed?contracts.filter(c=>c.agreementVersion===agreed.version).at(-1):null
+ if(agreed){
+  const total=agreed.data.stages.reduce((sum,s)=>sum+Number(s[2]),0)
+  add('a:'+agreed.version+':both',both(agreed.clientConfirmedAt,agreed.providerConfirmedAt),'Acuerdo final confirmado',agreed.data.title+' · '+clp(total)+' · '+agreed.data.stages.length+' etapas','agreement')
  }
- for(const c of contracts){
-  const k='c:'+c.agreementVersion+':'+c.revision,p=c.payer?label(c.payer):'Por definir'
-  add(k+':created',c.createdAt,c.mode==='notary'?'Modalidad notarial propuesta':'Contrato simple preparado','Documento versión '+c.revision+(c.mode==='notary'?' · Paga: '+p:''),'contract')
-  add(k+':accepted',c.notaryAcceptedAt,'Acuerdo de costo notarial confirmado','Responsable: '+p,'notary')
-  for(const s of ['client','provider'])add(k+':'+s,c[s+'SignedAt'],'Firma de prueba registrada · '+label(s),'Documento versión '+c.revision,'contract')
-  add(k+':both',both(c.clientSignedAt,c.providerSignedAt),'Contrato firmado por ambas partes','Firma de prueba · documento versión '+c.revision,'contract')
-  add(k+':paid',c.notaryDemoPaidAt,'Pago notarial registrado',clp(c.notaryDemoFee)+' · '+p+' · simulado','notary')
-  add(k+':authorized',c.notaryDemoAuthorizedAt,'Autorización notarial completada','Simulación sin validez legal','notary')
+ if(formal){
+  const c=formal,k='c:'+c.agreementVersion+':'+c.revision,p=label(c.payer)
+  if(c.mode==='notary'&&['client','provider'].includes(c.payer))add(k+':accepted',c.notaryAcceptedAt,'Acuerdo notarial confirmado','Modalidad notarial · Responsable del pago: '+p,'notary')
+  add(k+':both',both(c.clientSignedAt,c.providerSignedAt),'Contrato firmado por ambas partes','Ambas firmas de prueba confirmadas','contract')
+  if(c.mode==='notary'&&stageReady(c))add(k+':authorized',both(c.notaryDemoPaidAt,c.notaryDemoAuthorizedAt),'Trámite notarial completado','Pago registrado: '+clp(c.notaryDemoFee)+' · Autorización simulada completada · Sin validez legal','notary')
  }
- for(const s of stages){
+ for(const s of stages.filter(s=>formal&&s.agreementVersion===formal.agreementVersion&&s.contractRevision===formal.revision)){
   const k='s:'+s.agreementVersion+':'+s.contractRevision+':'+s.stageNo,detail='Etapa '+s.stageNo+' · '+clp(s.amount)+' · simulación'
   add(k+':funded',s.fundedAt,'Depósito de etapa '+s.stageNo+' registrado',detail,'stages')
-  add(k+':delivered',s.deliveredAt,'Entrega de etapa '+s.stageNo+' notificada',detail,'stages')
-  add(k+':released',s.releasedAt,'Etapa '+s.stageNo+' recibida conforme y pago liberado',detail,'stages')
+  add(k+':released',both(both(s.fundedAt,s.deliveredAt),s.releasedAt),'Etapa '+s.stageNo+' recibida conforme y pago liberado',detail,'stages')
  }
  events.sort((a,b)=>a.createdAt.localeCompare(b.createdAt)||a.id.localeCompare(b.id))
  const a=agreements.at(-1)||null,c=contracts.filter(x=>x.agreementVersion===a?.version).at(-1)||null
