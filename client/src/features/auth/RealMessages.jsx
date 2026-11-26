@@ -35,7 +35,7 @@ function Thread({client,role,thread,onBack}){
   }finally{sending.current=false}
  }
  const p={id:thread.id,name:thread.peerName,e:'👤',c:'#e6e9ef'}
- const job={id:thread.id,project:thread.project,agreementRequired:true,clientId:'client',providerId:'provider'}
+ const job={id:thread.id,project:thread.project,agreementRequired:true,clientId:'client',providerId:'provider',agreementContext:{client,role,requestId:thread.id}}
  const actor={id:role==='Cliente'?'client':'provider'}
  return <>{error&&<p className="mt-real-chat-error" role="alert">{error}</p>}<Chat p={p} job={job} actor={actor} msgs={items.map(display)} send={send} onBack={onBack} real={true} onRefresh={()=>load(false)} onOlder={()=>load(true)} hasMore={hasMore} loading={busy}/></>
 }
