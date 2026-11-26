@@ -15,7 +15,7 @@ export function validateContractAction(b){
  if(b.action==='confirm'&&b.payer===undefined&&b.expectedRevision>0&&b.mode===undefined&&typeof b.digest==='string'&&/^[a-f0-9]{64}$/.test(b.digest)&&b.accepted===true&&b.identityDemo===true&&shape(b.identityChecks,['front','back','selfie'])&&['front','back','selfie'].every(k=>b.identityChecks[k]===true))return
  throw new AuthError(400,'Acción de prueba no válida')
 }
-async function context(db,a,id,lock){
+export async function contractContext(db,a,id,lock){
  const m=(await db.query("SELECT id,sender_profile_id AS \"senderId\",recipient_profile_id AS \"recipientId\" FROM matchter.swipe_requests WHERE id=$1 AND status='accepted' AND (sender_profile_id=$2 OR recipient_profile_id=$2)"+(lock?' FOR UPDATE':''),[id,a.id])).rows[0]
  if(!m)throw new AuthError(404,'Conversación no disponible')
  const side=m.senderId===a.id?'client':'provider'
@@ -38,7 +38,7 @@ export function contractSnapshot(id,agreement,mode,revision,arrangement){
  return {terms,digest}
 }
 export async function readContractDemo(db,a,id){
- const {agreement,current}=await context(db,a,id,false)
+ const {agreement,current}=await contractContext(db,a,id,false)
  return {agreementVersion:agreement.version,contract:view(current)}
 }
 export async function changeContractDemo(db,a,id,b){
@@ -46,7 +46,7 @@ export async function changeContractDemo(db,a,id,b){
  const tx=await db.connect()
  try{
   await tx.query('BEGIN')
-  const {side,agreement,current}=await context(tx,a,id,true)
+  const {side,agreement,current}=await contractContext(tx,a,id,true)
   const revision=current?.revision||0
   if(b.agreementVersion!==agreement.version||b.expectedRevision!==revision)throw new AuthError(409,'El documento cambió. Actualiza antes de continuar.')
   let saved=current
