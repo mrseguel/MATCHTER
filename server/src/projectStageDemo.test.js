@@ -14,6 +14,7 @@ function fake(agreement=a){
   if(sql.startsWith('SELECT revision,agreement_version'))return {rows:[c]}
   if(sql.startsWith('SELECT stage_no'))return {rows:structuredClone(rows)}
   if(sql.startsWith('INSERT INTO matchter.project_stage_demos')){const r={stageNo:p[3],amount:String(p[4]),fundedAt:'now',deliveredAt:null,releasedAt:null};rows.push(r);return {rows:[structuredClone(r)]}}
+  if(sql.startsWith('UPDATE matchter.project_contract_demos SET provider_fee_demo_paid_at')){c.providerFeePaidAt=p[3];c.providerFeeStageNo=p[4];return {rows:[{providerFeePaidAt:p[3],providerFeeStageNo:p[4]}]}}
   if(sql.startsWith('UPDATE matchter.project_stage_demos')){const r=rows.find(x=>x.stageNo===p[3]);r[sql.includes('SET delivered_at')?'deliveredAt':'releasedAt']='now';return {rows:[structuredClone(r)]}}
   throw Error(sql)
  }
@@ -72,4 +73,25 @@ test('single-stage and five-stage contracts complete in order; unknown stages ca
 
 test('new contracts require the separate service-fee receipt; legacy contracts remain valid',()=>{
  const c={...contract,terms:{serviceFee:{amount:2990}}};assert.equal(stageReady(c),false);assert.equal(stageReady({...c,serviceFeePaidAt:'now'}),true);assert.equal(stageReady(contract),true)
+})
+
+test('deferred fee is never deducted at deposit, only once at first sufficient release',async()=>{
+ const db=fake({...a,data:{stages:[['Uno','2027-01-01',1000],['Dos','2027-01-02',100000],['Tres','2027-01-03',100000]]}})
+ Object.assign(db.c,{terms:{serviceFee:{version:2,amount:2990}},serviceFeePaidAt:'now',providerFeeMode:'deferred'})
+ for(let i=1;i<=3;i++){
+  const funded=await changeStageDemo(db,client,'m',action('fund',i))
+  assert.equal(funded.stages[i-1].providerFeeDeduction,0)
+  assert.equal(funded.stages[i-1].pendingProviderFeeDeduction,i===2?2990:0)
+  await changeStageDemo(db,provider,'m',action('deliver',i))
+  const released=await changeStageDemo(db,client,'m',action('release',i))
+  assert.equal(released.stages[i-1].providerFeeDeduction,i===2?2990:0)
+  assert.equal(released.stages[i-1].providerNetReleased,i===2?97010:i===1?1000:100000)
+  assert.deepEqual(await changeStageDemo(db,client,'m',action('release',i)),released)
+ }
+ assert.equal(db.c.providerFeeStageNo,2)
+})
+test('upfront tariff never deducts from any release',async()=>{
+ const db=fake();Object.assign(db.c,{terms:{serviceFee:{version:2,amount:2990}},serviceFeePaidAt:'now',providerFeeMode:'upfront',providerFeePaidAt:'now'})
+ await changeStageDemo(db,client,'m',action('fund'));await changeStageDemo(db,provider,'m',action('deliver'))
+ const r=await changeStageDemo(db,client,'m',action('release'));assert.equal(r.stages[0].providerNetReleased,120000);assert.equal(r.stages[0].providerFeeDeduction,0)
 })
