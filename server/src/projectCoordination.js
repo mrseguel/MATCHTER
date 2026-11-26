@@ -15,6 +15,7 @@ export function chileTime(date,time){
  return new Date([...candidates][0]).toISOString()
 }
 function initial(row,match){
+ if(typeof row.body!=='string'||!row.body.startsWith(prefix))return null
  let request;try{request=JSON.parse(row.body.slice(prefix.length))}catch{return null}
  if(!['quote','visit'].includes(request?.kind))return null
  const by=row.senderId===match.senderId?'client':'provider'
@@ -63,7 +64,7 @@ export async function coordinationContext(db,actor,id,lock=false){
  const side=match.senderId===actor.id?'client':'provider'
  if((side==='client')!==(actor.role==='Cliente'))fail(403,'Perfil no autorizado')
  const closed=!!(await db.query('SELECT 1 FROM matchter.project_agreement_versions WHERE request_id=$1 AND client_confirmed_at IS NOT NULL AND provider_confirmed_at IS NOT NULL LIMIT 1',[id])).rows.length
- const rows=(await db.query(`SELECT m.id,m.body,m.sender_profile_id AS "senderId",e.revision,e.state FROM matchter.swipe_messages m LEFT JOIN LATERAL (SELECT revision,state FROM matchter.project_coordination_events WHERE message_id=m.id ORDER BY revision DESC LIMIT 1) e ON true WHERE m.request_id=$1 AND m.body LIKE 'MATCHTER_REQUEST_V1:%' ORDER BY m.created_at,m.id`,[id])).rows
+ const rows=(await db.query(`SELECT m.id,m.body,m.sender_profile_id AS "senderId",e.revision,e.state FROM matchter.swipe_messages m LEFT JOIN LATERAL (SELECT revision,state FROM matchter.project_coordination_events WHERE message_id=m.id ORDER BY revision DESC LIMIT 1) e ON true WHERE m.request_id=$1 AND left(m.body,length('MATCHTER_REQUEST_V1:'))='MATCHTER_REQUEST_V1:' ORDER BY m.created_at,m.id`,[id])).rows
  const cards=rows.map(r=>initial(r,match)).filter(Boolean)
  return {side,closed,cards}
 }
