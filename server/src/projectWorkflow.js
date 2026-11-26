@@ -1,4 +1,5 @@
 import {AuthError} from './identityAccounts.js'
+import {serviceFeeReady} from './serviceFeeDemo.js'
 import {reviewView} from './projectReviewDemo.js'
 import {stageReady} from './projectStageDemo.js'
 const stamp=v=>v?new Date(v).toISOString():null
@@ -19,6 +20,7 @@ export function workflowSnapshot({agreements=[],contracts=[],stages=[],reviews=[
   const c=formal,k='c:'+c.agreementVersion+':'+c.revision,p=c.payer==='client'?'Cliente':providerLabel(providerRole)
   if(c.mode==='notary'&&['client','provider'].includes(c.payer))add(k+':accepted',c.notaryAcceptedAt,'Acuerdo notarial confirmado','Modalidad notarial · Responsable del pago: '+p,'notary')
   add(k+':both',both(c.clientSignedAt,c.providerSignedAt),'Contrato firmado por ambas partes','Ambas firmas de prueba confirmadas','contract')
+  if(c.terms?.serviceFee&&c.serviceFeePaidAt)add(k+':service-fee',c.serviceFeePaidAt,'Tarifa MATCHTER registrada',clp(c.terms.serviceFee.amount)+' · pago único de prueba','contract')
   if(c.mode==='notary'&&stageReady(c))add(k+':authorized',both(c.notaryDemoPaidAt,c.notaryDemoAuthorizedAt),'Trámite notarial completado','Pago registrado: '+clp(c.notaryDemoFee)+' · Autorización simulada completada · Sin validez legal','notary')
  }
  for(const s of stages.filter(s=>formal&&s.agreementVersion===formal.agreementVersion&&s.contractRevision===formal.revision)){
@@ -41,6 +43,7 @@ export function workflowSnapshot({agreements=[],contracts=[],stages=[],reviews=[
  else if(!c)next=step('contract','Elegir modalidad contractual')
  else if(c.mode==='notary'&&!c.notaryAcceptedAt)next=step('contract',c.proposedBy===side?'Esperando aceptación del costo notarial':'Aceptar modalidad y costo notarial',c.proposedBy===side)
  else if(!c.clientSignedAt||!c.providerSignedAt)next=step('contract',c[side+'SignedAt']?'Esperando firma de la contraparte':'Leer y firmar contrato',!!c[side+'SignedAt'])
+ else if(!serviceFeeReady(c))next=step('contract',side==='client'?'Pagar tarifa MATCHTER':'Esperando tarifa MATCHTER',side!=='client')
  else if(c.mode==='notary'&&!c.notaryDemoPaidAt)next=step('notary',c.payer===side?'Pagar trámite notarial':'Esperando pago notarial',c.payer!==side)
  else if(c.mode==='notary'&&!c.notaryDemoAuthorizedAt)next=step('notary','Simular autorización notarial')
  else if(complete)next=side==='client'&&!review?step('review',rateTitle(providerRole)):review?step('review',side==='client'&&review.editable?'Modificar calificación':'Calificación registrada'):step('stages','Proyecto recibido conforme')
@@ -52,7 +55,7 @@ export async function readWorkflow(db,actor,id){
  const row=(await db.query(`SELECT r.sender_profile_id AS "senderId",r.recipient_profile_id AS "recipientId",
  (SELECT p.role FROM matchter.account_profiles p WHERE p.id=r.recipient_profile_id) AS "providerRole",
  COALESCE((SELECT jsonb_agg(jsonb_build_object('version',a.version,'data',a.data,'proposedBy',CASE WHEN a.proposed_by=r.sender_profile_id THEN 'client' ELSE 'provider' END,'createdAt',a.created_at,'clientConfirmedAt',a.client_confirmed_at,'providerConfirmedAt',a.provider_confirmed_at) ORDER BY a.version) FROM matchter.project_agreement_versions a WHERE a.request_id=r.id),'[]'::jsonb) AS agreements,
- COALESCE((SELECT jsonb_agg(jsonb_build_object('agreementVersion',c.agreement_version,'revision',c.revision,'mode',c.mode,'digest',c.digest,'payer',c.terms->'notaryArrangement'->>'payer','proposedBy',c.terms->'notaryArrangement'->>'proposedBy','createdAt',c.created_at,'clientSignedAt',c.client_signed_at,'providerSignedAt',c.provider_signed_at,'notaryAcceptedAt',c.notary_accepted_at,'notaryDemoPaidAt',c.notary_demo_paid_at,'notaryDemoFee',c.notary_demo_fee,'notaryDemoAuthorizedAt',c.notary_demo_authorized_at) ORDER BY c.agreement_version,c.revision) FROM matchter.project_contract_demos c WHERE c.request_id=r.id),'[]'::jsonb) AS contracts,
+ COALESCE((SELECT jsonb_agg(jsonb_build_object('agreementVersion',c.agreement_version,'revision',c.revision,'mode',c.mode,'digest',c.digest,'terms',jsonb_build_object('serviceFee',c.terms->'serviceFee'),'serviceFeePaidAt',c.service_fee_demo_paid_at,'payer',c.terms->'notaryArrangement'->>'payer','proposedBy',c.terms->'notaryArrangement'->>'proposedBy','createdAt',c.created_at,'clientSignedAt',c.client_signed_at,'providerSignedAt',c.provider_signed_at,'notaryAcceptedAt',c.notary_accepted_at,'notaryDemoPaidAt',c.notary_demo_paid_at,'notaryDemoFee',c.notary_demo_fee,'notaryDemoAuthorizedAt',c.notary_demo_authorized_at) ORDER BY c.agreement_version,c.revision) FROM matchter.project_contract_demos c WHERE c.request_id=r.id),'[]'::jsonb) AS contracts,
  COALESCE((SELECT jsonb_agg(jsonb_build_object('agreementVersion',s.agreement_version,'contractRevision',s.contract_revision,'stageNo',s.stage_no,'amount',s.amount,'fundedAt',s.funded_at,'deliveredAt',s.delivered_at,'releasedAt',s.released_at) ORDER BY s.agreement_version,s.contract_revision,s.stage_no) FROM matchter.project_stage_demos s WHERE s.request_id=r.id),'[]'::jsonb) AS stages,
  COALESCE((SELECT jsonb_agg(jsonb_build_object('agreementVersion',v.agreement_version,'contractRevision',v.contract_revision,'score',COALESCE(e.score,v.score),'comment',COALESCE(e.comment,v.comment),'createdAt',v.created_at,'updatedAt',COALESCE(e.created_at,v.created_at),'revision',COALESCE(e.revision,1))) FROM matchter.project_review_demos v LEFT JOIN LATERAL (SELECT score,comment,created_at,revision FROM matchter.project_review_demo_revisions WHERE request_id=v.request_id AND agreement_version=v.agreement_version AND contract_revision=v.contract_revision ORDER BY revision DESC LIMIT 1) e ON true WHERE v.request_id=r.id),'[]'::jsonb) AS reviews
  FROM matchter.swipe_requests r WHERE r.id=$1 AND r.status='accepted' AND (r.sender_profile_id=$2 OR r.recipient_profile_id=$2)`,[id,actor.id])).rows[0]
