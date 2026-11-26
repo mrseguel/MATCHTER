@@ -58,5 +58,7 @@ export function createAuthRouter(env=process.env, dependencies={}) {
   router.get('/messages',handle((s,r)=>s.messages.list(r.get('authorization'),r.query.role)))
   router.get('/messages/history',handle((s,r)=>s.messages.history(r.get('authorization'),r.query)))
   router.post('/messages/send',handle((s,r)=>s.messages.send(r.get('authorization'),r.body)))
+  router.get('/messages/agreement',handle((s,r)=>s.messages.agreement(r.get('authorization'),r.query)))
+  router.post('/messages/agreement',handle((s,r)=>s.messages.changeAgreement(r.get('authorization'),r.body)))
   return router
 }
