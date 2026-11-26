@@ -1,7 +1,7 @@
 import {createHash} from 'node:crypto'
 import {AuthError} from './identityAccounts.js'
 import {documentTerms} from '../../client/src/features/contracts/model.js'
-const modes=['simple','notary','none']
+const modes=['simple','notary']
 const fields='revision,agreement_version AS "agreementVersion",mode,terms,digest,created_at AS "createdAt",client_signed_at AS "clientSignedAt",provider_signed_at AS "providerSignedAt"'
 const view=r=>r?{revision:r.revision,agreementVersion:r.agreementVersion,mode:r.mode,terms:r.terms,digest:r.digest,createdAt:r.createdAt,confirmed:{client:r.clientSignedAt,provider:r.providerSignedAt}}:null
 const shape=(o,keys)=>o&&typeof o==='object'&&!Array.isArray(o)&&Object.keys(o).every(k=>keys.includes(k))
@@ -22,6 +22,7 @@ async function context(db,a,id,lock){
  return {side,agreement,current}
 }
 export function contractSnapshot(id,agreement,mode,revision){
+ if(!modes.includes(mode))throw new AuthError(400,'Se requiere un contrato escrito')
  const d=agreement.data
  const terms=documentTerms({project:d.title,scope:d.scope,startDate:d.start,endDate:d.end},{name:'Cliente de prueba'},{name:'Prestador de prueba'},d.stages)
  const digest=createHash('sha256').update(JSON.stringify({id,agreementVersion:agreement.version,revision,mode,terms})).digest('hex')
@@ -47,7 +48,7 @@ export async function changeContractDemo(db,a,id,b){
     saved=(await tx.query('INSERT INTO matchter.project_contract_demos(request_id,agreement_version,revision,mode,terms,digest) VALUES($1,$2,$3,$4,$5,$6) RETURNING '+fields,[id,agreement.version,revision+1,b.mode,JSON.stringify(terms),digest])).rows[0]
    }
   }else{
-   if(!current||b.digest!==current.digest)throw new AuthError(409,'La versión del documento no coincide')
+   if(!current||!modes.includes(current.mode)||b.digest!==current.digest)throw new AuthError(409,'La versión del documento no coincide')
    if(!(side==='client'?current.clientSignedAt:current.providerSignedAt)){
     const col=side==='client'?'client_signed_at':'provider_signed_at'
     saved=(await tx.query('UPDATE matchter.project_contract_demos SET '+col+'=now() WHERE request_id=$1 AND agreement_version=$2 AND revision=$3 AND '+col+' IS NULL RETURNING '+fields,[id,agreement.version,revision])).rows[0]
