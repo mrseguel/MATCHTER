@@ -22,6 +22,7 @@ test('draft uses exact approved dates, milestones and amount and hashes its vers
  const a=contractSnapshot(id,agreement,'simple',1)
  assert.match(a.terms.clauses[3][1],/2027-02-01.*2027-02-20/)
  assert.match(a.terms.clauses[2][1],/\$600 CLP/)
+ assert.throws(()=>contractSnapshot(id,agreement,'none',1),{status:400})
  assert.equal(a.digest,contractSnapshot(id,agreement,'simple',1).digest)
  assert.notEqual(a.digest,contractSnapshot(id,agreement,'notary',1).digest)
  assert.notEqual(a.digest,contractSnapshot(id,agreement,'simple',2).digest)
@@ -30,7 +31,7 @@ test('strict test-only actions require explicit acceptance and digest',()=>{
  assert.doesNotThrow(()=>validateContractAction(choose()))
  const good=confirm({revision:1,digest:'a'.repeat(64)})
  assert.doesNotThrow(()=>validateContractAction(good))
- for(const b of [{...good,accepted:false},{...good,identityDemo:false},{...good,actorId:'p'},{...good,digest:'bad'},{...choose(),mode:'real'}])assert.throws(()=>validateContractAction(b),{status:400})
+ for(const b of [{...good,accepted:false},{...good,identityDemo:false},{...good,actorId:'p'},{...good,digest:'bad'},{...choose(),mode:'real'},{...choose(),mode:'none'}])assert.throws(()=>validateContractAction(b),{status:400})
 })
 test('only accepted participants can choose and confirm the same immutable demo contract',async()=>{
  const db=fake()
@@ -39,6 +40,8 @@ test('only accepted participants can choose and confirm the same immutable demo 
  db.a.providerConfirmedAt=null
  await assert.rejects(changeContractDemo(db,client,id,choose()),{status:409})
  db.a.providerConfirmedAt='now'
+ await assert.rejects(changeContractDemo(db,client,id,choose('none')),{status:400})
+ assert.equal(db.rows.length,0)
  const first=(await changeContractDemo(db,client,id,choose())).contract
  const second=(await changeContractDemo(db,provider,id,choose('notary',1))).contract
  assert.equal(second.revision,2)
