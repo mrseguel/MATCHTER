@@ -1,19 +1,20 @@
 import {createHash} from 'node:crypto'
 import {AuthError} from './identityAccounts.js'
-import {quoteServiceFee,serviceFeeReady} from './serviceFeeDemo.js'
+import {quoteServiceFee,serviceFeeReady,bilateral,needsFeeUpgrade} from './serviceFeeDemo.js'
 import {documentTerms} from '../../client/src/features/contracts/model.js'
 const modes=['simple','notary']
 export const DEMO_NOTARY_FEE=33490
-const fields='revision,agreement_version AS "agreementVersion",mode,terms,digest,created_at AS "createdAt",client_signed_at AS "clientSignedAt",provider_signed_at AS "providerSignedAt",notary_accepted_at AS "notaryAcceptedAt",notary_demo_paid_at AS "notaryDemoPaidAt",notary_demo_fee AS "notaryDemoFee",notary_demo_authorized_at AS "notaryDemoAuthorizedAt",service_fee_demo_paid_at AS "serviceFeePaidAt"'
-const view=r=>r?{revision:r.revision,agreementVersion:r.agreementVersion,mode:r.mode,terms:r.terms,digest:r.digest,createdAt:r.createdAt,notaryAcceptedAt:r.notaryAcceptedAt||null,notaryDemo:{fee:DEMO_NOTARY_FEE,paidAt:r.notaryDemoPaidAt||null,paidAmount:r.notaryDemoFee||null,authorizedAt:r.notaryDemoAuthorizedAt||null},serviceFeePaidAt:r.serviceFeePaidAt||null,confirmed:{client:r.clientSignedAt,provider:r.providerSignedAt}}:null
+const fields='revision,agreement_version AS "agreementVersion",mode,terms,digest,created_at AS "createdAt",client_signed_at AS "clientSignedAt",provider_signed_at AS "providerSignedAt",notary_accepted_at AS "notaryAcceptedAt",notary_demo_paid_at AS "notaryDemoPaidAt",notary_demo_fee AS "notaryDemoFee",notary_demo_authorized_at AS "notaryDemoAuthorizedAt",service_fee_demo_paid_at AS "serviceFeePaidAt",provider_fee_demo_mode AS "providerFeeMode",provider_fee_demo_paid_at AS "providerFeePaidAt",provider_fee_demo_stage_no AS "providerFeeStageNo"'
+const view=r=>r?{revision:r.revision,agreementVersion:r.agreementVersion,mode:r.mode,terms:r.terms,digest:r.digest,createdAt:r.createdAt,notaryAcceptedAt:r.notaryAcceptedAt||null,notaryDemo:{fee:DEMO_NOTARY_FEE,paidAt:r.notaryDemoPaidAt||null,paidAmount:r.notaryDemoFee||null,authorizedAt:r.notaryDemoAuthorizedAt||null},serviceFeePaidAt:r.serviceFeePaidAt||null,providerFeeMode:r.providerFeeMode||null,providerFeePaidAt:r.providerFeePaidAt||null,providerFeeStageNo:r.providerFeeStageNo||null,confirmed:{client:r.clientSignedAt,provider:r.providerSignedAt}}:null
 const shape=(o,keys)=>o&&typeof o==='object'&&!Array.isArray(o)&&Object.keys(o).every(k=>keys.includes(k))
 export function validateContractAction(b){
  if(!shape(b,['role','requestId','action','agreementVersion','expectedRevision','mode','digest','accepted','identityDemo','payer','identityChecks','demoAmount'])||!Number.isInteger(b.agreementVersion)||b.agreementVersion<1||!Number.isInteger(b.expectedRevision)||b.expectedRevision<0||b.expectedRevision>=2147483647)throw new AuthError(400,'Datos del contrato no válidos')
- if(b.identityChecks!==undefined&&b.action!=='confirm'||b.demoAmount!==undefined&&!['payNotaryDemo','payServiceFeeDemo'].includes(b.action))throw new AuthError(400,'Datos de prueba no válidos')
+ if(b.identityChecks!==undefined&&b.action!=='confirm'||b.demoAmount!==undefined&&!['payNotaryDemo','payServiceFeeDemo','payProviderFeeDemo'].includes(b.action))throw new AuthError(400,'Datos de prueba no válidos')
  if(b.action==='choose'&&modes.includes(b.mode)&&b.digest===undefined&&b.accepted===undefined&&b.identityDemo===undefined&&(b.mode==='simple'?b.payer===undefined:['client','provider'].includes(b.payer)))return
  if(b.action==='acceptNotary'&&b.expectedRevision>0&&b.mode===undefined&&b.payer===undefined&&b.accepted===undefined&&b.identityDemo===undefined&&typeof b.digest==='string'&&/^[a-f0-9]{64}$/.test(b.digest))return
  if(['payNotaryDemo','authorizeNotaryDemo'].includes(b.action)&&b.expectedRevision>0&&b.mode===undefined&&b.payer===undefined&&b.identityDemo===undefined&&b.accepted===true&&typeof b.digest==='string'&&/^[a-f0-9]{64}$/.test(b.digest)&&(b.action==='payNotaryDemo'?b.demoAmount===DEMO_NOTARY_FEE:b.demoAmount===undefined))return
  if(b.action==='payServiceFeeDemo'&&b.expectedRevision>0&&b.mode===undefined&&b.payer===undefined&&b.identityDemo===undefined&&b.accepted===true&&typeof b.digest==='string'&&/^[a-f0-9]{64}$/.test(b.digest)&&Number.isSafeInteger(b.demoAmount)&&b.demoAmount>0)return
+ if(['payProviderFeeDemo','deferProviderFeeDemo'].includes(b.action)&&b.expectedRevision>0&&b.mode===undefined&&b.payer===undefined&&b.identityDemo===undefined&&b.accepted===true&&typeof b.digest==='string'&&/^[a-f0-9]{64}$/.test(b.digest)&&(b.action==='payProviderFeeDemo'?Number.isSafeInteger(b.demoAmount)&&b.demoAmount>0:b.demoAmount===undefined))return
  if(b.action==='confirm'&&b.payer===undefined&&b.expectedRevision>0&&b.mode===undefined&&typeof b.digest==='string'&&/^[a-f0-9]{64}$/.test(b.digest)&&b.accepted===true&&b.identityDemo===true&&shape(b.identityChecks,['front','back','selfie'])&&['front','back','selfie'].every(k=>b.identityChecks[k]===true))return
  throw new AuthError(400,'Acción de prueba no válida')
 }
@@ -36,13 +37,13 @@ export function contractSnapshot(id,agreement,mode,revision,arrangement,fee){
   terms.notaryArrangement={payer:arrangement.payer,proposedBy:arrangement.proposedBy,feeStatus:'pending_quote'}
   terms.clauses.push(['DÉCIMO. Costo del trámite notarial · propuesta de prueba','Responsable propuesto del costo completo: '+(arrangement.payer==='client'?'cliente':'prestador')+'. Tarifa definitiva pendiente de cotización y aceptación expresa. No se genera ningún cobro en esta beta.'])
  }
- if(fee){terms.serviceFee=fee;terms.clauses.push(['Tarifa de servicio MATCHTER · simulación','Tarifa única del cliente: '+fee.amount.toLocaleString('es-CL')+' CLP, adicional al precio contractual y separada de las etapas y del trámite notarial. No reduce el monto del ejecutor. No se realiza ningún cargo real; los costos financieros e impuestos definitivos están pendientes de validación.'])}
+ if(fee?.version===2){terms.serviceFee=fee;terms.clauses.push(['Tarifa de servicio MATCHTER · simulación','Tarifa única de cada parte: '+fee.amount.toLocaleString('es-CL')+' CLP. El cliente paga su tarifa adicional al valor de la obra; el ejecutor elige pagar su propia tarifa tras ambas firmas o descontarla de la primera liberación suficiente a su favor. La tarifa remunera la conexión, negociación, acuerdos, gestión documental y formalización del contrato. Una vez prestados esos servicios y formalizado el contrato, no iniciar o continuar los trabajos no constituye por sí solo causal de devolución, sin perjuicio de los derechos irrenunciables y las responsabilidades legales de MATCHTER. Seguimiento, coordinación de pagos protegidos y mediación son prestaciones complementarias sin otra tarifa de gestión por etapa, no garantía técnica de la obra. No se descuenta la tarifa del ejecutor de fondos a restituir al cliente. Esta beta no mueve fondos reales.'])}else if(fee){terms.serviceFee=fee;terms.clauses.push(['Tarifa de servicio MATCHTER · simulación','Tarifa única del cliente: '+fee.amount.toLocaleString('es-CL')+' CLP, adicional al precio contractual y separada de las etapas y del trámite notarial. No reduce el monto del ejecutor. No se realiza ningún cargo real; los costos financieros e impuestos definitivos están pendientes de validación.'])}
  const digest=createHash('sha256').update(JSON.stringify({id,agreementVersion:agreement.version,revision,mode,terms})).digest('hex')
  return {terms,digest}
 }
 export async function readContractDemo(db,a,id){
  const {agreement,current,providerRole}=await contractContext(db,a,id,false)
- return {agreementVersion:agreement.version,serviceFee:current?current.terms?.serviceFee||null:quoteServiceFee(providerRole,agreement.data.stages),contract:view(current)}
+ return {agreementVersion:agreement.version,serviceFee:current&&!needsFeeUpgrade(current)?current.terms?.serviceFee||null:quoteServiceFee(providerRole,agreement.data.stages),feeUpgradeRequired:needsFeeUpgrade(current),contract:view(current)}
 }
 export async function changeContractDemo(db,a,id,b){
  validateContractAction(b)
@@ -54,9 +55,9 @@ export async function changeContractDemo(db,a,id,b){
   if(b.agreementVersion!==agreement.version||b.expectedRevision!==revision)throw new AuthError(409,'El documento cambió. Actualiza antes de continuar.')
   let saved=current
   if(b.action==='choose'){
-   if(current?.mode!==b.mode||b.mode==='notary'&&(current?.terms?.notaryArrangement?.payer!==b.payer||!current?.terms?.notaryArrangement)){ 
+   if(needsFeeUpgrade(current)||current?.mode!==b.mode||b.mode==='notary'&&(current?.terms?.notaryArrangement?.payer!==b.payer||!current?.terms?.notaryArrangement)){ 
     if(current?.clientSignedAt||current?.providerSignedAt)throw new AuthError(409,'La modalidad ya tiene una confirmación y no se puede cambiar')
-    const {terms,digest}=contractSnapshot(id,agreement,b.mode,revision+1,b.mode==='notary'?{payer:b.payer,proposedBy:side}:undefined,current?current.terms?.serviceFee:quoteServiceFee(providerRole,agreement.data.stages))
+    const {terms,digest}=contractSnapshot(id,agreement,b.mode,revision+1,b.mode==='notary'?{payer:b.payer,proposedBy:side}:undefined,current&&!needsFeeUpgrade(current)?current.terms?.serviceFee:quoteServiceFee(providerRole,agreement.data.stages))
     saved=(await tx.query('INSERT INTO matchter.project_contract_demos(request_id,agreement_version,revision,mode,terms,digest) VALUES($1,$2,$3,$4,$5,$6) RETURNING '+fields,[id,agreement.version,revision+1,b.mode,JSON.stringify(terms),digest])).rows[0]
    }
   }else if(b.action==='acceptNotary'){
@@ -67,6 +68,14 @@ export async function changeContractDemo(db,a,id,b){
    if(side!=='client')throw new AuthError(403,'Solo el cliente paga la tarifa MATCHTER')
    if(!current?.terms?.serviceFee||b.digest!==current.digest||!current.clientSignedAt||!current.providerSignedAt||b.demoAmount!==current.terms.serviceFee.amount)throw new AuthError(409,'Confirma ambas firmas y la tarifa exacta del contrato')
    if(!current.serviceFeePaidAt)saved=(await tx.query('UPDATE matchter.project_contract_demos SET service_fee_demo_paid_at=now() WHERE request_id=$1 AND agreement_version=$2 AND revision=$3 AND service_fee_demo_paid_at IS NULL RETURNING '+fields,[id,agreement.version,revision])).rows[0]
+  }else if(['payProviderFeeDemo','deferProviderFeeDemo'].includes(b.action)){
+   if(side!=='provider')throw new AuthError(403,'Solo el perfil contratado elige y paga su tarifa')
+   if(!bilateral(current)||b.digest!==current.digest||!current.clientSignedAt||!current.providerSignedAt)throw new AuthError(409,'Confirma ambas firmas del contrato bilateral')
+   const fee=current.terms.serviceFee,mode=b.action==='payProviderFeeDemo'?'upfront':'deferred'
+   if(mode==='upfront'&&b.demoAmount!==fee.amount)throw new AuthError(409,'La tarifa no coincide')
+   if(mode==='deferred'&&!fee.deferAvailable)throw new AuthError(409,'Ninguna etapa tiene monto suficiente para el descuento')
+   if(current.providerFeeMode&&current.providerFeeMode!==mode)throw new AuthError(409,'La modalidad de tarifa ya fue registrada')
+   if(!current.providerFeeMode)saved=(await tx.query('UPDATE matchter.project_contract_demos SET provider_fee_demo_mode=$4,provider_fee_demo_paid_at=CASE WHEN $4=\'upfront\' THEN now() ELSE NULL END WHERE request_id=$1 AND agreement_version=$2 AND revision=$3 AND provider_fee_demo_mode IS NULL RETURNING '+fields,[id,agreement.version,revision,mode])).rows[0]
   }else if(['payNotaryDemo','authorizeNotaryDemo'].includes(b.action)){
    if(!serviceFeeReady(current))throw new AuthError(409,'Primero registra la tarifa MATCHTER de prueba')
    if(!current||current.mode!=='notary'||b.digest!==current.digest||!current.notaryAcceptedAt||!current.clientSignedAt||!current.providerSignedAt)throw new AuthError(409,'Se requiere el acuerdo notarial y ambas firmas de prueba')
@@ -78,6 +87,7 @@ export async function changeContractDemo(db,a,id,b){
     if(!current.notaryDemoAuthorizedAt)saved=(await tx.query('UPDATE matchter.project_contract_demos SET notary_demo_authorized_at=now() WHERE request_id=$1 AND agreement_version=$2 AND revision=$3 AND notary_demo_authorized_at IS NULL RETURNING '+fields,[id,agreement.version,revision])).rows[0]
    }
   }else{
+   if(needsFeeUpgrade(current))throw new AuthError(409,'Actualiza el borrador al nuevo modelo bilateral antes de firmar')
    if(!current||!modes.includes(current.mode)||b.digest!==current.digest)throw new AuthError(409,'La versión del documento no coincide')
    if(current.mode==='notary'&&(!current.terms?.notaryArrangement||!current.notaryAcceptedAt))throw new AuthError(409,'Ambas partes deben aceptar la modalidad y el responsable del costo notarial')
    if(!(side==='client'?current.clientSignedAt:current.providerSignedAt)){
