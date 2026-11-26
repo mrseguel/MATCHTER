@@ -1,7 +1,7 @@
 (function(){
  const fs=require('node:fs'),once=(s,a,b)=>{if(s.split(a).length!==2)throw Error('Missing anchor: '+a);return s.replace(a,b)},update=(f,fn)=>fs.writeFileSync(f,fn(fs.readFileSync(f,'utf8')));
  update('client/src/features/contracts/model.js',s=>{
- s=once(s,"Inicio referencial: 01 de diciembre de 2026. Término estimado: 30 de enero de 2027.","Inicio: '+(job.startDate||'01 de diciembre de 2026')+'. Término estimado: '+(job.endDate||'30 de enero de 2027')+'.");return s});
+ if(!s.includes("job.startDate||'01 de diciembre de 2026'"))s=once(s,"Inicio referencial: 01 de diciembre de 2026. Término estimado: 30 de enero de 2027.","Inicio: '+(job.startDate||'01 de diciembre de 2026')+'. Término estimado: '+(job.endDate||'30 de enero de 2027')+'.");return s});
  update('client/src/features/contracts/ContractFormal.jsx',s=>{
  const re=/\{job\.paid<stages\.length&&side==='client'&&<button className="btn gr" onClick=\{onPay\}>Pagar etapa \{job\.paid\+1\} · demo<\/button>\}/;
  if(!re.test(s))throw Error('Old pay action missing');s=s.replace(re,'');return s;
