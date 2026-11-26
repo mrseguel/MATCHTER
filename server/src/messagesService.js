@@ -1,3 +1,4 @@
+import {readContractDemo,changeContractDemo} from './projectContractDemo.js'
 import {readProjectAgreement,changeProjectAgreement} from './projectAgreement.js'
 import {AuthError,PROFILE_ROLES} from './identityAccounts.js'
 const uuid=/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
@@ -50,6 +51,8 @@ export function createMessagesService({db,verifyIdentity}){
   return rid
  }
  return Object.freeze({
+  async contract(header,query){const a=await actor(header,query.role);return readContractDemo(db,a,id(query.requestId))},
+  async changeContract(header,body){const a=await actor(header,body?.role);return changeContractDemo(db,a,id(body.requestId),body)},
   async agreement(header,query){const a=await actor(header,query.role);return readProjectAgreement(db,a,id(query.requestId))},
   async changeAgreement(header,body){const a=await actor(header,body?.role);return changeProjectAgreement(db,a,id(body.requestId),body)},
   async list(header,role){const a=await actor(header,role)
