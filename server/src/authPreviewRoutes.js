@@ -1,5 +1,6 @@
 import express from 'express'
 import pg from 'pg'
+import {createSwipeService} from './swipeService.js'
 import {createProfileDetailsService} from './profileDetails.js'
 import {createProfilesService} from './accountProfiles.js'
 import {createIdentityVerifier,createAccountService,AuthError} from './identityAccounts.js'
@@ -19,7 +20,7 @@ export function createAuthRouter(env=process.env, dependencies={}) {
     pool=new pg.Pool({connectionString:dbUrl.href,ssl:{rejectUnauthorized:true},max:2,connectionTimeoutMillis:8000,idleTimeoutMillis:3000,statement_timeout:5000,application_name:'matchter-auth-preview'})
     pool.on('error',()=>console.error('Matchter auth pool error'))
     const verifyIdentity=createIdentityVerifier({issuer:auth.origin,audience:auth.origin,jwksUrl:jwks.href,algorithms:['EdDSA']})
-    service={...createAccountService({db:pool,verifyIdentity}),profiles:createProfilesService({db:pool,verifyIdentity}),details:createProfileDetailsService({db:pool,verifyIdentity})}
+    service={...createAccountService({db:pool,verifyIdentity}),profiles:createProfilesService({db:pool,verifyIdentity}),details:createProfileDetailsService({db:pool,verifyIdentity}),swipe:createSwipeService({db:pool,verifyIdentity})}
     return service
   }
   router.use((req,res,next)=>{
@@ -44,5 +45,14 @@ export function createAuthRouter(env=process.env, dependencies={}) {
   router.post('/profiles/switch',handle((svc,req)=>svc.profiles.switch(req.get('authorization'),req.body)))
   router.get('/profiles/details',handle((svc,req)=>svc.details.get(req.get('authorization'),req.query.role)))
   router.post('/profiles/details',handle((svc,req)=>svc.details.save(req.get('authorization'),req.body)))
+  router.get('/swipe/cards',handle((s,r)=>s.swipe.browse(r.get('authorization'),r.query)))
+  router.get('/swipe/own',handle((s,r)=>s.swipe.own(r.get('authorization'),r.query.role)))
+  router.post('/swipe/publish',handle((s,r)=>s.swipe.publish(r.get('authorization'),r.body)))
+  router.post('/swipe/hide',handle((s,r)=>s.swipe.hide(r.get('authorization'),r.body)))
+  router.get('/swipe/favorites',handle((s,r)=>s.swipe.favorites(r.get('authorization'),r.query.role)))
+  router.post('/swipe/favorite',handle((s,r)=>s.swipe.favorite(r.get('authorization'),r.body)))
+  router.get('/swipe/requests',handle((s,r)=>s.swipe.requests(r.get('authorization'),r.query.role)))
+  router.post('/swipe/invite',handle((s,r)=>s.swipe.invite(r.get('authorization'),r.body)))
+  router.post('/swipe/respond',handle((s,r)=>s.swipe.respond(r.get('authorization'),r.body)))
   return router
 }
