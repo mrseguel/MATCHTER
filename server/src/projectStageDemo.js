@@ -1,8 +1,9 @@
+import {serviceFeeReady} from './serviceFeeDemo.js'
 import {AuthError} from './identityAccounts.js'
 import {contractContext,DEMO_NOTARY_FEE} from './projectContractDemo.js'
 const cols='stage_no AS "stageNo",amount,funded_at AS "fundedAt",delivered_at AS "deliveredAt",released_at AS "releasedAt"'
 const fail=(status,msg)=>{throw new AuthError(status,msg)}
-export function stageReady(c){return !!(c?.clientSignedAt&&c?.providerSignedAt&&(c.mode==='simple'||c.mode==='notary'&&c.notaryAcceptedAt&&c.notaryDemoPaidAt&&c.notaryDemoFee===DEMO_NOTARY_FEE&&c.notaryDemoAuthorizedAt))}
+export function stageReady(c){return !!(serviceFeeReady(c)&&c?.clientSignedAt&&c?.providerSignedAt&&(c.mode==='simple'||c.mode==='notary'&&c.notaryAcceptedAt&&c.notaryDemoPaidAt&&c.notaryDemoFee===DEMO_NOTARY_FEE&&c.notaryDemoAuthorizedAt))}
 export function validateStageAction(b){
  if(!b||typeof b!=='object'||Array.isArray(b)||Object.keys(b).some(k=>!['role','requestId','action','agreementVersion','contractRevision','digest','stageNo','accepted'].includes(k))||!['fund','deliver','release'].includes(b.action)||!Number.isSafeInteger(b.agreementVersion)||b.agreementVersion<1||!Number.isSafeInteger(b.contractRevision)||b.contractRevision<1||!Number.isInteger(b.stageNo)||b.stageNo<1||b.stageNo>50||typeof b.digest!=='string'||!/^[a-f0-9]{64}$/.test(b.digest)||b.accepted!==true)fail(400,'Acción de pago protegido de prueba no válida')
 }
