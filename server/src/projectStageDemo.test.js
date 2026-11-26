@@ -5,12 +5,12 @@ const client={id:'c',role:'Cliente'},provider={id:'p',role:'Empresa'},other={id:
 const a={version:3,data:{stages:[['Uno','2027-01-01',120000],['Dos','2027-01-02',250000],['Tres','2027-01-03',100000]]},clientConfirmedAt:'now',providerConfirmedAt:'now'}
 const contract={revision:1,digest:'a'.repeat(64),mode:'notary',clientSignedAt:'now',providerSignedAt:'now',notaryAcceptedAt:'now',notaryDemoPaidAt:'now',notaryDemoFee:33490,notaryDemoAuthorizedAt:'now'}
 const action=(name,stageNo=1)=>({action:name,stageNo,agreementVersion:3,contractRevision:1,digest:contract.digest,accepted:true})
-function fake(){
+function fake(agreement=a){
  const rows=[],c=structuredClone(contract)
  async function query(sql,p=[]){
   if(['BEGIN','COMMIT','ROLLBACK'].includes(sql))return {rows:[]}
   if(sql.startsWith('SELECT id,sender_profile_id'))return {rows:p[0]==='m'&&['c','p'].includes(p[1])?[{id:'m',senderId:'c',recipientId:'p'}]:[]}
-  if(sql.startsWith('SELECT version,data'))return {rows:[a]}
+  if(sql.startsWith('SELECT version,data'))return {rows:[agreement]}
   if(sql.startsWith('SELECT revision,agreement_version'))return {rows:[c]}
   if(sql.startsWith('SELECT stage_no'))return {rows:structuredClone(rows)}
   if(sql.startsWith('INSERT INTO matchter.project_stage_demos')){const r={stageNo:p[3],amount:String(p[4]),fundedAt:'now',deliveredAt:null,releasedAt:null};rows.push(r);return {rows:[structuredClone(r)]}}
@@ -26,7 +26,7 @@ test('contract gate requires signatures and, for notarial mode, paid and authori
 })
 test('stage actions reject client-supplied amounts, wrong versions and missing explicit consent',()=>{
  assert.doesNotThrow(()=>validateStageAction(action('fund')))
- for(const b of [{...action('fund'),amount:1},{...action('fund'),stageNo:4},{...action('fund'),accepted:false},{...action('fund'),digest:'bad'},{...action('fund'),action:'real'}])assert.throws(()=>validateStageAction(b),{status:400})
+ for(const b of [{...action('fund'),amount:1},{...action('fund'),stageNo:51},{...action('fund'),accepted:false},{...action('fund'),digest:'bad'},{...action('fund'),action:'real'}])assert.throws(()=>validateStageAction(b),{status:400})
 })
 test('ordered stage flow enforces actual participants and roles, server amounts and idempotency',async()=>{
  const db=fake()
@@ -51,4 +51,21 @@ test('ordered stage flow enforces actual participants and roles, server amounts 
   assert.deepEqual(await changeStageDemo(db,client,'m',action('release',i)),released)
  }
  assert.equal((await readStageDemo(db,provider,'m')).complete,true)
+})
+
+test('single-stage and five-stage contracts complete in order; unknown stages cannot be funded',async()=>{
+ for(const count of [1,5]){
+  const agreement={...a,data:{stages:Array.from({length:count},(_,i)=>['Hito '+(i+1),'2027-01-01',100000+i,100/count])}}
+  const db=fake(agreement)
+  await assert.rejects(changeStageDemo(db,client,'m',action('fund',count+1)),{status:400})
+  for(let i=1;i<=count;i++){
+   const funded=await changeStageDemo(db,client,'m',action('fund',i))
+   assert.equal(funded.stages[i-1].physicalPercent,100/count)
+   await changeStageDemo(db,provider,'m',action('deliver',i))
+   const released=await changeStageDemo(db,client,'m',action('release',i))
+   assert.equal(released.complete,i===count)
+   assert.equal(released.currentStage,i===count?null:i+1)
+  }
+  assert.equal(db.rows.length,count)
+ }
 })
