@@ -36,7 +36,8 @@ export function contractSnapshot(id,agreement,mode,revision,arrangement,fee){
   terms.notaryArrangement={payer:arrangement.payer,proposedBy:arrangement.proposedBy,feeStatus:'pending_quote'}
   terms.clauses.push(['DÉCIMO. Costo del trámite notarial · propuesta de prueba','Responsable propuesto del costo completo: '+(arrangement.payer==='client'?'cliente':'prestador')+'. Tarifa definitiva pendiente de cotización y aceptación expresa. No se genera ningún cobro en esta beta.'])
  }
- if(fee){terms.serviceFee=fee;terms.clauses.push(['Tarifa de servicio MATCHTER · simulación','Tarifa única del cliente: ('sha256').update(JSON.stringify({id,agreementVersion:agreement.version,revision,mode,terms})).digest('hex')
+ if(fee){terms.serviceFee=fee;terms.clauses.push(['Tarifa de servicio MATCHTER · simulación','Tarifa única del cliente: '+fee.amount.toLocaleString('es-CL')+' CLP, adicional al precio contractual y separada de las etapas y del trámite notarial. No reduce el monto del ejecutor. No se realiza ningún cargo real; los costos financieros e impuestos definitivos están pendientes de validación.'])}
+ const digest=createHash('sha256').update(JSON.stringify({id,agreementVersion:agreement.version,revision,mode,terms})).digest('hex')
  return {terms,digest}
 }
 export async function readContractDemo(db,a,id){
@@ -68,55 +69,6 @@ export async function changeContractDemo(db,a,id,b){
    if(!current.serviceFeePaidAt)saved=(await tx.query('UPDATE matchter.project_contract_demos SET service_fee_demo_paid_at=now() WHERE request_id=$1 AND agreement_version=$2 AND revision=$3 AND service_fee_demo_paid_at IS NULL RETURNING '+fields,[id,agreement.version,revision])).rows[0]
   }else if(['payNotaryDemo','authorizeNotaryDemo'].includes(b.action)){
    if(!serviceFeeReady(current))throw new AuthError(409,'Primero registra la tarifa MATCHTER de prueba')
-   if(!current||current.mode!=='notary'||b.digest!==current.digest||!current.notaryAcceptedAt||!current.clientSignedAt||!current.providerSignedAt)throw new AuthError(409,'Se requiere el acuerdo notarial y ambas firmas de prueba')
-   if(b.action==='payNotaryDemo'){
-    if(current.terms?.notaryArrangement?.payer!==side)throw new AuthError(403,'Solo paga el responsable acordado')
-    if(!current.notaryDemoPaidAt)saved=(await tx.query('UPDATE matchter.project_contract_demos SET notary_demo_paid_at=now(),notary_demo_fee=$4 WHERE request_id=$1 AND agreement_version=$2 AND revision=$3 AND notary_demo_paid_at IS NULL RETURNING '+fields,[id,agreement.version,revision,DEMO_NOTARY_FEE])).rows[0]
-   }else{
-    if(!current.notaryDemoPaidAt||current.notaryDemoFee!==DEMO_NOTARY_FEE)throw new AuthError(409,'Falta el pago simulado del responsable')
-    if(!current.notaryDemoAuthorizedAt)saved=(await tx.query('UPDATE matchter.project_contract_demos SET notary_demo_authorized_at=now() WHERE request_id=$1 AND agreement_version=$2 AND revision=$3 AND notary_demo_authorized_at IS NULL RETURNING '+fields,[id,agreement.version,revision])).rows[0]
-   }
-  }else{
-   if(!current||!modes.includes(current.mode)||b.digest!==current.digest)throw new AuthError(409,'La versión del documento no coincide')
-   if(current.mode==='notary'&&(!current.terms?.notaryArrangement||!current.notaryAcceptedAt))throw new AuthError(409,'Ambas partes deben aceptar la modalidad y el responsable del costo notarial')
-   if(!(side==='client'?current.clientSignedAt:current.providerSignedAt)){
-    const col=side==='client'?'client_signed_at':'provider_signed_at'
-    saved=(await tx.query('UPDATE matchter.project_contract_demos SET '+col+'=now() WHERE request_id=$1 AND agreement_version=$2 AND revision=$3 AND '+col+' IS NULL RETURNING '+fields,[id,agreement.version,revision])).rows[0]
-   }
-  }
-  if(!saved)throw new AuthError(409,'No se pudo registrar la acción')
-  await tx.query('COMMIT')
-  return {agreementVersion:agreement.version,contract:view(saved)}
- }catch(e){try{await tx.query('ROLLBACK')}catch{}throw e}finally{tx.release()}
-}
-+fee.amount.toLocaleString('es-CL')+' CLP, adicional al precio contractual y separada de las etapas y del trámite notarial. No reduce el monto del ejecutor. No se realiza ningún cargo real; los costos financieros e impuestos definitivos están pendientes de validación.'])}
- const digest=createHash('sha256').update(JSON.stringify({id,agreementVersion:agreement.version,revision,mode,terms})).digest('hex')
- return {terms,digest}
-}
-export async function readContractDemo(db,a,id){
- const {agreement,current}=await contractContext(db,a,id,false)
- return {agreementVersion:agreement.version,contract:view(current)}
-}
-export async function changeContractDemo(db,a,id,b){
- validateContractAction(b)
- const tx=await db.connect()
- try{
-  await tx.query('BEGIN')
-  const {side,agreement,current}=await contractContext(tx,a,id,true)
-  const revision=current?.revision||0
-  if(b.agreementVersion!==agreement.version||b.expectedRevision!==revision)throw new AuthError(409,'El documento cambió. Actualiza antes de continuar.')
-  let saved=current
-  if(b.action==='choose'){
-   if(current?.mode!==b.mode||b.mode==='notary'&&(current?.terms?.notaryArrangement?.payer!==b.payer||!current?.terms?.notaryArrangement)){ 
-    if(current?.clientSignedAt||current?.providerSignedAt)throw new AuthError(409,'La modalidad ya tiene una confirmación y no se puede cambiar')
-    const {terms,digest}=contractSnapshot(id,agreement,b.mode,revision+1,b.mode==='notary'?{payer:b.payer,proposedBy:side}:undefined)
-    saved=(await tx.query('INSERT INTO matchter.project_contract_demos(request_id,agreement_version,revision,mode,terms,digest) VALUES($1,$2,$3,$4,$5,$6) RETURNING '+fields,[id,agreement.version,revision+1,b.mode,JSON.stringify(terms),digest])).rows[0]
-   }
-  }else if(b.action==='acceptNotary'){
-   if(!current||current.mode!=='notary'||!current.terms?.notaryArrangement||b.digest!==current.digest)throw new AuthError(409,'La propuesta notarial no coincide')
-   if(current.terms.notaryArrangement.proposedBy===side)throw new AuthError(403,'Debe aceptar la contraparte')
-   if(!current.notaryAcceptedAt)saved=(await tx.query('UPDATE matchter.project_contract_demos SET notary_accepted_at=now() WHERE request_id=$1 AND agreement_version=$2 AND revision=$3 AND notary_accepted_at IS NULL RETURNING '+fields,[id,agreement.version,revision])).rows[0]
-  }else if(['payNotaryDemo','authorizeNotaryDemo'].includes(b.action)){
    if(!current||current.mode!=='notary'||b.digest!==current.digest||!current.notaryAcceptedAt||!current.clientSignedAt||!current.providerSignedAt)throw new AuthError(409,'Se requiere el acuerdo notarial y ambas firmas de prueba')
    if(b.action==='payNotaryDemo'){
     if(current.terms?.notaryArrangement?.payer!==side)throw new AuthError(403,'Solo paga el responsable acordado')
