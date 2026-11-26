@@ -3,6 +3,7 @@ import {ArrowLeftRight,Check,ChevronDown,UserRound} from 'lucide-react'
 import {ACCOUNT_TYPES,roleForLabel,displayRole} from './realAuthFlow.js'
 import {RoleIcon} from './AuthPreview.jsx'
 import './profileSwitch.css'
+import {RealMessages} from './RealMessages.jsx'
 import {RealSwipe} from './RealSwipe.jsx'
 import {ProfileDetailsEditor} from './ProfileDetailsEditor.jsx'
 const types=ACCOUNT_TYPES.map(t=>({label:t[1],role:roleForLabel(t[1]),icon:t[0]}))
@@ -31,21 +32,21 @@ async function profileRequest(client,path,body){
  return data
 }
 export function ProfileSwitchPanel({client,session,profile,onLogout,busy:parentBusy,error:parentError}){
- const [data,setData]=useState(null),[busy,setBusy]=useState(false),[error,setError]=useState(''),[notice,setNotice]=useState(''),[open,setOpen]=useState(false),[section,setSection]=useState('profile')
+ const [data,setData]=useState(null),[busy,setBusy]=useState(false),[error,setError]=useState(''),[notice,setNotice]=useState(''),[open,setOpen]=useState(false),[section,setSection]=useState('profile'),[messageView,setMessageView]=useState(null)
  const initial=useRef(false)
  const active=data?.activeRole||profile.role
  async function load(){setBusy(true);setError('');try{setData(await profileRequest(client,''))}catch(e){setError(e.message)}finally{setBusy(false)}}
  useEffect(()=>{if(!initial.current){initial.current=true;load()}},[])
  async function select(role){setBusy(true);setError('');setNotice('');try{setData(await profileRequest(client,'/switch',{role}));setOpen(false);setNotice('Perfil activo actualizado.')}catch(e){setError(e.message)}finally{setBusy(false)}}
  const blocked=busy||parentBusy
- return <main className="mai-page"><section className="mai-card mt-profile-card"><h1>Matchter</h1><p className="mai-note">Integración privada · Tu identidad y tus perfiles se guardan realmente. SWIPE de pruebas conectado a Neon. Los demás módulos siguen separados.</p>
- <nav className="mt-real-nav" aria-label="Navegación privada"><button disabled={blocked||!data} type="button" className={section==='profile'?'':'mai-secondary'} aria-current={section==='profile'?'page':undefined} onClick={()=>setSection('profile')}>Mi perfil</button><button disabled={blocked||!data} type="button" className={section==='swipe'?'':'mai-secondary'} aria-current={section==='swipe'?'page':undefined} onClick={()=>setSection('swipe')}>SWIPE</button></nav>
+ return <><main className="mai-page"><section className="mai-card mt-profile-card"><h1>Matchter</h1><p className="mai-note">Integración privada · Tu identidad y tus perfiles se guardan realmente. SWIPE y mensajes de pruebas conectados a Neon. Los demás módulos siguen separados.</p>
+ <nav className="mt-real-nav" aria-label="Navegación privada"><button disabled={blocked||!data} type="button" className={section==='profile'?'':'mai-secondary'} aria-current={section==='profile'?'page':undefined} onClick={()=>setSection('profile')}>Mi perfil</button><button disabled={blocked||!data} type="button" className={section==='swipe'?'':'mai-secondary'} aria-current={section==='swipe'?'page':undefined} onClick={()=>setSection('swipe')}>SWIPE</button><button type="button" className="mai-secondary" disabled={blocked||!data} onClick={()=>setMessageView({})}>Mensajes</button></nav>
  {section==='profile'?<><h2>Mi perfil</h2><div className="mt-person"><span className="mt-example-avatar"><UserRound size={27}/></span><div className="mt-person-name"><strong>{session?.user?.name||'Mi cuenta'}</strong><small>{displayRole(active)}</small></div><button type="button" className="mt-switch" aria-expanded={open} disabled={blocked||!data} onClick={()=>setOpen(v=>!v)}><ArrowLeftRight size={15}/> Cambiar perfil <ChevronDown size={15}/></button></div>
  <p className="mt-email">{session?.user?.email}</p>
  {open&&<div className="mt-profile-menu"><strong>Cambiar perfil</strong>{types.map(t=>{const current=active===t.role;return <button key={t.role} type="button" disabled={blocked||current} onClick={()=>select(t.role)}><RoleIcon type={t.label} fallback={t.icon}/><span>{displayRole(t.role)}<small>{current?'Activo':'Cambiar a este perfil'}</small></span>{current?<Check size={18} className="mt-orange"/>:<ArrowLeftRight size={17}/>}</button>})}</div>}
  {(error||parentError)&&<p className="mai-error" role="alert">{error||parentError}</p>}{notice&&<p className="mai-notice" role="status">{notice}</p>}
  {data&&<ProfileDetailsEditor key={active} client={client} role={active}/>}
- </>:data?<RealSwipe key={active} client={client} role={active}/>:null}
+ </>:data?<RealSwipe key={active} client={client} role={active} onOpenMessages={requestId=>setMessageView({requestId})}/>:null}
  <p>Perfil persistente: <strong>{displayRole(active)}</strong></p><button type="button" disabled={blocked} onClick={load}>Comprobar cuenta guardada</button><button type="button" className="mai-secondary" disabled={blocked} onClick={onLogout}>Cerrar sesión</button>
- </section></main>
+ </section></main>{messageView&&data&&<RealMessages key={active} client={client} role={active} initialRequestId={messageView.requestId} onBack={()=>setMessageView(null)}/>}</>
 }
