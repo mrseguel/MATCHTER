@@ -9,10 +9,14 @@ const display=m=>({...m,t:m.body})
 function Thread({client,role,thread,onBack}){
  const [items,setItems]=useState([]),[hasMore,setHasMore]=useState(false),[busy,setBusy]=useState(true),[error,setError]=useState('')
  const [workflow,setWorkflow]=useState(null),[workflowError,setWorkflowError]=useState(''),[screen,setScreen]=useState(null)
+ const [coordination,setCoordination]=useState(null),[coordinationError,setCoordinationError]=useState('')
+ const coordinationSeq=useRef(0),coordinationBusy=useRef(false)
+ async function refreshCoordination(){if(coordinationBusy.current)return;const seq=++coordinationSeq.current;try{const data=await messagesRequest(client,'coordination',role,undefined,{requestId:thread.id});if(alive.current&&seq===coordinationSeq.current){setCoordination(data);setCoordinationError('')}}catch(e){if(alive.current&&seq===coordinationSeq.current)setCoordinationError(e.message)}}
+ async function changeCoordination(payload){if(coordinationBusy.current)throw Error('Espera a que se complete la acción anterior');coordinationBusy.current=true;++coordinationSeq.current;try{const data=await messagesRequest(client,'coordination',role,{requestId:thread.id,...payload});if(alive.current){setCoordination(data);setCoordinationError('')}}catch(e){throw e}finally{coordinationBusy.current=false;refreshCoordination()}}
  const workflowSeq=useRef(0)
  async function refreshWorkflow(){const seq=++workflowSeq.current;try{const data=await messagesRequest(client,'workflow',role,undefined,{requestId:thread.id});if(alive.current&&seq===workflowSeq.current){setWorkflow(data);setWorkflowError('')}}catch(e){if(alive.current&&seq===workflowSeq.current)setWorkflowError(e.message)}}
  const loaded=useRef(false),inFlight=useRef(false),alive=useRef(true),retry=useRef(null),oldest=useRef(null),sending=useRef(false)
- useEffect(()=>{alive.current=true;load(false);refreshWorkflow();const timer=setInterval(()=>{load(false,true);refreshWorkflow()},8000);return()=>{alive.current=false;clearInterval(timer)}},[thread.id,role,client])
+ useEffect(()=>{alive.current=true;load(false);refreshWorkflow();refreshCoordination();const timer=setInterval(()=>{load(false,true);refreshWorkflow();refreshCoordination()},8000);return()=>{alive.current=false;clearInterval(timer)}},[thread.id,role,client])
  async function load(older=false,quiet=false){
   if(inFlight.current||older&&!oldest.current)return
   inFlight.current=true;if(!quiet)setBusy(true)
@@ -37,13 +41,13 @@ function Thread({client,role,thread,onBack}){
   try{const data=await messagesRequest(client,'send',role,{requestId:thread.id,clientMessageId:key,...payload})
    if(!data.message?.id)throw Error('El servidor no confirmó el envío')
    retry.current=null
-   if(alive.current){setItems(prev=>merge(prev,[data.message]));setError('')}
+   if(alive.current){setItems(prev=>merge(prev,[data.message]));setError('');if(payload.request)refreshCoordination()}
   }finally{sending.current=false}
  }
  const p={id:thread.id,name:thread.peerName,e:'👤',c:'#e6e9ef'}
  const context={client,role,requestId:thread.id}
  const openWorkflow=target=>{setScreen(target);refreshWorkflow()}
- const job={id:thread.id,project:thread.project,agreementRequired:true,clientId:'client',providerId:'provider',agreementContext:context,workflow,workflowError,openWorkflow,refreshWorkflow}
+ const job={id:thread.id,project:thread.project,agreementRequired:true,clientId:'client',providerId:'provider',agreementContext:context,workflow,workflowError,openWorkflow,refreshWorkflow,coordination,changeCoordination}
  const actor={id:role==='Cliente'?'client':'provider'}
  const documents=[['agreement','Acuerdo previo',true],['contract','Contrato escrito',!!workflow?.contract||!!(workflow?.agreement?.confirmed?.client&&workflow?.agreement?.confirmed?.provider)],['notary','Trámite notarial',workflow?.notaryAvailable],['stages','Etapas y pagos',workflow?.stagesAvailable]]
  if(screen)return <Overlay title={documents.find(d=>d[0]===screen)?.[1]||'Proyecto'} onBack={()=>{setScreen(null);refreshWorkflow();load(false,true)}}>
@@ -52,7 +56,7 @@ function Thread({client,role,thread,onBack}){
  {screen==='agreement'?<RealProjectAgreement key={thread.id} context={context} project={thread.project} standalone onAdvance={refreshWorkflow}/>:screen==='contract'||screen==='notary'?workflow?.agreement?<RealContractDemo key={screen+workflow.agreement.version} context={context} agreement={workflow.agreement} standalone notaryOnly={screen==='notary'} onAdvance={refreshWorkflow}/>:<p className="mut">Primero confirma el acuerdo.</p>:screen==='stages'&&workflow?.contract&&workflow.stagesAvailable?<RealStageDemo key={workflow.contract.digest} context={context} contract={workflow.contract} onAdvance={refreshWorkflow}/>:<p className="mut">Este paso aún no está habilitado.</p>}
  </Overlay>
  const combined=merge(items,workflow?.events||[]).map(display)
- return <>{error&&<p className="mt-real-chat-error" role="alert">{error}</p>}<Chat p={p} job={job} actor={actor} msgs={combined} send={send} onBack={onBack} real={true} onRefresh={()=>{load(false);refreshWorkflow()}} onOlder={()=>load(true)} hasMore={hasMore} loading={busy}/></>
+ return <>{error&&<p className="mt-real-chat-error" role="alert">{error}</p>}{coordinationError&&<p className="mt-real-chat-error" role="alert">{coordinationError} <button className="chip" onClick={refreshCoordination}>Reintentar</button></p>}<Chat p={p} job={job} actor={actor} msgs={combined} send={send} onBack={onBack} real={true} onRefresh={()=>{load(false);refreshWorkflow();refreshCoordination()}} onOlder={()=>load(true)} hasMore={hasMore} loading={busy}/></>
 }
 export function RealMessages({client,role,initialRequestId,onBack}){
  const [threads,setThreads]=useState([]),[active,setActive]=useState(null),[busy,setBusy]=useState(true),[error,setError]=useState('')
