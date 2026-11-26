@@ -6,11 +6,14 @@ const bad=(m='Datos del acuerdo no válidos')=>{throw new AuthError(400,m)}
 export function validateAgreementAction(body){
  if(!shape(body,['role','requestId','action','expectedVersion','data'])||!Number.isSafeInteger(body.expectedVersion)||body.expectedVersion<0||body.expectedVersion>=2147483647)bad()
  if(body.action==='confirm'){if(body.expectedVersion<1||body.data!==undefined)bad();return {action:'confirm',expectedVersion:body.expectedVersion}}
- if(body.action!=='propose'||!shape(body.data,['title','scope','start','end','stages']))bad()
- const {title,scope,start,end,stages}=body.data
+ if(body.action!=='propose'||!shape(body.data,['title','scope','start','end','totalAmount','stages']))bad()
+ const {title,scope,start,end,totalAmount,stages}=body.data
  if(!str(title,3,150)||!str(scope,20,1800)||!dateOK(start)||!dateOK(end)||start>end)bad('Completa el alcance y las fechas del acuerdo')
- if(!Array.isArray(stages)||stages.length!==3||stages.some((s,i)=>!Array.isArray(s)||s.length!==3||!str(s[0],1,200)||!dateOK(s[1])||s[1]<start||s[1]>end||i>0&&s[1]<stages[i-1][1]||typeof s[2]!=='number'||!Number.isSafeInteger(s[2])||s[2]<=0||s[2]>100000000000))bad('Completa tres hitos, montos positivos y fechas ordenadas dentro del plazo')
- return {action:'propose',expectedVersion:body.expectedVersion,data:{title:title.trim(),scope:scope.trim(),start,end,stages:stages.map(s=>[s[0].trim(),s[1],s[2]])}}
+ if(!Array.isArray(stages)||stages.length<1||stages.length>50||stages.some((s,i)=>!Array.isArray(s)||s.length!==4||!str(s[0],1,200)||!dateOK(s[1])||s[1]<start||s[1]>end||i>0&&s[1]<stages[i-1][1]||typeof s[2]!=='number'||!Number.isSafeInteger(s[2])||s[2]<=0||s[2]>100000000000))bad('Completa entre 1 y 50 etapas, montos positivos y fechas ordenadas dentro del plazo')
+ const basis=p=>Math.round(p*100)
+ if(stages.some(s=>typeof s[3]!=='number'||!Number.isFinite(s[3])||s[3]<=0||s[3]>100||Math.abs(s[3]*100-basis(s[3]))>1e-7)||stages.reduce((n,s)=>n+basis(s[3]),0)!==10000)bad('Los porcentajes de avance físico deben sumar exactamente 100 %, con hasta dos decimales')
+ if(!Number.isSafeInteger(totalAmount)||totalAmount<=0||totalAmount!==stages.reduce((n,s)=>n+s[2],0))bad('Los pagos de las etapas deben sumar el valor total acordado')
+ return {action:'propose',expectedVersion:body.expectedVersion,data:{title:title.trim(),scope:scope.trim(),start,end,totalAmount,stages:stages.map(s=>[s[0].trim(),s[1],s[2],basis(s[3])/100])}}
 }
 const columns='version,data,proposed_by AS "proposedBy",created_at AS "createdAt",client_confirmed_at AS "clientConfirmedAt",provider_confirmed_at AS "providerConfirmedAt"'
 const view=(row,match)=>row?{version:row.version,data:row.data,proposedBy:row.proposedBy===match.senderId?'client':'provider',at:row.createdAt,confirmed:{client:row.clientConfirmedAt,provider:row.providerConfirmedAt}}:null
