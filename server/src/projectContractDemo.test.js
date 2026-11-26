@@ -10,11 +10,11 @@ function fake(){
  const rows=[],a=structuredClone(agreement)
  async function query(sql,p=[]){
   if(['BEGIN','COMMIT','ROLLBACK'].includes(sql))return {rows:[]}
-  if(sql.startsWith('SELECT id,sender_profile_id'))return {rows:p[0]===id&&['c','p'].includes(p[1])?[{id,senderId:'c',recipientId:'p'}]:[]}
+  if(sql.startsWith('SELECT id,sender_profile_id'))return {rows:p[0]===id&&['c','p'].includes(p[1])?[{id,senderId:'c',recipientId:'p',providerRole:'Empresa'}]:[]}
   if(sql.startsWith('SELECT version,data'))return {rows:[a]}
   if(sql.startsWith('SELECT revision,agreement_version'))return {rows:rows.length?[structuredClone(rows.at(-1))]:[]}
   if(sql.startsWith('INSERT INTO matchter.project_contract_demos')){const r={agreementVersion:p[1],revision:p[2],mode:p[3],terms:JSON.parse(p[4]),digest:p[5],createdAt:'now',clientSignedAt:null,providerSignedAt:null,notaryAcceptedAt:null,notaryDemoPaidAt:null,notaryDemoFee:null,notaryDemoAuthorizedAt:null};rows.push(r);return {rows:[structuredClone(r)]}}
-  if(sql.startsWith('UPDATE matchter.project_contract_demos')){const r=rows.at(-1);if(sql.includes('SET notary_demo_paid_at')){r.notaryDemoPaidAt='confirmed';r.notaryDemoFee=p[3]}else r[sql.includes('SET notary_demo_authorized_at')?'notaryDemoAuthorizedAt':sql.includes('SET notary_accepted_at')?'notaryAcceptedAt':sql.includes('SET client_signed_at')?'clientSignedAt':'providerSignedAt']='confirmed';return {rows:[structuredClone(r)]}}
+  if(sql.startsWith('UPDATE matchter.project_contract_demos')){const r=rows.at(-1);if(sql.includes('SET service_fee_demo_paid_at')){r.serviceFeePaidAt='confirmed'}else if(sql.includes('SET notary_demo_paid_at')){r.notaryDemoPaidAt='confirmed';r.notaryDemoFee=p[3]}else r[sql.includes('SET notary_demo_authorized_at')?'notaryDemoAuthorizedAt':sql.includes('SET notary_accepted_at')?'notaryAcceptedAt':sql.includes('SET client_signed_at')?'clientSignedAt':'providerSignedAt']='confirmed';return {rows:[structuredClone(r)]}}
   throw Error(sql)
  }
  return {rows,a,query,async connect(){return {query,release(){}}}}
@@ -91,9 +91,16 @@ test('notary simulation requires both signatures, agreed payer, exact demo amoun
  await changeContractDemo(db,client,id,confirm(c))
  await assert.rejects(changeContractDemo(db,provider,id,pay),{status:409})
  await changeContractDemo(db,provider,id,confirm(c))
- await assert.rejects(changeContractDemo(db,client,id,pay),{status:403})
+ await assert.rejects(changeContractDemo(db,client,id,pay),{status:409})
  await assert.rejects(changeContractDemo(db,provider,id,{...pay,demoAmount:1}),{status:400})
  await assert.rejects(changeContractDemo(db,client,id,auth),{status:409})
+ const servicePay={...acceptNotary(c),action:'payServiceFeeDemo',accepted:true,demoAmount:9990}
+ await assert.rejects(changeContractDemo(db,provider,id,pay),{status:409})
+ await assert.rejects(changeContractDemo(db,provider,id,servicePay),{status:403})
+ await assert.rejects(changeContractDemo(db,client,id,{...servicePay,demoAmount:2990}),{status:409})
+ const feePaid=(await changeContractDemo(db,client,id,servicePay)).contract
+ assert.ok(feePaid.serviceFeePaidAt)
+ assert.deepEqual(await changeContractDemo(db,client,id,servicePay),{agreementVersion:2,contract:feePaid})
  const paid=(await changeContractDemo(db,provider,id,pay)).contract
  assert.equal(paid.notaryDemo.paidAmount,DEMO_NOTARY_FEE)
  assert.ok(paid.notaryDemo.paidAt);assert.equal(paid.notaryDemo.authorizedAt,null)
