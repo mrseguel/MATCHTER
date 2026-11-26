@@ -72,5 +72,13 @@ test('completed projects invite only the customer to rate the actual provider ro
  const args={agreements:[a],contracts:[c],stages,providerRole:'Empresa'}
  assert.equal(workflowSnapshot({...args,side:'client'}).next.title,'Calificar a la empresa')
  assert.equal(workflowSnapshot({...args,side:'provider'}).next.target,'stages')
- assert.equal(workflowSnapshot({...args,side:'client',reviews:[{agreementVersion:3,contractRevision:1,score:5,createdAt:t(12)}]}).next.title,'Calificación registrada')
+ const reviews=[{agreementVersion:3,contractRevision:1,score:5,comment:'Bien',revision:1,createdAt:t(12)}]
+ const first=workflowSnapshot({...args,side:'client',reviews,now:new Date(t(12)).getTime()})
+ assert.equal(first.next.title,'Modificar calificación')
+ assert.equal(first.events.filter(e=>e.event.review).length,1)
+ const edited=workflowSnapshot({...args,side:'provider',reviews:[{...reviews[0],score:4,revision:2,updatedAt:t(13)}],now:new Date(t(13)).getTime()})
+ assert.equal(edited.events.at(-1).id,first.events.at(-1).id)
+ assert.equal(edited.events.at(-1).event.review.score,4)
+ assert.equal(edited.events.at(-1).event.review.editable,false)
+ assert.equal(workflowSnapshot({...args,side:'client',reviews,now:new Date(t(12)).getTime()+7*86400000}).next.title,'Calificación registrada')
 })
