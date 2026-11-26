@@ -14,6 +14,18 @@ function StageCard({stage:t,currentStage,complete}){
  <div><b>Etapa {t.stageNo} · {t.title}</b><small>{t.date}</small><small style={{fontWeight:600,...(paid?{color:'#16803c'}:{})}}>{label}</small>{detail&&<small>{detail}</small>}</div>
  </div><b style={{whiteSpace:'nowrap',flexShrink:0}}>{clp(t.amount)}</b></div>
 }
+function ExecutionProgress({stages}){
+ const total=stages.length,started=stages.filter(t=>t.fundedAt).length
+ const delivered=total>0&&stages.every(t=>t.deliveredAt)
+ const green='#16934a',gray='#a5aab4',circumference=2*Math.PI*7
+ const label='Ejecución de obra · '+started+' de '+total
+ return <div title="Etapas con depósito registrado; el tick definitivo indica todas las entregas notificadas.">
+ {delivered?<CheckCircle2 size={18} color={green} aria-hidden="true"/>:<svg width="18" height="18" viewBox="0 0 18 18" aria-hidden="true" style={{flexShrink:0}}>
+ <circle cx="9" cy="9" r="7" fill="none" stroke={gray} strokeWidth="1.6"/>
+ {started>0&&total>0&&<circle cx="9" cy="9" r="7" fill="none" stroke={green} strokeWidth="1.8" strokeLinecap="round" strokeDasharray={circumference} strokeDashoffset={circumference*(1-started/total)} transform="rotate(-90 9 9)"/>}
+ <text x="9" y="9" dy=".35em" textAnchor="middle" fontSize="9" fontWeight="700" fill={started>0?green:gray}>{started}</text>
+ </svg>}<span>{label}</span></div>
+}
 export function RealStageDemo({context,contract,onAdvance}){
  const {client,role,requestId}=context,side=role==='Cliente'?'client':'provider'
  const [state,setState]=useState(null),[busy,setBusy]=useState(false),[error,setError]=useState(''),[accepted,setAccepted]=useState(false)
@@ -40,7 +52,7 @@ export function RealStageDemo({context,contract,onAdvance}){
  return <section className="card wf-execution" aria-label="Seguimiento del proyecto"><div className="row sp"><h3>Seguimiento del proyecto</h3><button type="button" className="chip" disabled={busy} onClick={load}>Actualizar</button></div>
  <p className="mut">Pago protegido · simulación. No existe custodia ni transferencia de fondos reales. Los reclamos y la mediación todavía no están conectados a este flujo de prueba.</p>
  {!state?<p className="mut">Cargando hitos...</p>:<>
- <div className="wf-progress">{['Contrato formalizado · demo','Ejecución de obra','Recepción conforme'].map((x,i)=><div key={x}><CheckCircle2 size={18} color={i===0||i===1&&state.stages.every(t=>t.deliveredAt)||i===2&&state.complete?'#16934a':'#a5aab4'}/><span>{x}</span></div>)}</div>
+ <div className="wf-progress"><div><CheckCircle2 size={18} color="#16934a"/><span>Contrato formalizado · demo</span></div><ExecutionProgress stages={state.stages}/><div><CheckCircle2 size={18} color={state.complete?'#16934a':'#a5aab4'}/><span>Recepción conforme</span></div></div>
  {state.stages.map(t=><StageCard key={t.stageNo} stage={t} currentStage={state.currentStage} complete={state.complete}/>)}
  <div className="row sp"><span>Total contractual</span><b>{clp(state.stages.reduce((n,t)=>n+t.amount,0))}</b></div>
  {state.complete?<div className="wf-done"><CheckCircle2 size={21}/> Proyecto recibido conforme · pagos de prueba liberados.</div>:s&&<>
