@@ -69,3 +69,7 @@ test('single-stage and five-stage contracts complete in order; unknown stages ca
   assert.equal(db.rows.length,count)
  }
 })
+
+test('new contracts require the separate service-fee receipt; legacy contracts remain valid',()=>{
+ const c={...contract,terms:{serviceFee:{amount:2990}}};assert.equal(stageReady(c),false);assert.equal(stageReady({...c,serviceFeePaidAt:'now'}),true);assert.equal(stageReady(contract),true)
+})
