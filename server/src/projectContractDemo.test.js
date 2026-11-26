@@ -21,7 +21,7 @@ function fake(){
 }
 test('draft uses exact approved dates, milestones and amount and hashes its version and mode',()=>{
  const a=contractSnapshot(id,agreement,'simple',1)
- assert.match(a.terms.clauses[3][1],/2027-02-01.*2027-02-20/)
+ assert.match(a.terms.clauses[3][1],/01-02-2027.*20-02-2027/)
  assert.match(a.terms.clauses[2][1],/\$600 CLP/)
  assert.throws(()=>contractSnapshot(id,agreement,'none',1),{status:400})
  assert.equal(a.digest,contractSnapshot(id,agreement,'simple',1).digest)
