@@ -1,8 +1,19 @@
 import React,{useEffect,useRef,useState} from 'react'
-import {CheckCircle2,Lock} from 'lucide-react'
+import {CheckCircle2,Lock,Clock3} from 'lucide-react'
 import {messagesRequest} from './messagesApi.js'
 const clp=n=>'$'+Number(n).toLocaleString('es-CL')+' CLP'
-const status=s=>s.releasedAt?'Pago liberado · demo':s.deliveredAt?'Pendiente de conformidad':s.fundedAt?'En ejecución · depósito simulado':'Pendiente de depósito'
+function StageCard({stage:t,currentStage,complete}){
+ const locked=!complete&&!t.fundedAt&&t.stageNo>currentStage
+ const paid=!!t.fundedAt,delivered=!!t.deliveredAt,released=!!t.releasedAt
+ const label=released?'Etapa finalizada · Pago liberado':paid?'Depósito registrado':locked?'Pendiente de etapa anterior':'Pendiente de depósito'
+ const detail=released?'Recepción conforme · pago simulado':delivered?'Entrega notificada · pendiente de conformidad':paid?'En ejecución · pendiente de entrega':null
+ const Icon=paid?CheckCircle2:locked?Lock:Clock3
+ return <div className="wf-stage" data-stage-state={released?'released':delivered?'delivered':paid?'funded':locked?'locked':'pending'} style={paid?{border:'1px solid #b7dfc5',borderLeft:'3px solid #16934a',borderRadius:10,padding:'10px 9px',margin:'6px 0'}:undefined}>
+ <div style={{display:'flex',alignItems:'flex-start',gap:8,minWidth:0}}>
+ <Icon size={21} color={paid?'#16934a':'#9299a4'} aria-hidden="true" style={{flexShrink:0,marginTop:1}}/>
+ <div><b>Etapa {t.stageNo} · {t.title}</b><small>{t.date}</small><small style={{fontWeight:600,...(paid?{color:'#16803c'}:{})}}>{label}</small>{detail&&<small>{detail}</small>}</div>
+ </div><b style={{whiteSpace:'nowrap',flexShrink:0}}>{clp(t.amount)}</b></div>
+}
 export function RealStageDemo({context,contract,onAdvance}){
  const {client,role,requestId}=context,side=role==='Cliente'?'client':'provider'
  const [state,setState]=useState(null),[busy,setBusy]=useState(false),[error,setError]=useState(''),[accepted,setAccepted]=useState(false)
@@ -29,8 +40,8 @@ export function RealStageDemo({context,contract,onAdvance}){
  return <section className="card wf-execution" aria-label="Seguimiento del proyecto"><div className="row sp"><h3>Seguimiento del proyecto</h3><button type="button" className="chip" disabled={busy} onClick={load}>Actualizar</button></div>
  <p className="mut">Pago protegido · simulación. No existe custodia ni transferencia de fondos reales. Los reclamos y la mediación todavía no están conectados a este flujo de prueba.</p>
  {!state?<p className="mut">Cargando hitos...</p>:<>
- <div className="wf-progress">{['Contrato formalizado · demo','Ejecución de obra','Recepción conforme'].map((x,i)=><div key={x}><CheckCircle2 size={18} color={i===0||i>0&&state.complete?'#16934a':'#a5aab4'}/><span>{x}</span></div>)}</div>
- {state.stages.map(t=><div className="wf-stage" key={t.stageNo}><div><b>Etapa {t.stageNo} · {t.title}</b><small>{t.date} · {t.stageNo>state.currentStage&&!state.complete?'Pendiente de etapa anterior':status(t)}</small></div><b>{clp(t.amount)}</b></div>)}
+ <div className="wf-progress">{['Contrato formalizado · demo','Ejecución de obra','Recepción conforme'].map((x,i)=><div key={x}><CheckCircle2 size={18} color={i===0||i===1&&state.stages.every(t=>t.deliveredAt)||i===2&&state.complete?'#16934a':'#a5aab4'}/><span>{x}</span></div>)}</div>
+ {state.stages.map(t=><StageCard key={t.stageNo} stage={t} currentStage={state.currentStage} complete={state.complete}/>)}
  <div className="row sp"><span>Total contractual</span><b>{clp(state.stages.reduce((n,t)=>n+t.amount,0))}</b></div>
  {state.complete?<div className="wf-done"><CheckCircle2 size={21}/> Proyecto recibido conforme · pagos de prueba liberados.</div>:s&&<>
  {!s.fundedAt&&(side==='client'?<button type="button" className="btn" disabled={busy} onClick={()=>save('fund',s)}>Simular depósito etapa {s.stageNo} · {clp(s.amount)}</button>:<p className="mut"><Lock size={15}/> Esperando depósito simulado del cliente.</p>)}
