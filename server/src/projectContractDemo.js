@@ -2,14 +2,17 @@ import {createHash} from 'node:crypto'
 import {AuthError} from './identityAccounts.js'
 import {documentTerms} from '../../client/src/features/contracts/model.js'
 const modes=['simple','notary']
-const fields='revision,agreement_version AS "agreementVersion",mode,terms,digest,created_at AS "createdAt",client_signed_at AS "clientSignedAt",provider_signed_at AS "providerSignedAt",notary_accepted_at AS "notaryAcceptedAt"'
-const view=r=>r?{revision:r.revision,agreementVersion:r.agreementVersion,mode:r.mode,terms:r.terms,digest:r.digest,createdAt:r.createdAt,notaryAcceptedAt:r.notaryAcceptedAt||null,confirmed:{client:r.clientSignedAt,provider:r.providerSignedAt}}:null
+export const DEMO_NOTARY_FEE=33490
+const fields='revision,agreement_version AS "agreementVersion",mode,terms,digest,created_at AS "createdAt",client_signed_at AS "clientSignedAt",provider_signed_at AS "providerSignedAt",notary_accepted_at AS "notaryAcceptedAt",notary_demo_paid_at AS "notaryDemoPaidAt",notary_demo_fee AS "notaryDemoFee",notary_demo_authorized_at AS "notaryDemoAuthorizedAt"'
+const view=r=>r?{revision:r.revision,agreementVersion:r.agreementVersion,mode:r.mode,terms:r.terms,digest:r.digest,createdAt:r.createdAt,notaryAcceptedAt:r.notaryAcceptedAt||null,notaryDemo:{fee:DEMO_NOTARY_FEE,paidAt:r.notaryDemoPaidAt||null,paidAmount:r.notaryDemoFee||null,authorizedAt:r.notaryDemoAuthorizedAt||null},confirmed:{client:r.clientSignedAt,provider:r.providerSignedAt}}:null
 const shape=(o,keys)=>o&&typeof o==='object'&&!Array.isArray(o)&&Object.keys(o).every(k=>keys.includes(k))
 export function validateContractAction(b){
- if(!shape(b,['role','requestId','action','agreementVersion','expectedRevision','mode','digest','accepted','identityDemo','payer'])||!Number.isInteger(b.agreementVersion)||b.agreementVersion<1||!Number.isInteger(b.expectedRevision)||b.expectedRevision<0||b.expectedRevision>=2147483647)throw new AuthError(400,'Datos del contrato no válidos')
+ if(!shape(b,['role','requestId','action','agreementVersion','expectedRevision','mode','digest','accepted','identityDemo','payer','identityChecks','demoAmount'])||!Number.isInteger(b.agreementVersion)||b.agreementVersion<1||!Number.isInteger(b.expectedRevision)||b.expectedRevision<0||b.expectedRevision>=2147483647)throw new AuthError(400,'Datos del contrato no válidos')
+ if(b.identityChecks!==undefined&&b.action!=='confirm'||b.demoAmount!==undefined&&b.action!=='payNotaryDemo')throw new AuthError(400,'Datos de prueba no válidos')
  if(b.action==='choose'&&modes.includes(b.mode)&&b.digest===undefined&&b.accepted===undefined&&b.identityDemo===undefined&&(b.mode==='simple'?b.payer===undefined:['client','provider'].includes(b.payer)))return
  if(b.action==='acceptNotary'&&b.expectedRevision>0&&b.mode===undefined&&b.payer===undefined&&b.accepted===undefined&&b.identityDemo===undefined&&typeof b.digest==='string'&&/^[a-f0-9]{64}$/.test(b.digest))return
- if(b.action==='confirm'&&b.payer===undefined&&b.expectedRevision>0&&b.mode===undefined&&typeof b.digest==='string'&&/^[a-f0-9]{64}$/.test(b.digest)&&b.accepted===true&&b.identityDemo===true)return
+ if(['payNotaryDemo','authorizeNotaryDemo'].includes(b.action)&&b.expectedRevision>0&&b.mode===undefined&&b.payer===undefined&&b.identityDemo===undefined&&b.accepted===true&&typeof b.digest==='string'&&/^[a-f0-9]{64}$/.test(b.digest)&&(b.action==='payNotaryDemo'?b.demoAmount===DEMO_NOTARY_FEE:b.demoAmount===undefined))return
+ if(b.action==='confirm'&&b.payer===undefined&&b.expectedRevision>0&&b.mode===undefined&&typeof b.digest==='string'&&/^[a-f0-9]{64}$/.test(b.digest)&&b.accepted===true&&b.identityDemo===true&&shape(b.identityChecks,['front','back','selfie'])&&['front','back','selfie'].every(k=>b.identityChecks[k]===true))return
  throw new AuthError(400,'Acción de prueba no válida')
 }
 async function context(db,a,id,lock){
@@ -57,6 +60,15 @@ export async function changeContractDemo(db,a,id,b){
    if(!current||current.mode!=='notary'||!current.terms?.notaryArrangement||b.digest!==current.digest)throw new AuthError(409,'La propuesta notarial no coincide')
    if(current.terms.notaryArrangement.proposedBy===side)throw new AuthError(403,'Debe aceptar la contraparte')
    if(!current.notaryAcceptedAt)saved=(await tx.query('UPDATE matchter.project_contract_demos SET notary_accepted_at=now() WHERE request_id=$1 AND agreement_version=$2 AND revision=$3 AND notary_accepted_at IS NULL RETURNING '+fields,[id,agreement.version,revision])).rows[0]
+  }else if(['payNotaryDemo','authorizeNotaryDemo'].includes(b.action)){
+   if(!current||current.mode!=='notary'||b.digest!==current.digest||!current.notaryAcceptedAt||!current.clientSignedAt||!current.providerSignedAt)throw new AuthError(409,'Se requiere el acuerdo notarial y ambas firmas de prueba')
+   if(b.action==='payNotaryDemo'){
+    if(current.terms?.notaryArrangement?.payer!==side)throw new AuthError(403,'Solo paga el responsable acordado')
+    if(!current.notaryDemoPaidAt)saved=(await tx.query('UPDATE matchter.project_contract_demos SET notary_demo_paid_at=now(),notary_demo_fee=$4 WHERE request_id=$1 AND agreement_version=$2 AND revision=$3 AND notary_demo_paid_at IS NULL RETURNING '+fields,[id,agreement.version,revision,DEMO_NOTARY_FEE])).rows[0]
+   }else{
+    if(!current.notaryDemoPaidAt||current.notaryDemoFee!==DEMO_NOTARY_FEE)throw new AuthError(409,'Falta el pago simulado del responsable')
+    if(!current.notaryDemoAuthorizedAt)saved=(await tx.query('UPDATE matchter.project_contract_demos SET notary_demo_authorized_at=now() WHERE request_id=$1 AND agreement_version=$2 AND revision=$3 AND notary_demo_authorized_at IS NULL RETURNING '+fields,[id,agreement.version,revision])).rows[0]
+   }
   }else{
    if(!current||!modes.includes(current.mode)||b.digest!==current.digest)throw new AuthError(409,'La versión del documento no coincide')
    if(current.mode==='notary'&&(!current.terms?.notaryArrangement||!current.notaryAcceptedAt))throw new AuthError(409,'Ambas partes deben aceptar la modalidad y el responsable del costo notarial')
