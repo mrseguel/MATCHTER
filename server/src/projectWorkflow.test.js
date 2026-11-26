@@ -82,3 +82,8 @@ test('completed projects invite only the customer to rate the actual provider ro
  assert.equal(edited.events.at(-1).event.review.editable,false)
  assert.equal(workflowSnapshot({...args,side:'client',reviews,now:new Date(t(12)).getTime()+7*86400000}).next.title,'Calificación registrada')
 })
+
+test('new signed contract waits for unique service fee and records receipt without changing milestone amounts',()=>{
+ const fresh={...c,mode:'simple',terms:{serviceFee:{amount:2990}},notaryDemoAuthorizedAt:null};const w=snap('client',[fresh]);assert.equal(w.next.title,'Pagar tarifa MATCHTER');assert.equal(w.stagesAvailable,false);assert.equal(snap('provider',[fresh]).next.waiting,true);
+ const paid=snap('client',[{...fresh,serviceFeePaidAt:t(9)}]);assert.equal(paid.next.title,'Pagar etapa 1');assert.equal(paid.events.filter(e=>e.body==='Tarifa MATCHTER registrada').length,1)
+})
