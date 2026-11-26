@@ -3,7 +3,7 @@ import {CheckCircle2,Lock} from 'lucide-react'
 import {messagesRequest} from './messagesApi.js'
 const clp=n=>'$'+Number(n).toLocaleString('es-CL')+' CLP'
 const status=s=>s.releasedAt?'Pago liberado · demo':s.deliveredAt?'Pendiente de conformidad':s.fundedAt?'En ejecución · depósito simulado':'Pendiente de depósito'
-export function RealStageDemo({context,contract}){
+export function RealStageDemo({context,contract,onAdvance}){
  const {client,role,requestId}=context,side=role==='Cliente'?'client':'provider'
  const [state,setState]=useState(null),[busy,setBusy]=useState(false),[error,setError]=useState(''),[accepted,setAccepted]=useState(false)
  const alive=useRef(false),saving=useRef(false),loading=useRef(false),seq=useRef(0)
@@ -22,7 +22,7 @@ export function RealStageDemo({context,contract}){
   if(action==='fund'&&!window.confirm('¿Registrar depósito ficticio por '+clp(s.amount)+'? No se realizará ningún cargo.'))return
   saving.current=true;++seq.current;setBusy(true);setError('')
   try{const r=await messagesRequest(client,'stages',role,{requestId,action,agreementVersion:contract.agreementVersion,contractRevision:contract.revision,digest:contract.digest,stageNo:s.stageNo,accepted:true})
-   if(alive.current){setState(r);setAccepted(false)}
+   if(alive.current){setState(r);setAccepted(false);onAdvance?.()}
   }catch(e){if(alive.current)setError(e.message)}finally{saving.current=false;if(alive.current)setBusy(false)}
  }
  const s=state?.stages.find(x=>x.stageNo===state.currentStage)
