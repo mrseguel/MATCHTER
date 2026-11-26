@@ -2,6 +2,7 @@ import React,{useEffect,useRef,useState} from 'react'
 import {FileText,ShieldCheck,CheckCircle2,PenLine} from 'lucide-react'
 import {ContractDocument} from '../contracts/ContractFormal.jsx'
 import {messagesRequest} from './messagesApi.js'
+import {RealStageDemo} from './RealStageDemo.jsx'
 const options=[['simple','Firmar contrato simple','Sin costo de formalización · $0 CLP.'],['notary','Firmar y autorizar ante notario','Solo por acuerdo mutuo. El costo se acuerda entre las partes.']]
 export function RealContractDemo({context,agreement}){
  const {client,role,requestId}=context,side=role==='Cliente'?'client':'provider'
@@ -48,6 +49,7 @@ export function RealContractDemo({context,agreement}){
  <button type="button" className="btn" disabled={busy||!accepted||!front||!back||!selfie||!drawn} onClick={()=>save('confirm',{digest:contract.digest,accepted:true,identityDemo:true,identityChecks:{front,back,selfie}})}><PenLine size={17}/> Firmar contrato · demo</button></div>}
  {complete&&<div className="ct-success"><CheckCircle2 size={20}/>Ambas firmas de prueba registradas</div>}
  {complete&&contract.mode==='notary'&&<div className="ct-fee-summary"><h4>Trámite notarial · simulación</h4><div className="row sp"><span>Responsable acordado</span><b>{arrangement?.payer==='client'?'Cliente':'Prestador'}</b></div><div className="row sp"><span>Importe ficticio del trámite</span><b>{Number(contract.notaryDemo?.fee||0).toLocaleString('es-CL',{style:'currency',currency:'CLP'})}</b></div><p className="mut">Monto exclusivamente ilustrativo. No es una tarifa real, no se solicitan tarjetas y no se moverá dinero.</p>{contract.notaryDemo?.paidAt?<div className="ct-success"><CheckCircle2 size={18}/>Pago simulado registrado</div>:side===arrangement?.payer?<button type="button" className="btn" disabled={busy} onClick={()=>{if(window.confirm('¿Registrar el pago ficticio del trámite notarial? No se realizará ningún cargo.'))save('payNotaryDemo',{digest:contract.digest,accepted:true,demoAmount:contract.notaryDemo.fee})}}>Simular pago del trámite notarial</button>:<p className="mut">Esperando el pago simulado del responsable acordado.</p>}{contract.notaryDemo?.authorizedAt?<div className="ct-success"><CheckCircle2 size={18}/>Autorización notarial simulada · sin validez legal</div>:contract.notaryDemo?.paidAt?<button type="button" className="btn out" disabled={busy} onClick={()=>{if(window.confirm('Esta acción solo simula una autorización. No representa intervención notarial real.'))save('authorizeNotaryDemo',{digest:contract.digest,accepted:true})}}>Simular autorización notarial</button>:<p className="mut">La autorización de prueba requiere el pago simulado previo.</p>}</div>}
+ {complete&&(contract.mode==='simple'||contract.mode==='notary'&&contract.notaryDemo?.authorizedAt)&&<RealStageDemo key={contract.digest} context={context} contract={contract}/>}
  <p className="mut">Referencia de integridad: {contract.digest.slice(0,16)}… · no se habilitan pagos reales.</p></>}
  </>}{error&&<p role="alert" className="wf-error">{error}</p>}</div>
 }
