@@ -1,3 +1,4 @@
+import {readStageDemo,changeStageDemo} from './projectStageDemo.js'
 import {readContractDemo,changeContractDemo} from './projectContractDemo.js'
 import {readProjectAgreement,changeProjectAgreement} from './projectAgreement.js'
 import {AuthError,PROFILE_ROLES} from './identityAccounts.js'
@@ -51,6 +52,8 @@ export function createMessagesService({db,verifyIdentity}){
   return rid
  }
  return Object.freeze({
+  async stages(header,query){const a=await actor(header,query.role);return readStageDemo(db,a,id(query.requestId))},
+  async changeStage(header,body){const a=await actor(header,body?.role);return changeStageDemo(db,a,id(body.requestId),body)},
   async contract(header,query){const a=await actor(header,query.role);return readContractDemo(db,a,id(query.requestId))},
   async changeContract(header,body){const a=await actor(header,body?.role);return changeContractDemo(db,a,id(body.requestId),body)},
   async agreement(header,query){const a=await actor(header,query.role);return readProjectAgreement(db,a,id(query.requestId))},
