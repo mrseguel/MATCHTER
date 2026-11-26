@@ -11,7 +11,7 @@ function StageCard({stage:t,currentStage,complete}){
  return <div className="wf-stage" data-stage-state={released?'released':delivered?'delivered':paid?'funded':locked?'locked':'pending'} style={paid?{border:'1px solid #b7dfc5',borderLeft:'3px solid #16934a',borderRadius:10,padding:'10px 9px',margin:'6px 0'}:undefined}>
  <div style={{display:'flex',alignItems:'flex-start',gap:8,minWidth:0}}>
  <Icon size={21} color={paid?'#16934a':'#9299a4'} aria-hidden="true" style={{flexShrink:0,marginTop:1}}/>
- <div><b>Etapa {t.stageNo} · {t.title}</b><small>{t.date}</small><small style={{fontWeight:600,...(paid?{color:'#16803c'}:{})}}>{label}</small>{detail&&<small>{detail}</small>}</div>
+ <div><b>Etapa {t.stageNo} · {t.title}</b><small>{t.date}{t.physicalPercent!=null?' · Avance físico de la etapa: '+Number(t.physicalPercent).toLocaleString('es-CL',{maximumFractionDigits:2})+' %':''}</small><small style={{fontWeight:600,...(paid?{color:'#16803c'}:{})}}>{label}</small>{detail&&<small>{detail}</small>}</div>
  </div><b style={{whiteSpace:'nowrap',flexShrink:0}}>{clp(t.amount)}</b></div>
 }
 function ExecutionProgress({stages}){
