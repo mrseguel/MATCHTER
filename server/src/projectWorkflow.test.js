@@ -19,7 +19,7 @@ test('next action is contextual to each participant, never forces completed agre
  assert.equal(snap('provider').next.waiting,true)
  const s={agreementVersion:3,contractRevision:1,stageNo:1,amount:100,fundedAt:t(9)}
  assert.equal(snap('provider',[c],[s]).next.title,'Notificar entrega de etapa 1')
- assert.equal(snap('client',[c],[{...s,deliveredAt:t(10)}]).next.title,'Confirmar conformidad de etapa 1')
+ assert.equal(snap('client',[c],[{...s,deliveredAt:t(10)}]).next.title,'Confirmar entrega de etapa 1 y liberar pago')
  assert.equal(snap('client',[c],[{...s,deliveredAt:t(10),releasedAt:t(11)}]).next.title,'Pagar etapa 2')
  assert.equal(snap('client',[{...c,mode:'simple',notaryDemoAuthorizedAt:null}]).next.target,'stages')
 })
@@ -63,6 +63,14 @@ test('stage timeline includes recorded deposit and completed release, not indivi
  const delivered={...funded,deliveredAt:t(10)}
  assert.equal(snap('client',[c],[funded]).events.length,5)
  assert.equal(snap('client',[c],[delivered]).events.length,5)
- assert.equal(snap('client',[c],[delivered]).next.title,'Confirmar conformidad de etapa 1')
+ assert.equal(snap('client',[c],[delivered]).next.title,'Confirmar entrega de etapa 1 y liberar pago')
  assert.equal(snap('client',[c],[{...delivered,releasedAt:t(11)}]).events.length,6)
+})
+
+test('completed projects invite only the customer to rate the actual provider role',()=>{
+ const stages=a.data.stages.map((_,i)=>({agreementVersion:3,contractRevision:1,stageNo:i+1,amount:100,fundedAt:t(9),deliveredAt:t(10),releasedAt:t(11)}))
+ const args={agreements:[a],contracts:[c],stages,providerRole:'Empresa'}
+ assert.equal(workflowSnapshot({...args,side:'client'}).next.title,'Calificar a la empresa')
+ assert.equal(workflowSnapshot({...args,side:'provider'}).next.target,'stages')
+ assert.equal(workflowSnapshot({...args,side:'client',reviews:[{agreementVersion:3,contractRevision:1,score:5,createdAt:t(12)}]}).next.title,'Calificación registrada')
 })
