@@ -10,10 +10,14 @@ test('message validation rejects empty text and supplied actor IDs',()=>{
 test('accepted Match participants alone can read and send; retries are idempotent',async()=>{
  let accepted=false;const items=[]
  const roles={a:{id:a,role:'Cliente'},b:{id:b,role:'Profesional'},c:{id:c,role:'Cliente'}}
- const db={query:async(sql,p)=>{
+ const db={connect:async()=>({...db,release(){}}),query:async(sql,p)=>{
+  if(['BEGIN','COMMIT','ROLLBACK'].includes(sql))return {rows:[]}
+  if(sql.startsWith('SELECT sender_profile_id'))return {rows:accepted&&[a,b].includes(p[1])?[{senderId:a,recipientId:b}]:[]}
+  if(sql.startsWith('SELECT 1 FROM matchter.project_agreement_versions'))return {rows:[]}
+  if(sql.startsWith('SELECT m.id,m.body,m.sender_profile_id'))return {rows:items.filter(x=>x.body.startsWith('MATCHTER_REQUEST_V1:')).map(x=>({...x,senderId:x.sender,state:null,revision:null}))}
   if(sql.startsWith('SELECT p.id,p.role'))return {rows:[roles[p[1]]].filter(Boolean)}
   if(sql.startsWith('SELECT id FROM matchter.swipe_requests'))return {rows:accepted&&p[0]===r&&[a,b].includes(p[1])?[{id:r}]:[]}
-  if(sql.startsWith('INSERT INTO matchter.swipe_messages')){if(items.some(x=>x.sender===p[1]&&x.key===p[2]))return {rows:[]};const message={id:m,sender:p[1],key:p[2],body:p[3],me:true};items.push(message);return {rows:[message]}}
+  if(sql.startsWith('INSERT INTO matchter.swipe_messages')){if(items.some(x=>x.sender===p[1]&&x.key===p[2]))return {rows:[]};const message={id:items.length?String(items.length):m,sender:p[1],key:p[2],body:p[3],me:true};items.push(message);return {rows:[message]}}
   if(sql.includes('client_message_id=$3'))return {rows:items.filter(x=>x.sender===p[1]&&x.key===p[2])}
   if(sql.startsWith('SELECT m.id'))return {rows:items.map(x=>({...x,me:x.sender===p[1]}))}
   throw Error('Unexpected query')
@@ -31,12 +35,12 @@ test('accepted Match participants alone can read and send; retries are idempoten
  assert.equal((await s.history('b',{role:'Profesional',requestId:r})).messages[0].me,false)
  assert.equal((await s.history('a',{role:'Cliente',requestId:r})).messages[0].me,true)
  const quote={role:'Cliente',requestId:r,clientMessageId:c,request:{kind:'quote',note:'Materiales y mano de obra'}}
- const visit={role:'Profesional',requestId:r,clientMessageId:c,request:{kind:'visit',date:'2026-11-27',time:'10:00',note:'Revisar terreno'}}
+ const visit={role:'Profesional',requestId:r,clientMessageId:c,request:{kind:'visit',date:'2099-11-27',time:'10:00',note:'Revisar terreno'}}
  await assert.rejects(s.send('b',{...quote,role:'Profesional'}),e=>e.status===403)
  const q=(await s.send('a',quote)).message
  assert.equal(q.kind,'quote');assert.equal(q.request.note,'Materiales y mano de obra')
  const v=(await s.send('b',visit)).message
- assert.equal(v.kind,'visit');assert.equal(v.request.date,'2026-11-27')
+ assert.equal(v.kind,'visit');assert.equal(v.request.date,'2099-11-27')
  assert.equal((await s.send('b',visit)).message.request.time,'10:00')
  await assert.rejects(s.send('b',{...visit,request:{...visit.request,time:'11:00'}}),e=>e.status===409)
  const history=(await s.history('a',{role:'Cliente',requestId:r})).messages
