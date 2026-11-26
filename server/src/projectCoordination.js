@@ -28,10 +28,10 @@ export function cardView(s,side,closed,now=Date.now(),superseded=false){
  const reported=!!(mine||other),completed=mine?.outcome==='attended'&&other?.outcome==='attended'
  const disputed=!!(mine&&other&&!completed)
  const pending=s.proposal&&Date.parse(s.proposal.at)>now
- const canModify=!closed&&!superseded&&!reported&&(!s.scheduled||now<start-day)
+ const canModify=(!closed||!!s.scheduled)&&!superseded&&!reported&&(!s.scheduled||now<start-day)
  const status=s.kind==='quote'?(s.quote?'Cotización realizada':closed||superseded?'Solicitud cerrada sin cotización registrada':'Cotización pendiente'):
  completed?'Visita realizada':disputed?'Incidencia de visita registrada':reported?'Resultado informado por una de las partes':s.scheduled?(s.proposal&&canModify?'Cambio de horario pendiente':now>=start?'Visita pendiente de confirmar':now>=start-day?'Visita agendada · horario cerrado':'Visita agendada'):closed||superseded?'Solicitud cerrada sin visita agendada':pending?'Pendiente de aprobación':'Coordinar fecha y hora'
- return {...s,status,side,canQuote:s.kind==='quote'&&!s.quote&&!closed&&!superseded&&side==='provider',canPropose:s.kind==='visit'&&canModify,canAccept:s.kind==='visit'&&canModify&&!!pending&&s.proposal.by!==side,canReport:s.kind==='visit'&&!!s.scheduled&&now>=start&&!mine&&!superseded,cutoff:s.scheduled?new Date(start-day).toISOString():null}
+ return {...s,status,side,canQuote:s.kind==='quote'&&!s.quote&&!closed&&!superseded&&side==='provider',canPropose:s.kind==='visit'&&canModify,canAccept:s.kind==='visit'&&canModify&&!!pending&&s.proposal.by!==side&&(!s.scheduled||Date.parse(s.proposal.at)>=now+day),canReport:s.kind==='visit'&&!!s.scheduled&&now>=start&&!mine&&!superseded,cutoff:s.scheduled?new Date(start-day).toISOString():null}
 }
 export function transition(s,side,b,closed,now=Date.now(),superseded=false){
  if(!b||typeof b!=='object'||Object.keys(b).some(k=>!['role','requestId','messageId','expectedRevision','action','amount','detail','date','time','outcome','note'].includes(k)))fail(400,'Acción no válida')
