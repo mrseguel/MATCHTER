@@ -30,7 +30,7 @@ function ExecutionProgress({stages}){
  <text x="9" y="9" dy=".35em" textAnchor="middle" fontSize="9" fontWeight="700" fill={started>0?ring:gray}>{started}</text>
  </svg>}<span>{label}</span></div>
 }
-export function RealStageDemo({context,contract,onAdvance}){
+export function RealStageDemo({context,contract,onAdvance,onComplete}){
  const {client,role,requestId}=context,side=role==='Cliente'?'client':'provider'
  const [state,setState]=useState(null),[busy,setBusy]=useState(false),[error,setError]=useState(''),[accepted,setAccepted]=useState(false)
  const alive=useRef(false),saving=useRef(false),loading=useRef(false),seq=useRef(0)
@@ -49,7 +49,7 @@ export function RealStageDemo({context,contract,onAdvance}){
   if(action==='fund'&&!window.confirm('¿Registrar depósito ficticio por '+clp(s.amount)+'? No se realizará ningún cargo.'))return
   saving.current=true;++seq.current;setBusy(true);setError('')
   try{const r=await messagesRequest(client,'stages',role,{requestId,action,agreementVersion:contract.agreementVersion,contractRevision:contract.revision,digest:contract.digest,stageNo:s.stageNo,accepted:true})
-   if(alive.current){setState(r);setAccepted(false);onAdvance?.()}
+   if(alive.current){setState(r);setAccepted(false);onAdvance?.();if(action==='release'&&r.complete)onComplete?.()}
   }catch(e){if(alive.current)setError(e.message)}finally{saving.current=false;if(alive.current)setBusy(false)}
  }
  const s=state?.stages.find(x=>x.stageNo===state.currentStage)
