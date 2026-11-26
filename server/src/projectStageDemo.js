@@ -1,4 +1,4 @@
-import {serviceFeeReady} from './serviceFeeDemo.js'
+import {serviceFeeReady,bilateral,deferredDeduction} from './serviceFeeDemo.js'
 import {AuthError} from './identityAccounts.js'
 import {contractContext,DEMO_NOTARY_FEE} from './projectContractDemo.js'
 const cols='stage_no AS "stageNo",amount,funded_at AS "fundedAt",delivered_at AS "deliveredAt",released_at AS "releasedAt"'
@@ -11,7 +11,9 @@ async function rowsFor(db,id,a,c){return (await db.query('SELECT '+cols+' FROM m
 function state(a,c,rows){
  const stages=a.data.stages.map(([title,date,amount,physicalPercent],i)=>{const row=rows.find(r=>r.stageNo===i+1);return {stageNo:i+1,title,date,amount:Number(amount),...(physicalPercent==null?{}:{physicalPercent}),fundedAt:row?.fundedAt||null,deliveredAt:row?.deliveredAt||null,releasedAt:row?.releasedAt||null}})
  const currentStage=stages.find(s=>!s.releasedAt)?.stageNo||null
- return {demo:true,agreementVersion:a.version,contractRevision:c.revision,digest:c.digest,stages,currentStage,complete:currentStage===null}
+ const fee=bilateral(c)?c.terms.serviceFee:null
+ const stageViews=stages.map(s=>{const deduction=c.providerFeeStageNo===s.stageNo?fee?.amount||0:0;return {...s,providerFeeDeduction:deduction,providerNetReleased:s.releasedAt?s.amount-deduction:null,pendingProviderFeeDeduction:!s.releasedAt&&s.stageNo===currentStage?deferredDeduction(c,s):0}})
+ return {demo:true,serviceFee:fee?{amount:fee.amount,clientPaidAt:c.serviceFeePaidAt||null,providerMode:c.providerFeeMode,providerPaidAt:c.providerFeePaidAt||null,providerStageNo:c.providerFeeStageNo||null}:null,agreementVersion:a.version,contractRevision:c.revision,digest:c.digest,stages:stageViews,currentStage,complete:currentStage===null}
 }
 async function readyContext(db,actor,id,lock){const {side,agreement,current}=await contractContext(db,actor,id,lock);if(!stageReady(current))fail(409,'Primero formaliza el contrato de prueba');return {side,agreement,current}}
 export async function readStageDemo(db,actor,id){const {agreement,current}=await readyContext(db,actor,id,false);return state(agreement,current,await rowsFor(db,id,agreement,current))}
@@ -33,6 +35,7 @@ export async function changeStageDemo(db,actor,id,b){
    else if(b.action==='deliver'){if(!s.fundedAt)fail(409,'Primero registra el depósito simulado');saved=(await tx.query('UPDATE matchter.project_stage_demos SET delivered_at=now() WHERE request_id=$1 AND agreement_version=$2 AND contract_revision=$3 AND stage_no=$4 AND delivered_at IS NULL RETURNING '+cols,args)).rows[0]}
    else{if(!s.fundedAt||!s.deliveredAt)fail(409,'Primero registra la entrega de la etapa');saved=(await tx.query('UPDATE matchter.project_stage_demos SET released_at=now() WHERE request_id=$1 AND agreement_version=$2 AND contract_revision=$3 AND stage_no=$4 AND released_at IS NULL RETURNING '+cols,args)).rows[0]}
    if(!saved)fail(409,'No se pudo registrar la acción')
+   if(b.action==='release'&&deferredDeduction(current,s)>0){const receipt=(await tx.query('UPDATE matchter.project_contract_demos SET provider_fee_demo_paid_at=$4,provider_fee_demo_stage_no=$5 WHERE request_id=$1 AND agreement_version=$2 AND revision=$3 AND provider_fee_demo_mode=\'deferred\' AND provider_fee_demo_paid_at IS NULL RETURNING provider_fee_demo_paid_at AS "providerFeePaidAt",provider_fee_demo_stage_no AS "providerFeeStageNo"',[id,agreement.version,current.revision,saved.releasedAt,b.stageNo])).rows[0];if(!receipt)fail(409,'No se pudo registrar el descuento de tarifa');Object.assign(current,receipt)}
    const idx=rows.findIndex(r=>r.stageNo===b.stageNo);if(idx<0)rows.push(saved);else rows[idx]=saved
   }
   await tx.query('COMMIT');return state(agreement,current,rows)
