@@ -20,14 +20,15 @@ function Thread({client,role,thread,onBack}){
   }catch(e){if(alive.current)setError(e.message)}
   finally{inFlight.current=false;if(alive.current)setBusy(false)}
  }
- async function send(_id,text){
+ async function send(_id,input){
   if(sending.current)throw Error('Espera a que termine el envío anterior')
   if(!loaded.current)throw Error('Espera a que se cargue la conversación')
-  const body=text.trim()
-  if(!body)return
-  const key=retry.current?.body===body?retry.current.key:crypto.randomUUID()
-  retry.current={body,key};sending.current=true
-  try{const data=await messagesRequest(client,'send',role,{requestId:thread.id,clientMessageId:key,body})
+  const payload=typeof input==='string'?{body:input.trim()}:{request:input}
+  if(payload.body==='')return
+  const fingerprint=JSON.stringify(payload)
+  const key=retry.current?.fingerprint===fingerprint?retry.current.key:crypto.randomUUID()
+  retry.current={fingerprint,key};sending.current=true
+  try{const data=await messagesRequest(client,'send',role,{requestId:thread.id,clientMessageId:key,...payload})
    if(!data.message?.id)throw Error('El servidor no confirmó el envío')
    retry.current=null
    if(alive.current){setItems(prev=>merge(prev,[data.message]));setError('')}
