@@ -43,6 +43,9 @@ jobs:
             npm audit --json "${flags[@]}" > "/tmp/matchter-audit-$scope.json" || true
             node -e 'const fs=require("fs");const a=JSON.parse(fs.readFileSync(process.argv[1],"utf8"));if(a.error||!a.metadata){console.log("AUDIT_UNAVAILABLE",process.argv[2]);process.exit(0)};console.log("AUDIT_SCOPE",process.argv[2],JSON.stringify(a.metadata.vulnerabilities));for(const [name,v] of Object.entries(a.vulnerabilities||{})){console.log("AUDIT_DEP",JSON.stringify({name,severity:v.severity,isDirect:v.isDirect,range:v.range,fixAvailable:v.fixAvailable,nodes:v.nodes,via:v.via.map(x=>typeof x==="string"?x:{source:x.source,title:x.title,url:x.url,range:x.range})}))}' "/tmp/matchter-audit-$scope.json" "$scope"
           done
+      - name: Runtime dependency security gate
+        run: |
+          node -e 'const a=JSON.parse(require("fs").readFileSync("/tmp/matchter-audit-runtime.json","utf8"));const v=a.metadata?.vulnerabilities;if(a.error||!v||!Number.isInteger(v.high)||!Number.isInteger(v.critical)||v.high+v.critical>0){console.error("Runtime dependency security gate failed or audit unavailable");process.exit(1)};console.log("Runtime dependency security gate passed")'
       - name: Authenticated API and real isolated PostgreSQL
         env:
           MATCHTER_EPHEMERAL_QA: 'true'
