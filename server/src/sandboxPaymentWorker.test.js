@@ -22,3 +22,11 @@ test('errors never retry creation or bypass durable reservation',async()=>{
 test('reconciliation obtains saved checkout and a fresh provider response',async()=>{
  const {events,worker}=fixture();assert.deepEqual(await worker.reconcile(id),{status:'verified_test',realPayment:false});assert.deepEqual(events,['get','observe'])
 })
+
+test('Khipu-only worker rejects disabled provider before calling transport',async()=>{
+ const calls=[]
+ const worker=createSandboxPaymentWorker({mode:'isolated_test',providers:['khipu'],merchants:{khipu:'9876'},db:{query:async()=>({rows:[{...a,provider:'mercadopago',checkoutId:'pref-1',merchantId:'9876'}]})},attempts:{markDispatchUnknown:async()=>({...a,provider:'mercadopago'})},transport:{createCheckout:async()=>{calls.push('post')},readPayment:async()=>{calls.push('get')}},reconciliation:{}})
+ await assert.rejects(worker.dispatch(id,'owner'))
+ await assert.rejects(worker.reconcile(id))
+ assert.deepEqual(calls,[])
+})
