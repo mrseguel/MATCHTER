@@ -1,5 +1,6 @@
 import express from 'express'
 import pg from 'pg'
+import {createPaymentAvailabilityService} from './paymentAvailabilityService.js'
 import {createMessagesService} from './messagesService.js'
 import {createSwipeService} from './swipeService.js'
 import {createProfileDetailsService} from './profileDetails.js'
@@ -21,7 +22,8 @@ export function createAuthRouter(env=process.env, dependencies={}) {
     pool=new pg.Pool({connectionString:dbUrl.href,ssl:{rejectUnauthorized:true},max:2,connectionTimeoutMillis:8000,idleTimeoutMillis:3000,statement_timeout:5000,application_name:'matchter-auth-preview'})
     pool.on('error',()=>console.error('Matchter auth pool error'))
     const verifyIdentity=createIdentityVerifier({issuer:auth.origin,audience:auth.origin,jwksUrl:jwks.href,algorithms:['EdDSA']})
-    service={...createAccountService({db:pool,verifyIdentity}),profiles:createProfilesService({db:pool,verifyIdentity}),details:createProfileDetailsService({db:pool,verifyIdentity}),swipe:createSwipeService({db:pool,verifyIdentity}),messages:createMessagesService({db:pool,verifyIdentity})}
+    const paymentAvailability=env.MATCHTER_PAYMENT_POLICY_ENABLED==='true'?createPaymentAvailabilityService({db:pool,verifyIdentity}):null
+    service={...createAccountService({db:pool,verifyIdentity}),profiles:createProfilesService({db:pool,verifyIdentity}),details:createProfileDetailsService({db:pool,verifyIdentity}),swipe:createSwipeService({db:pool,verifyIdentity}),paymentAvailability,messages:createMessagesService({db:pool,verifyIdentity,paymentModeForNewContract:paymentAvailability?.modeForNewContract})}
     return service
   }
   router.use((req,res,next)=>{
@@ -40,6 +42,10 @@ export function createAuthRouter(env=process.env, dependencies={}) {
     try{const svc=dependencies.service||configuredService();return res.json(await fn(svc,req))}
     catch(error){if(error instanceof AuthError)return res.status(error.status).json({message:error.message});console.error('Matchter auth request failed');return res.status(503).json({message:'Autenticación temporalmente no disponible'})}
   }
+  const paymentAdmin=s=>{if(!s.paymentAvailability)throw new AuthError(404,'Configuración no disponible');return s.paymentAvailability}
+  router.get('/admin/payments/access',handle((s,r)=>paymentAdmin(s).access(r.get('authorization'))))
+  router.get('/admin/payments',handle((s,r)=>paymentAdmin(s).get(r.get('authorization'))))
+  router.post('/admin/payments',handle((s,r)=>paymentAdmin(s).save(r.get('authorization'),r.body)))
   router.get('/me',handle((svc,req)=>svc.me(req.get('authorization'))))
   router.post('/onboard',handle((svc,req)=>svc.onboard(req.get('authorization'),req.body)))
   router.get('/profiles',handle((svc,req)=>svc.profiles.list(req.get('authorization'))))
