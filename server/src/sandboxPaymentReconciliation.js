@@ -1,3 +1,4 @@
+import {sandboxMerchants} from './sandboxProviderSelection.js'
 import {AuthError} from './identityAccounts.js'
 import {readCheckoutResponse,verifyProviderPayment} from './paymentProviderContracts.js'
 const uuid=/^[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}$/i
@@ -20,9 +21,9 @@ export function assertPreferenceLink(order,checkoutId,paymentId,payment,merchant
 }
 // Internal QA worker, deliberately no network transport, public endpoints or live mode.
 // Callers may supply fixture responses only until an authenticated server transport exists.
-export function createSandboxReconciliation({db,mode,merchants}){
- if(mode!=='isolated_test'||!merchants||!['khipu','mercadopago'].every(p=>typeof merchants[p]==='string'&&/^\d{1,20}$/.test(merchants[p])))throw Error('Sandbox reconciliation requires isolated test merchants')
- const configured=Object.freeze({khipu:merchants.khipu,mercadopago:merchants.mercadopago})
+export function createSandboxReconciliation({db,mode,merchants,providers}){
+ if(mode!=='isolated_test')throw Error('Sandbox reconciliation requires isolated test merchants')
+ const configured=sandboxMerchants(merchants,providers)
  async function tx(id,fn){
   if(typeof id!=='string'||!uuid.test(id))fail(400,'Intento inválido')
   const q=await db.connect()
@@ -30,6 +31,7 @@ export function createSandboxReconciliation({db,mode,merchants}){
    await q.query('BEGIN')
    const a=(await q.query('SELECT id,request_id,owner_profile_id,provider,amount_clp FROM matchter.sandbox_payment_attempts WHERE id=$1',[id])).rows[0]
    if(!a)fail(404,'Intento no disponible')
+   if(!Object.hasOwn(configured,a.provider))fail(409,'Proveedor de prueba no habilitado')
    await q.query("SELECT pg_advisory_xact_lock(hashtextextended('sandbox-fee:'||$1::text||':'||$2::text,0))",[a.request_id,a.owner_profile_id])
    const slot=(await q.query('SELECT attempt_id FROM matchter.sandbox_payment_slots WHERE request_id=$1 AND owner_profile_id=$2',[a.request_id,a.owner_profile_id])).rows[0]
    if(slot?.attempt_id!==id)fail(409,'Intento no activo')
