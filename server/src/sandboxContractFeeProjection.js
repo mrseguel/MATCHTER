@@ -16,11 +16,13 @@ export function projectSandboxFees(current,rows){
  return {...current,serviceFeePaidAt:client.paidAt,providerFeePaidAt:provider.paidAt,providerFeeMode:provider.paidAt?'upfront':null,providerFeeStageNo:null,sandboxFeeVerification:{client:client.status,provider:provider.status,realPayment:false}}
 }
 export function createSandboxContractFeeProjection({db,mode}={}){
- if(mode!=='isolated_test'||typeof db?.query!=='function')throw Error('Isolated QA projection required')
+ const scopes={isolated_test:{role:'matchter_payment_qa_app',branch:'br-royal-mud-b648tp0j'},isolated_dispute_test:{role:'matchter_dispute_qa_app',branch:'br-lively-frog-b691adhk'}}
+ if(!Object.hasOwn(scopes,mode)||typeof db?.query!=='function')throw Error('Isolated QA projection required')
+ const expected=scopes[mode]
  return async function project(actor,id,current,{query=db,lock=false}={}){
   if(!current)return current
   const scope=(await query.query("SELECT current_database() AS database,current_user AS role,current_setting('neon.branch_id',true) AS branch,rolcreatedb OR rolcreaterole OR rolsuper OR rolbypassrls AS elevated FROM pg_roles WHERE rolname=current_user")).rows[0]
-  if(scope?.database!=='matchter_payment_qa'||scope.role!=='matchter_payment_qa_app'||scope.branch!=='br-royal-mud-b648tp0j'||scope.elevated!==false)throw Error('QA isolation failed')
+  if(scope?.database!=='matchter_payment_qa'||scope.role!==expected.role||scope.branch!==expected.branch||scope.elevated!==false)throw Error('QA isolation failed')
   const fixture=(await query.query(`SELECT r.sender_profile_id AS client,r.recipient_profile_id AS provider
    FROM matchter.swipe_requests r JOIN matchter.account_profiles cp ON cp.id=r.sender_profile_id JOIN matchter.accounts ca ON ca.id=cp.account_id
    JOIN matchter.account_profiles pp ON pp.id=r.recipient_profile_id JOIN matchter.accounts pa ON pa.id=pp.account_id
@@ -42,7 +44,7 @@ export function createSandboxContractFeeProjection({db,mode}={}){
   const projected=projectSandboxFees(current,rows)
   // This preview resumes only the existing, verified pending QA checkout for its owner.
   const own=rows.find(x=>x.ownerId===actor.id&&x.status==='pending'&&x.bound&&x.amount===current.terms?.serviceFee?.amount)
-  const checkout=own?.attemptId==='ec445481-b1e5-4dee-9c49-681a937de52c'&&own.checkoutId==='npugxixinbuh'?'https://khipu.com/payment/info/npugxixinbuh':null
+  const checkout=mode==='isolated_test'&&own?.attemptId==='ec445481-b1e5-4dee-9c49-681a937de52c'&&own.checkoutId==='npugxixinbuh'?'https://khipu.com/payment/info/npugxixinbuh':null
   return {...projected,sandboxFeeCheckout:checkout}
  }
 }

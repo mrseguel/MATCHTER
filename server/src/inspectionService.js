@@ -52,7 +52,7 @@ export async function inspectionCaseRecord(q,claimId){
  const record=view(r,rows.map(row=>{const {fingerprint,...event}=row.data;return {id:row.id,...event}}),{profileId:null})
  return {...record,awarded:true,events,limitations:['Registro de prueba. No acredita pago ni visita de manera independiente.','Informe técnico sin firma profesional ni archivos originales adjuntos.','No constituye orden de deducción o liberación de fondos.']}
 }
-export function createInspectionService({db,verifyIdentity,attachmentsEnabled=false}){
+export function createInspectionService({db,verifyIdentity,attachmentsEnabled=false,clock=Date.now}){
  const getActor=(q,header,role)=>actor(q,verifyIdentity,header,role)
  const attachmentFields='id,filename,media_type AS "mediaType",octet_length(bytes) AS size,sha256,created_at AS "createdAt"'
  async function attachmentAccess(q,header,query,mediator=false){
@@ -180,7 +180,7 @@ export function createInspectionService({db,verifyIdentity,attachmentsEnabled=fa
       if((await tx.query('SELECT 1 FROM matchter.inspection_attachments WHERE order_id=$1 LIMIT 1',[r.id])).rows[0])fail(409,'Ya existen evidencias de inspección. Solicita revisión administrativa.')
       await tx.query('UPDATE matchter.inspection_awards SET cancelled_at=now(),cancelled_by=$2,cancellation_reason=$3 WHERE order_id=$1 AND cancelled_at IS NULL',[r.id,a.profileId,body.input.reason.trim()])
       event={action:'cancel',reason:body.input.reason.trim(),author:a.profileId===r.inspectorProfileId?'inspector':'requester'}
-     }else try{event=nextInspectionEvent({order,events:await eventsFor(tx,r.id),actor:a,action:body.action,input:body.input})}catch(e){if([400,403,409].includes(e.status))fail(e.status,e.message);throw e}
+     }else try{event=nextInspectionEvent({order,events:await eventsFor(tx,r.id),actor:a,action:body.action,input:body.input,now:clock()})}catch(e){if([400,403,409].includes(e.status))fail(e.status,e.message);throw e}
      if(event.action==='report'&&award?.id!==r.id)fail(403,'Solo el inspector seleccionado puede presentar el informe')
      if(event.action==='accept')await tx.query('INSERT INTO matchter.inspection_awards(claim_id,order_id) VALUES($1,$2)',[r.caseId,r.id])
      await tx.query('INSERT INTO matchter.inspection_order_events(order_id,actor_profile_id,submission_id,data) VALUES($1,$2,$3,$4)',[r.id,a.profileId,body.submissionId,JSON.stringify({...event,fingerprint})])
