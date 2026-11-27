@@ -8,10 +8,14 @@ export function premiumQuote(amount){
 export const reasons={quality_scope:'Calidad de los trabajos',delay:'Retraso en la entrega',nonperformance:'Trabajo incompleto o incumplimiento',payment_disagreement:'Problemas con el pago',communication:'Problemas de comunicación',other:'Otro problema'}
 export function caseCode(c){return 'REC-'+String(c.id).toUpperCase()}
 export function claimState(c,d){
- const status=d?.inspectionResolution?.status||d?.status||c.status
+ const status=d?.formal?.status||d?.inspectionResolution?.status||d?.status||c.status
  if(status==='closed_with_agreement')return {finished:true,title:'Cerrado con acuerdo',hint:'Ambas partes aceptaron la solución.',tone:'success'}
  if(status==='closed_without_agreement'&&!d?.inspectionRequested?.length)return {finished:true,title:'Cerrado sin acuerdo',hint:'Consulta las alternativas disponibles.',tone:'neutral'}
  if(status==='closed_without_agreement')return {finished:false,title:'Evaluación técnica',hint:'Consulta los antecedentes de la inspección.',tone:'pending'}
+ if(status==='awaiting_receipt')return {finished:false,title:'Esperando confirmación de recepción',hint:'El reclamo está registrado.',tone:'pending'}
+ if(status==='awaiting_response')return {finished:false,title:'Esperando respuesta',hint:'La contraparte ha confirmado la recepción.',tone:'pending'}
+ if(status==='response_overdue')return {finished:false,title:'Plazo de respuesta vencido',hint:'Corresponde evaluar una revisión administrativa, sin prejuzgar el reclamo.',tone:'pending'}
+ if(status==='in_dialogue')return {finished:false,title:'Buscando una solución',hint:'Consulta las respuestas y propuestas registradas.',tone:'pending'}
  if(status==='received')return {finished:false,title:'Reclamo recibido',hint:'El caso está registrado. Aún no tiene actuaciones.',tone:'pending'}
  if(status==='review')return {finished:false,title:'En revisión',hint:'MATCHTER está revisando los antecedentes.',tone:'pending'}
  if(status==='invited')return {finished:false,title:'Invitación a mediación',hint:'Consulta la participación de ambas partes.',tone:'pending'}

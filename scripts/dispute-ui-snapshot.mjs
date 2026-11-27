@@ -6,6 +6,7 @@ import {createSandboxContractFeeProjection} from '../server/src/sandboxContractF
 import {readStageDemo} from '../server/src/projectStageDemo.js'
 import {listStageClaims} from '../server/src/stageClaimsService.js'
 import {createMediationService} from '../server/src/mediationService.js'
+import {createFormalClaimService} from '../server/src/formalClaimService.js'
 import {createInspectionService} from '../server/src/inspectionService.js'
 let db,phase='scope'
 try{
@@ -22,16 +23,17 @@ try{
  const r=(await db.query("SELECT r.id,r.sender_profile_id,r.recipient_profile_id FROM matchter.sandbox_payment_attempts a JOIN matchter.swipe_requests r ON r.id=a.request_id WHERE a.id=$1 AND r.details->>'projectTitle'='MATCHTER Khipu external QA webhook 3'",['404caf87-a133-4901-ae61-e6393bda0657'])).rows[0]
  assert.equal(r.sender_profile_id,actors.client.id);assert.equal(r.recipient_profile_id,actors.provider.id)
  const verifyIdentity=async h=>{assert.ok(rows.some(x=>x.subject===h));return {issuer,subject:h}}
+ const formal=createFormalClaimService({db,verifyIdentity})
  const med=createMediationService({db,verifyIdentity,inspectionsEnabled:true}),ins=createInspectionService({db,verifyIdentity}),opts={sandboxFeeProjection:createSandboxContractFeeProjection({db,mode:'isolated_dispute_test'})}
  const data={views:{}},caseId='28b6d099-ead9-48a2-b3f3-2c595f854191',orderId='ebcfa872-e496-476c-b1a6-9cd585de903e'
  phase='participants'
  for(const key of ['client','provider']){
   const a=actors[key],claims=await listStageClaims(db,a,r.id),stages=await readStageDemo(db,a,r.id,opts)
   assert.equal(claims.claims.length,2);assert.ok(claims.claims.every(c=>c.requestId===r.id&&c.description.startsWith('Reclamo ficticio QA:')))
-  const v={role:a.role,claims,stages,thread:{id:r.id,project:'Proyecto contractual de prueba',peerName:key==='client'?'Maestro ficticio':'Cliente ficticio',peerRole:key==='client'?'Maestro o contratista':'Cliente'},cases:{},exports:{},inspections:{},conversations:{}}
-  for(const c of claims.claims){const q={role:a.role,claimId:c.id};v.cases[c.id]=await med.get(a.subject,q);v.exports[c.id]=await med.exportCase(a.subject,q);if(c.id===caseId){assert.equal(v.cases[c.id].inspectionResolution.status,'closed_with_agreement');v.inspections[c.id]=await ins.caseView(a.subject,q);assert.equal(v.inspections[c.id].orders.length,1);if(key==='client')v.conversations[orderId]=await ins.conversation(a.subject,{role:a.role,orderId})}}
+  const v={role:a.role,claims,stages,thread:{id:r.id,project:'Proyecto contractual de prueba',peerName:key==='client'?'Maestro ficticio':'Cliente ficticio',peerRole:key==='client'?'Maestro o contratista':'Cliente'},cases:{},formal:{},exports:{},inspections:{},conversations:{}}
+  for(const c of claims.claims){const q={role:a.role,claimId:c.id};v.cases[c.id]=await med.get(a.subject,q);const f=await formal.get(a.subject,q);if(f.status!=='not_open'){assert.equal(f.closed,true);assert.equal(f.events.length,8);v.formal[c.id]=f;}v.exports[c.id]=await med.exportCase(a.subject,q);if(c.id===caseId){assert.equal(v.cases[c.id].inspectionResolution.status,'closed_with_agreement');v.inspections[c.id]=await ins.caseView(a.subject,q);assert.equal(v.inspections[c.id].orders.length,1);if(key==='client')v.conversations[orderId]=await ins.conversation(a.subject,{role:a.role,orderId})}}
   if(key==='provider'){assert.equal(v.inspections[caseId].orders[0].quote,null);assert.equal(v.inspections[caseId].orders[0].scope,null);assert.deepEqual(v.inspections[caseId].orders[0].messages,[])}
-  data.views[key]=v
+  assert.equal(Object.keys(v.formal).length,1);data.views[key]=v
  }
  phase='mediator'
  const m=actors.mediator,queue=await med.queue(m.subject);assert.equal(queue.cases.length,2);assert.ok(queue.cases.every(c=>c.requestId===r.id))
