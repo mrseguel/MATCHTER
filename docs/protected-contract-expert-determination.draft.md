@@ -16,3 +16,6 @@ Las partes acuerdan, antes de firmar, un procedimiento de determinación técnic
 7. Los honorarios, límites, plazos y mecanismo vinculante requieren revisión por abogado chileno y entidad financiera; no hay custodia real implementada. El flujo protegido permanecerá bloqueado. No aplicar descuentos reales ni cambiar Neon o beta publicada.
 
 Fuentes: Código Civil art. 2002; Ley 19.496 art. 16 (BCN). Este documento es una especificación de producto y borrador de cláusula, no asesoramiento jurídico definitivo.
+
+## Plazo ordinario aprobado como propuesta de producto
+30 días hábiles, contados desde el día siguiente a la recepción del reclamo: mediación 5, selección y contratación 5, inspección e informe 10, observaciones 5, resolución o derivación 5. Calendario chileno de lunes a viernes con feriados aplicables verificados antes del uso real. El módulo `server/src/protectedDisputePolicy.js` calcula fechas de planificación y avisa de vencimiento, nunca autoriza movimientos de dinero. Aún no se aplica a contratos reales, casos existentes ni demos antiguas. Al vencer el plazo sin solución válida, revisar y derivar al procedimiento externo previsto; no presumir aceptación ni liberar o deducir fondos automáticamente.
