@@ -1,3 +1,4 @@
+import {readWalletHistory} from './walletHistory.js'
 import {readCoordination,changeCoordination,coordinationContext,coordinationView,chileTime} from './projectCoordination.js'
 import {readReviewDemo,changeReviewDemo} from './projectReviewDemo.js'
 import {readWorkflow} from './projectWorkflow.js'
@@ -40,7 +41,7 @@ export function validateMessage(body){
  return {...ids,body:message}
 }
 const cols='m.id,m.body,m.created_at AS "createdAt",(m.sender_profile_id=$2) AS me'
-export function createMessagesService({db,verifyIdentity,paymentModeForNewContract,claimsEnabled=false}){
+export function createMessagesService({db,verifyIdentity,paymentModeForNewContract,claimsEnabled=false,walletEnabled=false}){
  async function actor(header,expected){
   const identity=await verifyIdentity(header)
   if(!PROFILE_ROLES.includes(expected))throw new AuthError(400,'Perfil no válido')
@@ -56,6 +57,7 @@ export function createMessagesService({db,verifyIdentity,paymentModeForNewContra
   return rid
  }
  return Object.freeze({
+  async wallet(header,query){if(!walletEnabled)throw new AuthError(404,'Wallet aún no disponible');return readWalletHistory(db,await actor(header,query.role))},
   async coordination(header,query){const a=await actor(header,query.role);return readCoordination(db,a,id(query.requestId))},
   async changeCoordination(header,body){const a=await actor(header,body?.role);id(body.messageId);return changeCoordination(db,a,id(body.requestId),body)},
   async review(header,query){const a=await actor(header,query.role);return readReviewDemo(db,a,id(query.requestId))},
