@@ -8,10 +8,11 @@ import {createRoot} from 'react-dom/client'
 import {StageClaimsPanel} from './client/src/features/auth/StageClaimsPanel.jsx'
 import {MediationPanel} from './client/src/features/auth/MediationPanel.jsx'
 import {InspectorInbox} from './client/src/features/auth/InspectionPanel.jsx'
+import {RealWallet} from './client/src/features/auth/RealWallet.jsx'
 const root=createRoot(document.getElementById('root'))
 window.mountQA=({view,token,role,claimId,requestId})=>{
  const client={getJWTToken:async()=>token}
- root.render(view==='claims'?<StageClaimsPanel client={client} role={role} thread={{id:requestId,project:'Obra QA',peerName:'Contraparte QA',peerRole:'Perfil de prueba'}} onBack={()=>{}}/>:view==='inspector'?<InspectorInbox client={client} role={role} onBack={()=>{}}/>:<MediationPanel client={client} role={role} claimId={claimId} mediator={view==='mediator'} onBack={()=>{}}/>)
+ root.render(view==='wallet'?<RealWallet client={client} role={role} onBack={()=>{}} onOpenContract={()=>{}}/>:view==='claims'?<StageClaimsPanel client={client} role={role} thread={{id:requestId,project:'Obra QA',peerName:'Contraparte QA',peerRole:'Perfil de prueba'}} onBack={()=>{}}/>:view==='inspector'?<InspectorInbox client={client} role={role} onBack={()=>{}}/>:<MediationPanel client={client} role={role} claimId={claimId} mediator={view==='mediator'} onBack={()=>{}}/>)
 }
 window.unmountQA=()=>root.unmount()
 `
@@ -81,5 +82,21 @@ export async function verifyCaseInterface({actors,winner,claimId,requestId,base,
   await wait(()=>has('Revisión cerrada con acuerdo registrado')&&has('informe-qa.pdf'),'mediator case')
   assert.equal(has('QA_UI_PRIVATE_MESSAGE'),false);assert.equal(has('PRIVATE_QA_TEXT'),false);assert.equal(has('Honorarios:'),false)
  })
+ for(const who of ['client','provider']){
+  await open(who,'wallet',async({root,wait,has,click})=>{
+   await wait(()=>has('Pago de prueba registrado')&&has('Tarifa de servicio MATCHTER'),'own wallet record')
+   assert.equal(root.querySelectorAll('article').length,1)
+   assert.ok(has('no hay dinero disponible'))
+   await click('Pendientes')
+   await wait(()=>has('No hay movimientos en esta sección.'),'pending filter')
+   await click('Registrados')
+   await wait(()=>root.querySelectorAll('article').length===1,'recorded filter')
+  })
+ }
+ await open('alternative','wallet',async({root,wait,has})=>{
+  await wait(()=>has('No hay movimientos en esta sección.'),'unrelated profile empty wallet')
+  assert.equal(root.querySelectorAll('article').length,0)
+ })
+ console.log('AUTHENTICATED WALLET UI QA PASSED: own fee records, filters and unrelated profile isolation')
  console.log('AUTHENTICATED CASE UI QA PASSED: client, provider, selected inspector and mediator; real React DOM and HTTP; private messages not shared')
 }
