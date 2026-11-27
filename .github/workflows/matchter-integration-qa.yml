@@ -14,6 +14,15 @@ jobs:
     if: github.event.pull_request.head.repo.full_name == github.repository && github.event.pull_request.head.ref == 'feat/payment-mode-foundation'
     runs-on: ubuntu-latest
     timeout-minutes: 12
+    services:
+      postgres:
+        image: postgres:18
+        env:
+          POSTGRES_DB: matchter_qa
+          POSTGRES_PASSWORD: qa_local_only
+        ports:
+          - 5432:5432
+        options: --health-cmd "pg_isready -U postgres -d matchter_qa" --health-interval 5s --health-timeout 5s --health-retries 10
     steps:
       - uses: actions/checkout@v4
         with:
@@ -25,3 +34,7 @@ jobs:
       - run: npm install --no-audit --no-fund
       - name: Existing beta build, test suites and smoke checks
         run: node scripts/build-demo.cjs
+      - name: Authenticated API and real isolated PostgreSQL
+        env:
+          MATCHTER_EPHEMERAL_QA: 'true'
+        run: node scripts/qa-authenticated-db.mjs
