@@ -3,10 +3,12 @@ BEGIN;
 ALTER TABLE matchter.inspection_orders DROP CONSTRAINT IF EXISTS inspection_orders_claim_id_key;
 ALTER TABLE matchter.inspection_orders ADD CONSTRAINT inspection_conversation_unique UNIQUE(claim_id,requester_profile_id,inspector_profile_id);
 -- One accepted inspection per case, independent of how many conversations exist.
+ALTER TABLE matchter.inspection_orders ADD CONSTRAINT inspection_case_order_unique UNIQUE(claim_id,id);
 CREATE TABLE IF NOT EXISTS matchter.inspection_awards (
  claim_id uuid PRIMARY KEY REFERENCES matchter.stage_claims(id),
  order_id uuid NOT NULL UNIQUE REFERENCES matchter.inspection_orders(id),
- accepted_at timestamptz NOT NULL DEFAULT now()
+ accepted_at timestamptz NOT NULL DEFAULT now(),
+ FOREIGN KEY(claim_id,order_id) REFERENCES matchter.inspection_orders(claim_id,id)
 );
 -- Preserve existing accepted trial orders if migration 023 was already applied.
 INSERT INTO matchter.inspection_awards(claim_id,order_id)
