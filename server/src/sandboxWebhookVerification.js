@@ -2,7 +2,8 @@ import {createHmac,timingSafeEqual,createHash} from 'node:crypto'
 // Pure verification only; no route, database mutation, or external requests.
 // Khipu signs the original bytes. MP signs the query resource ID and request headers.
 // Both are signals to re-fetch the resource, NEVER proof of payment.
-const invalid=()=>{throw Error('Notificación de prueba no válida')}
+export class SandboxNotificationError extends Error {}
+const invalid=()=>{throw new SandboxNotificationError('Notificación de prueba no válida')}
 const maxBytes=256*1024
 const maxSkew=5*60*1000
 const id=/^[0-9]{1,20}$/
