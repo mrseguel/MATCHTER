@@ -1,3 +1,4 @@
+import {inspectionResolutionState,isInspectionResolutionAction,checkInspectionResolutionAction} from './inspectionResolution.js'
 import {inspectionCaseRecord} from './inspectionService.js'
 import {signedDisputeReminder} from './signedDisputeReminder.js'
 import {AuthError} from './identityAccounts.js'
@@ -25,7 +26,9 @@ async function detail(q,claimId,actor,inspectionsEnabled=false){
  const signed=(await q.query('SELECT revision,agreement_version AS "agreementVersion",terms,digest,client_signed_at AS "clientSignedAt",provider_signed_at AS "providerSignedAt" FROM matchter.project_contract_demos WHERE request_id=$1 AND agreement_version=$2 AND revision=$3 AND digest=$4',[c.requestId,claim.agreementVersion,claim.contractRevision,claim.digest])).rows[0]
  const contractReminder=signedDisputeReminder(claim,signed)
  const inspection=inspectionsEnabled?await inspectionCaseRecord(q,c.id):null
- return {id:c.id,requestId:c.requestId,claim,createdAt:c.createdAt,side,contractReminder,inspection,...mediationState(events)}
+ const reportId=inspection?.events.find(e=>e.action==='report')?.id
+ const inspectionResolution=claim.mode==='direct'?inspectionResolutionState(events,reportId):null
+ return {id:c.id,requestId:c.requestId,claim,createdAt:c.createdAt,side,contractReminder,inspection,inspectionResolution,...mediationState(events)}
 }
 export function createMediationService({db,verifyIdentity,inspectionsEnabled=false}){
  async function actor(header,role,mediator,q=db){
@@ -63,7 +66,13 @@ export function createMediationService({db,verifyIdentity,inspectionsEnabled=fal
     else{
      const events=await eventsFor(tx,body.claimId)
      let event
-     try{event=checkMediationAction({events,side,action:body.action,text:body.text,reference:body.reference,mode:c.data.mode})}catch(e){if([400,403,409].includes(e.status))fail(e.status,e.message);throw e}
+     try{
+      if(isInspectionResolutionAction(body.action)){
+       const inspection=inspectionsEnabled?await inspectionCaseRecord(tx,c.id):null
+       if(mediator&&inspection&&(await tx.query('SELECT 1 FROM matchter.account_profiles WHERE id=$1 AND account_id=$2',[inspection.inspector.profileId,a.accountId])).rows[0])fail(403,'El inspector no puede mediar su propio informe')
+       event=checkInspectionResolutionAction({events,reportId:inspection?.events.find(e=>e.action==='report')?.id,side,action:body.action,text:body.text,reference:body.reference,mode:c.data.mode,mediationStatus:mediationState(events).status})
+      }else event=checkMediationAction({events,side,action:body.action,text:body.text,reference:body.reference,mode:c.data.mode})
+     }catch(e){if([400,403,409].includes(e.status))fail(e.status,e.message);throw e}
      await tx.query('INSERT INTO matchter.stage_claim_events(claim_id,actor_account_id,actor_profile_id,submission_id,data) VALUES($1,$2,$3,$4,$5)',[body.claimId,a.accountId,a.profileId??null,body.submissionId,JSON.stringify({...event,fingerprint})])
     }
     const result=await detail(tx,body.claimId,a,inspectionsEnabled)
