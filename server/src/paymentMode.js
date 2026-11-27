@@ -4,8 +4,23 @@ export const BASE_FEE_CLP = 2990;
 
 // Called on the server only, from verified provider configuration (never client input).
 // Persist the returned mode on NEW contracts; existing contracts require explicit migration.
-export function choosePaymentMode({ verifiedCustody = false } = {}) {
-  return verifiedCustody === true ? PAYMENT_MODE.PROTECTED : PAYMENT_MODE.DIRECT;
+export function choosePaymentMode({ selectedMode = PAYMENT_MODE.DIRECT, verifiedCustody = false } = {}) {
+  if (!Object.values(PAYMENT_MODE).includes(selectedMode)) throw new Error('Unknown payment mode');
+  if (selectedMode === PAYMENT_MODE.PROTECTED && verifiedCustody !== true) throw new Error('Verified custody unavailable');
+  return selectedMode;
+}
+
+// Authorization inputs must come from the authenticated server session and verified
+// integration status, not from the administrator's request body. Persistence and audit
+// of the change belong to the future administrator endpoint.
+export function validateAdminPaymentModeChange({ isAdmin = false, currentMode = PAYMENT_MODE.DIRECT,
+  requestedMode, verifiedCustody = false } = {}) {
+  if (isAdmin !== true) throw new Error('Administrator required');
+  if (!Object.values(PAYMENT_MODE).includes(currentMode) ||
+      !Object.values(PAYMENT_MODE).includes(requestedMode)) throw new Error('Unknown payment mode');
+  const selectedMode = choosePaymentMode({ selectedMode: requestedMode, verifiedCustody });
+  return { selectedMode, previousMode: currentMode, changed: currentMode !== selectedMode,
+    appliesTo: 'new-contracts-only' };
 }
 
 export function paymentPlan({ mode = PAYMENT_MODE.DIRECT, stageAmounts, clientFeeConfirmed = false,
