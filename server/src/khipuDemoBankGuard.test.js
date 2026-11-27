@@ -35,3 +35,16 @@ test('guard refuses unconfirmed account, external hosts, callbacks and forced ot
  await assert.rejects(guard(base+'/v3/payments',{...opts,body:JSON.stringify({...body,bank_id:'real1'})}))
  assert.equal(calls,1)
 })
+
+test('accept documented numeric minimum and observed decimal-string minimum without coercing invalid values',async()=>{
+ for(const min_amount of [0,'0','1000','1000.0000','2990.00']){
+  let post=0
+  const guard=make(async(u,o)=>u.endsWith('/banks')?json([{...demo,min_amount}]):(post++,new Response('{}')))
+  await guard(base+'/v3/payments',opts);assert.equal(post,1)
+ }
+ for(const min_amount of ['', ' ', '1e3', '1,000', '2990.0001','3000','-1',null,false,[],{},'Infinity','NaN']){
+  let post=0
+  const guard=make(async(u,o)=>u.endsWith('/banks')?json([{...demo,min_amount}]):(post++,new Response('{}')))
+  await assert.rejects(guard(base+'/v3/payments',opts));assert.equal(post,0)
+ }
+})
