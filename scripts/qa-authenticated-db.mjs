@@ -1,6 +1,6 @@
 // End-to-end HTTP QA, exclusively on an empty local PostgreSQL service in CI.
 import assert from 'node:assert/strict'
-import {randomUUID,createHash} from 'node:crypto'
+import {randomUUID,createHash,createHmac} from 'node:crypto'
 import {request} from 'node:http'
 // Native fetch rewrites Host; use the actual HTTP client to exercise the host/origin gate.
 function fetch(url,options={}){return new Promise((resolve,reject)=>{
@@ -12,6 +12,7 @@ import {readFile,readdir} from 'node:fs/promises'
 import express from 'express'
 import pg from 'pg'
 import {generateKeyPair,SignJWT} from 'jose'
+import {createSandboxNotificationInbox} from '../server/src/sandboxNotificationInbox.js'
 import {createSandboxProviderTransport} from '../server/src/sandboxProviderTransport.js'
 import {createSandboxPaymentWorker} from '../server/src/sandboxPaymentWorker.js'
 import {createSandboxReconciliation} from '../server/src/sandboxPaymentReconciliation.js'
@@ -42,6 +43,7 @@ try{
  await admin.query(await readFile('docs/migrations/026_case_completion.draft.sql','utf8'))
  await admin.query(await readFile('docs/migrations/027_sandbox_payment_attempts.draft.sql','utf8'))
  await admin.query(await readFile('docs/migrations/028_sandbox_payment_reconciliation.draft.sql','utf8'))
+ await admin.query(await readFile('docs/migrations/029_sandbox_notification_inbox.draft.sql','utf8'))
  db=new Pool({host:'127.0.0.1',port:5432,database:'matchter_qa',user:'matchter_auth_app',password:'qa_app_local_only'})
  const {privateKey,publicKey}=await generateKeyPair('EdDSA')
  const verifyIdentity=createIdentityVerifier({issuer,audience:issuer,jwksUrl:issuer+'/.well-known/jwks.json',algorithms:['EdDSA']},publicKey)
@@ -163,6 +165,34 @@ try{
  assert.equal(providerAttemptStatus.reconciliationStatus,'review')
  await assert.rejects(sandboxAttempts.read(auth('alternative'),{role:'Profesional',attemptId:winnerAttempt.id}),{status:404})
  await assert.rejects(sandboxAttempts.markDispatchUnknown(winnerAttempt.id,actors.client.profileId),{status:409})
+ const webhookSecret='fixture-webhook-secret'
+ const inbox=createSandboxNotificationInbox({mode:'isolated_test',db,worker,transport,credentials:{khipu:{merchantId:'9876',webhookSecret},mercadopago:{merchantId:'9876',webhookSecret}}})
+ const stamp=String(Date.now()),rawK=Buffer.from(JSON.stringify({payment_id:kc.payment_id,receiver_id:9876,bank_account_number:'PRIVATE'}))
+ const kSig='t='+stamp+',s='+createHmac('sha256',webhookSecret).update(stamp+'.').update(rawK).digest('base64')
+ const kInput={rawBody:rawK,signature:kSig}
+ await assert.rejects(inbox.acceptKhipu({...kInput,signature:'invalid'}))
+ assert.equal((await inbox.acceptKhipu(kInput)).duplicate,false)
+ assert.equal((await inbox.acceptKhipu(kInput)).duplicate,true)
+ const mpRequest='qa-notification',mpResource=fixtureM.id,rawM=Buffer.from(JSON.stringify({type:'payment',live_mode:false,user_id:9876,data:{id:mpResource}}))
+ const mSig='ts='+stamp+',v1='+createHmac('sha256',webhookSecret).update('id:'+mpResource+';request-id:'+mpRequest+';ts:'+stamp+';').digest('hex')
+ const mInput={rawBody:rawM,signature:mSig,requestId:mpRequest,resourceId:mpResource}
+ assert.equal((await inbox.acceptMercadoPago(mInput)).duplicate,false)
+ assert.equal((await inbox.acceptMercadoPago(mInput)).duplicate,true)
+ const processed=await Promise.all([inbox.processOne(),inbox.processOne()])
+ assert.equal(processed.filter(x=>x.processed&&x.state==='review').length,2)
+ assert.equal((await inbox.processOne()).processed,false)
+ assert.equal((await db.query('SELECT count(*)::int n FROM matchter.sandbox_notification_inbox')).rows[0].n,2)
+ const unknownRaw=Buffer.from(JSON.stringify({payment_id:'abc123def999',receiver_id:9876}))
+ const unknownSig='t='+stamp+',s='+createHmac('sha256',webhookSecret).update(stamp+'.').update(unknownRaw).digest('base64')
+ await inbox.acceptKhipu({rawBody:unknownRaw,signature:unknownSig})
+ assert.equal((await inbox.processOne()).state,'pending')
+ assert.equal((await inbox.processOne()).processed,false)
+ // Advance only the isolated test's queue clock, never production timestamps.
+ await admin.query("UPDATE matchter.sandbox_notification_inbox SET tries=4,next_attempt_at=now() WHERE resource_id='abc123def999'")
+ assert.equal((await inbox.processOne()).state,'review')
+ assert.equal((await db.query("SELECT tries FROM matchter.sandbox_notification_inbox WHERE resource_id='abc123def999'")).rows[0].tries,5)
+ assert.equal((await db.query("SELECT has_table_privilege(current_user,'matchter.sandbox_notification_inbox','DELETE') AS allowed")).rows[0].allowed,false)
+ console.log('SANDBOX NOTIFICATION INBOX QA PASSED: signed hints, deduplication, concurrent leases, bounded retry and review; no external calls')
  const pendingWallet=await call('client','/messages/wallet')
  assert.equal(pendingWallet.movements.length,1)
  assert.equal(pendingWallet.movements[0].status,'pending_demo')
