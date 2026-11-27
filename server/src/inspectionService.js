@@ -46,7 +46,7 @@ export async function inspectionCaseRecord(q,claimId){
   if(e.quote){const {scope,feeCLP,currency,validUntil}=e.quote;e.quote={scope,feeCLP,currency,validUntil}}
   return {id:row.id,createdAt:row.createdAt,author:row.actorProfileId===r.inspectorProfileId?'inspector':row.actorProfileId===r.requesterProfileId?'requester':'unknown',...e}
  })
- const record=view(r,await eventsFor(q,r.id),{profileId:null})
+ const record=view(r,rows.map(row=>{const {fingerprint,...event}=row.data;return {id:row.id,...event}}),{profileId:null})
  return {...record,events,limitations:['Registro de prueba. No acredita pago ni visita de manera independiente.','Informe técnico sin firma profesional ni archivos originales adjuntos.','No constituye orden de deducción o liberación de fondos.']}
 }
 export function createInspectionService({db,verifyIdentity}){
