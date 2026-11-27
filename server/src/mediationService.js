@@ -11,7 +11,7 @@ async function context(q,claimId,actor,lock=false){
  // Only a participant in the underlying request or an independently authorized mediator may see a case.
  const c=(await q.query(`SELECT c.id,c.request_id AS "requestId",c.data,c.created_at AS "createdAt",r.sender_profile_id AS "senderId",r.recipient_profile_id AS "recipientId"
  FROM matchter.stage_claims c JOIN matchter.swipe_requests r ON r.id=c.request_id
- WHERE c.id=$1 AND ($3::boolean OR r.sender_profile_id=$2 OR r.recipient_profile_id=$2)`+(lock?' FOR UPDATE OF c':''),[claimId,actor.profileId??null,actor.mediator===true])).rows[0]
+ WHERE c.id=$1 AND (($3::boolean AND NOT EXISTS (SELECT 1 FROM matchter.account_profiles p WHERE p.account_id=$4 AND p.id IN (r.sender_profile_id,r.recipient_profile_id))) OR (NOT $3::boolean AND (r.sender_profile_id=$2 OR r.recipient_profile_id=$2)))`+(lock?' FOR UPDATE OF c':''),[claimId,actor.profileId??null,actor.mediator===true,actor.accountId])).rows[0]
  if(!c)fail(404,'Expediente no disponible')
  const side=actor.mediator?'mediator':c.senderId===actor.profileId?'client':'provider'
  return {c,side}
@@ -32,7 +32,7 @@ export function createMediationService({db,verifyIdentity}){
  }
  return Object.freeze({
   async access(header){await actor(header,null,true);return {authorized:true}},
-  async queue(header){await actor(header,null,true);const rows=(await db.query('SELECT id,request_id AS "requestId",data,created_at AS "createdAt" FROM matchter.stage_claims ORDER BY created_at DESC,id DESC LIMIT 100')).rows;return {cases:rows.map(r=>({id:r.id,requestId:r.requestId,createdAt:r.createdAt,projectTitle:r.data.projectTitle,stageNo:r.data.stageNo}))}},
+  async queue(header){const a=await actor(header,null,true);const rows=(await db.query('SELECT c.id,c.request_id AS "requestId",c.data,c.created_at AS "createdAt" FROM matchter.stage_claims c JOIN matchter.swipe_requests r ON r.id=c.request_id WHERE NOT EXISTS (SELECT 1 FROM matchter.account_profiles p WHERE p.account_id=$1 AND p.id IN (r.sender_profile_id,r.recipient_profile_id)) ORDER BY c.created_at DESC,c.id DESC LIMIT 100',[a.accountId])).rows;return {cases:rows.map(r=>({id:r.id,requestId:r.requestId,createdAt:r.createdAt,projectTitle:r.data.projectTitle,stageNo:r.data.stageNo}))}},
   async get(header,query,mediator=false){return detail(db,query.claimId,await actor(header,query.role,mediator))},
   async change(header,body,mediator=false){
    if(!body||typeof body!=='object'||Array.isArray(body)||Object.keys(body).some(k=>!['role','claimId','submissionId','action','text','reference'].includes(k))||!validId(body.claimId)||!validId(body.submissionId)||typeof body.action!=='string')fail(400,'Actuación no válida')
