@@ -9,10 +9,11 @@ import {StageClaimsPanel} from './client/src/features/auth/StageClaimsPanel.jsx'
 import {MediationPanel} from './client/src/features/auth/MediationPanel.jsx'
 import {InspectorInbox} from './client/src/features/auth/InspectionPanel.jsx'
 import {RealWallet} from './client/src/features/auth/RealWallet.jsx'
+import {PaymentMethodChoice} from './client/src/features/auth/PaymentMethodChoice.jsx'
 const root=createRoot(document.getElementById('root'))
 window.mountQA=({view,token,role,claimId,requestId})=>{
  const client={getJWTToken:async()=>token}
- root.render(view==='wallet'?<RealWallet client={client} role={role} onBack={()=>{}} onOpenContract={()=>{}}/>:view==='claims'?<StageClaimsPanel client={client} role={role} thread={{id:requestId,project:'Obra QA',peerName:'Contraparte QA',peerRole:'Perfil de prueba'}} onBack={()=>{}}/>:view==='inspector'?<InspectorInbox client={client} role={role} onBack={()=>{}}/>:<MediationPanel client={client} role={role} claimId={claimId} mediator={view==='mediator'} onBack={()=>{}}/>)
+ root.render(view==='checkout'?<PaymentMethodChoice amount={2990} onConfirm={async()=>{window.qaPaymentCount=(window.qaPaymentCount||0)+1}} onCancel={()=>{}}/>:view==='wallet'?<RealWallet client={client} role={role} onBack={()=>{}} onOpenContract={()=>{}}/>:view==='claims'?<StageClaimsPanel client={client} role={role} thread={{id:requestId,project:'Obra QA',peerName:'Contraparte QA',peerRole:'Perfil de prueba'}} onBack={()=>{}}/>:view==='inspector'?<InspectorInbox client={client} role={role} onBack={()=>{}}/>:<MediationPanel client={client} role={role} claimId={claimId} mediator={view==='mediator'} onBack={()=>{}}/>)
 }
 window.unmountQA=()=>root.unmount()
 `
@@ -107,6 +108,12 @@ export async function verifyCaseInterface({actors,winner,claimId,requestId,base,
  await open('alternative','wallet',async({root,wait,has})=>{
   await wait(()=>has('No hay movimientos en esta sección.'),'unrelated profile empty wallet')
   assert.equal(root.querySelectorAll('article').length,0)
+ })
+ await open('client','checkout',async({root,w,wait,has,click,buttons})=>{
+  await wait(()=>has('Mediante Khipu')&&has('Mediante Mercado Pago'),'two approved payment choices')
+  const radios=Array.from(root.querySelectorAll('input[type=radio]'));assert.equal(radios.length,2)
+  const proceed=()=>buttons().find(b=>b.textContent.trim()==='Continuar al pago de prueba')
+  assert.ok(proceed().disabled);radios[0].click();await wait(()=>!proceed().disabled,'bank transfer selected');radios[1].click();await wait(()=>radios[1].checked&&!radios[0].checked,'card selected exclusively');await click('Continuar al pago de prueba');await wait(()=>w.qaPaymentCount===1,'explicit demo confirmation');assert.equal(root.querySelectorAll('input:not([type=radio])').length,0)
  })
  console.log('AUTHENTICATED WALLET UI QA PASSED: own fee records, filters and unrelated profile isolation')
  console.log('AUTHENTICATED CASE UI QA PASSED: client, provider, selected inspector and mediator; real React DOM and HTTP; private messages not shared')
