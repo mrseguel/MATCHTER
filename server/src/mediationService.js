@@ -18,13 +18,14 @@ async function context(q,claimId,actor,lock=false){
  const side=actor.mediator?'mediator':c.senderId===actor.profileId?'client':'provider'
  return {c,side}
 }
-async function detail(q,claimId,actor){
+async function detail(q,claimId,actor,inspectionsEnabled=false){
  const {c,side}=await context(q,claimId,actor)
  const events=await eventsFor(q,claimId)
  const {submissionId,...claim}=c.data
  const signed=(await q.query('SELECT revision,agreement_version AS "agreementVersion",terms,digest,client_signed_at AS "clientSignedAt",provider_signed_at AS "providerSignedAt" FROM matchter.project_contract_demos WHERE request_id=$1 AND agreement_version=$2 AND revision=$3 AND digest=$4',[c.requestId,claim.agreementVersion,claim.contractRevision,claim.digest])).rows[0]
  const contractReminder=signedDisputeReminder(claim,signed)
- return {id:c.id,requestId:c.requestId,claim,createdAt:c.createdAt,side,contractReminder,...mediationState(events)}
+ const inspection=inspectionsEnabled?await inspectionCaseRecord(q,c.id):null
+ return {id:c.id,requestId:c.requestId,claim,createdAt:c.createdAt,side,contractReminder,inspection,...mediationState(events)}
 }
 export function createMediationService({db,verifyIdentity,inspectionsEnabled=false}){
  async function actor(header,role,mediator,q=db){
@@ -37,14 +38,14 @@ export function createMediationService({db,verifyIdentity,inspectionsEnabled=fal
  return Object.freeze({
   async access(header){await actor(header,null,true);return {authorized:true}},
   async queue(header){const a=await actor(header,null,true);const rows=(await db.query('SELECT c.id,c.request_id AS "requestId",c.data,c.created_at AS "createdAt" FROM matchter.stage_claims c JOIN matchter.swipe_requests r ON r.id=c.request_id WHERE NOT EXISTS (SELECT 1 FROM matchter.account_profiles p WHERE p.account_id=$1 AND p.id IN (r.sender_profile_id,r.recipient_profile_id)) ORDER BY c.created_at DESC,c.id DESC LIMIT 100',[a.accountId])).rows;return {cases:rows.map(r=>({id:r.id,requestId:r.requestId,createdAt:r.createdAt,projectTitle:r.data.projectTitle,stageNo:r.data.stageNo}))}},
-  async get(header,query,mediator=false){return detail(db,query.claimId,await actor(header,query.role,mediator))},
+  async get(header,query,mediator=false){return detail(db,query.claimId,await actor(header,query.role,mediator),inspectionsEnabled)},
   async exportCase(header,query,mediator=false){
    const a=await actor(header,query.role,mediator)
-   const record=await detail(db,query.claimId,a),c=record.claim
+   const record=await detail(db,query.claimId,a,inspectionsEnabled),c=record.claim
    const signed=(await db.query('SELECT revision,agreement_version AS "agreementVersion",mode,terms,digest,created_at AS "createdAt",client_signed_at AS "clientSignedAt",provider_signed_at AS "providerSignedAt" FROM matchter.project_contract_demos WHERE request_id=$1 AND agreement_version=$2 AND revision=$3 AND digest=$4',[record.requestId,c.agreementVersion,c.contractRevision,c.digest])).rows[0]
    const agreement=(await db.query('SELECT version,data,client_confirmed_at AS "clientConfirmedAt",provider_confirmed_at AS "providerConfirmedAt" FROM matchter.project_agreement_versions WHERE request_id=$1 AND version=$2',[record.requestId,c.agreementVersion])).rows[0]
    if(!signed||!agreement)fail(409,'No se pudo verificar el documento original del expediente')
-   const inspection=inspectionsEnabled?await inspectionCaseRecord(db,record.id):null
+   const inspection=record.inspection
    return {format:'matchter-mediation-record-v1',exportedAt:new Date().toISOString(),case:record,contract:signed,agreement,inspection,limitations:['Firmas de prueba, no certificación legal.','Los reclamos son alegaciones, no hechos comprobados.','No incluye archivos originales de evidencia ni conversaciones ajenas al expediente.']}
   },
   async change(header,body,mediator=false){
@@ -63,7 +64,7 @@ export function createMediationService({db,verifyIdentity,inspectionsEnabled=fal
      try{event=checkMediationAction({events,side,action:body.action,text:body.text,reference:body.reference,mode:c.data.mode})}catch(e){if([400,403,409].includes(e.status))fail(e.status,e.message);throw e}
      await tx.query('INSERT INTO matchter.stage_claim_events(claim_id,actor_account_id,actor_profile_id,submission_id,data) VALUES($1,$2,$3,$4,$5)',[body.claimId,a.accountId,a.profileId??null,body.submissionId,JSON.stringify({...event,fingerprint})])
     }
-    const result=await detail(tx,body.claimId,a)
+    const result=await detail(tx,body.claimId,a,inspectionsEnabled)
     await tx.query('COMMIT');return result
    }catch(e){try{await tx.query('ROLLBACK')}catch{}throw e}finally{tx.release()}
   }
