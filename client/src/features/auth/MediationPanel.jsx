@@ -17,6 +17,18 @@ function downloadCase(data){
  const url=URL.createObjectURL(new Blob([JSON.stringify(data,null,2)],{type:'application/json;charset=utf-8'}))
  const a=document.createElement('a');a.href=url;a.download='expediente-matchter-'+data.case.id+'.json';a.click();setTimeout(()=>URL.revokeObjectURL(url),1000)
 }
+function SignedDisputeReminder({reminder}){
+ const date=value=>new Date(value).toLocaleString('es-CL',{timeZone:'America/Santiago'})
+ if(!reminder?.available)return <section className="ct-fee-summary" aria-label="Cláusula contractual"><b>Cláusula contractual</b><p role="status">{reminder?.message||'No se pudo verificar la cláusula original.'}</p></section>
+ return <section className="ct-fee-summary" aria-label="Cláusula de controversias firmada">
+ <h4>Recuerda lo acordado en tu contrato</h4>
+ <p>Esta es la cláusula original del contrato asociado al reclamo, aceptada por ambas partes mediante sus firmas de prueba. Si la mediación termina sin acuerdo, consulta el procedimiento que corresponde a esta modalidad.</p>
+ <b>{reminder.title}</b><p style={{whiteSpace:'pre-wrap',lineHeight:1.55}}>{reminder.text}</p>
+ <div className="row sp"><span>Firma de prueba del cliente</span><b>{date(reminder.clientSignedAt)}</b></div>
+ <div className="row sp"><span>Firma de prueba del prestador</span><b>{date(reminder.providerSignedAt)}</b></div>
+ <small className="mut">Acuerdo versión {reminder.agreementVersion} · Contrato revisión {reminder.contractRevision}. Recordatorio informativo; no constituye nueva aceptación ni autorización de pago.</small>
+ </section>
+}
 export function MediationPanel({client,role,claimId,mediator=false,onBack}){
  const [data,setData]=useState(null),[error,setError]=useState(''),[busy,setBusy]=useState(false),[note,setNote]=useState(''),[kind,setKind]=useState('comment')
  const pending=useRef(null),running=useRef(false),alive=useRef(false)
@@ -40,7 +52,7 @@ export function MediationPanel({client,role,claimId,mediator=false,onBack}){
  const closed=data?.status.startsWith('closed'),side=data?.side,canRespond=data?.status==='mediation'&&data.proposal&&!data.accepted.includes(side)
  const options=[['comment','Agregar antecedentes'],...(mediator&&data?.status==='mediation'?[['propose','Proponer solución']]:[]),...(mediator&&data?.status!=='received'?[['close','Cerrar sin acuerdo (motivo)']]:[]),...(!mediator&&!data?.inspectionRequested.includes(side)?[['inspection','Solicitar inspección técnica']]:[])]
  return <section className="card ct-form"><div className="row sp"><h3>Expediente de mediación</h3><button type="button" className="chip" disabled={busy} onClick={onBack}>Volver</button></div>{error&&<p role="alert">{error}</p>}<button type="button" className="chip" disabled={busy} onClick={load}>Actualizar</button>
- {data&&<><b>{data.claim.projectTitle} · Etapa {data.claim.stageNo}</b><p>{statuses[data.status]}</p><p className="mut">Reclamo de {roles[data.claim.side]}: {data.claim.description}</p><p>Solución solicitada: {data.claim.requestedResolution}</p><p className="mut">No se descuentan ni liberan fondos. La visita técnica es opcional y requiere cotización y aceptación separadas.</p>
+ {data&&<><b>{data.claim.projectTitle} · Etapa {data.claim.stageNo}</b><p>{statuses[data.status]}</p><SignedDisputeReminder reminder={data.contractReminder}/><p className="mut">Reclamo de {roles[data.claim.side]}: {data.claim.description}</p><p>Solución solicitada: {data.claim.requestedResolution}</p><p className="mut">No se descuentan ni liberan fondos. La visita técnica es opcional y requiere cotización y aceptación separadas.</p>
  {!closed&&<>{mediator&&data.status==='received'&&<button className="btn" disabled={busy} onClick={()=>act('review')}>Iniciar revisión</button>}{mediator&&data.status==='review'&&<button className="btn" disabled={busy} onClick={()=>act('invite')}>Invitar a ambas partes</button>}
  {data.status==='invited'&&<><p>Participación confirmada: {data.joined.length} de 2</p>{!mediator&&!data.joined.includes(side)&&<><button className="btn" disabled={busy} onClick={()=>act('join',undefined,data.invitation)}>Aceptar mediación voluntaria</button><button className="btn out" disabled={busy} onClick={()=>act('decline',undefined,data.invitation)}>No participar</button></>}</>}
  {data.proposal&&<div className="ct-fee-summary"><b>Propuesta vigente</b><p>{data.proposal.text}</p><p>Confirmaciones: {data.accepted.length} de 2</p>{!mediator&&canRespond&&<><button className="btn gr" disabled={busy} onClick={()=>act('accept',undefined,data.proposal.id)}>Aceptar esta propuesta</button><button className="btn out" disabled={busy} onClick={()=>act('reject',undefined,data.proposal.id)}>Rechazar propuesta</button></>}</div>}
