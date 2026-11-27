@@ -40,8 +40,8 @@ try{
  const {privateKey,publicKey}=await generateKeyPair('EdDSA')
  const verifyIdentity=createIdentityVerifier({issuer,audience:issuer,jwksUrl:issuer+'/.well-known/jwks.json',algorithms:['EdDSA']},publicKey)
  const paymentAvailability=createPaymentAvailabilityService({db,verifyIdentity})
- const service={caseNotices:createCaseNotices({db,verifyIdentity}),inspectorAdmin:createInspectorAdministration({db,verifyIdentity}),...createAccountService({db,verifyIdentity}),profiles:createProfilesService({db,verifyIdentity}),paymentAvailability,messages:createMessagesService({db,verifyIdentity,paymentModeForNewContract:paymentAvailability.modeForNewContract,claimsEnabled:true}),mediation:createMediationService({db,verifyIdentity,inspectionsEnabled:true,evidenceEnabled:true}),inspections:createInspectionService({db,verifyIdentity,attachmentsEnabled:true})}
- const app=express();app.use(express.json({limit:'1mb'}));app.use('/api/auth-preview',createAuthRouter({MATCHTER_AUTH_TEST_ORIGIN:origin,MATCHTER_NEON_AUTH_URL:'https://qa.neon.tech/auth',MATCHTER_STAGE_CLAIMS_ENABLED:'true',MATCHTER_MEDIATION_ENABLED:'true',MATCHTER_INSPECTIONS_ENABLED:'true',MATCHTER_INSPECTION_ATTACHMENTS_ENABLED:'true',MATCHTER_CASE_COMPLETION_ENABLED:'true'},{service}))
+ const service={caseNotices:createCaseNotices({db,verifyIdentity}),inspectorAdmin:createInspectorAdministration({db,verifyIdentity}),...createAccountService({db,verifyIdentity}),profiles:createProfilesService({db,verifyIdentity}),paymentAvailability,messages:createMessagesService({db,verifyIdentity,paymentModeForNewContract:paymentAvailability.modeForNewContract,claimsEnabled:true,walletEnabled:true}),mediation:createMediationService({db,verifyIdentity,inspectionsEnabled:true,evidenceEnabled:true}),inspections:createInspectionService({db,verifyIdentity,attachmentsEnabled:true})}
+ const app=express();app.use(express.json({limit:'1mb'}));app.use('/api/auth-preview',createAuthRouter({MATCHTER_AUTH_TEST_ORIGIN:origin,MATCHTER_NEON_AUTH_URL:'https://qa.neon.tech/auth',MATCHTER_STAGE_CLAIMS_ENABLED:'true',MATCHTER_MEDIATION_ENABLED:'true',MATCHTER_INSPECTIONS_ENABLED:'true',MATCHTER_INSPECTION_ATTACHMENTS_ENABLED:'true',MATCHTER_CASE_COMPLETION_ENABLED:'true',MATCHTER_WALLET_HISTORY_ENABLED:'true'},{service}))
  server=app.listen(0,'127.0.0.1');await new Promise(resolve=>server.once('listening',resolve))
  const base='http://127.0.0.1:'+server.address().port+'/api/auth-preview'
  const actors={}
@@ -76,8 +76,29 @@ try{
  const signature={requestId,action:'confirm',agreementVersion:1,expectedRevision:contract.revision,digest:contract.digest,accepted:true,identityDemo:true,identityChecks:{front:true,back:true,selfie:true}}
  await call('client','/messages/contract',signature);await call('provider','/messages/contract',signature)
  const fee={requestId,agreementVersion:1,expectedRevision:contract.revision,digest:contract.digest,accepted:true,demoAmount:2990}
+ const pendingWallet=await call('client','/messages/wallet')
+ assert.equal(pendingWallet.movements.length,1)
+ assert.equal(pendingWallet.movements[0].status,'pending_demo')
  await call('client','/messages/contract',{...fee,action:'payServiceFeeDemo'})
+ const clientWallet=await call('client','/messages/wallet')
+ assert.equal(clientWallet.movements.length,1)
+ assert.equal(clientWallet.movements[0].status,'recorded_demo')
+ assert.equal(clientWallet.movements[0].amountCLP,2990)
+ assert.equal(clientWallet.realPaymentsEnabled,false)
+ const providerPending=await call('provider','/messages/wallet')
+ assert.equal(providerPending.movements.length,1)
+ assert.equal(providerPending.movements[0].status,'pending_demo')
+ assert.equal(providerPending.movements[0].recordedAt,null)
+ assert.deepEqual((await call('alternative','/messages/wallet')).movements,[])
+ await call('client','/messages/contract',{...fee,action:'payServiceFeeDemo'})
+ assert.equal((await call('client','/messages/wallet')).movements.length,1)
  await call('provider','/messages/contract',{...fee,action:'payProviderFeeDemo'})
+ const providerWallet=await call('provider','/messages/wallet')
+ assert.equal(providerWallet.movements.length,1)
+ assert.equal(providerWallet.movements[0].status,'recorded_demo')
+ assert.equal(providerWallet.movements[0].amountCLP,2990)
+ assert.equal(providerWallet.realPaymentsEnabled,false)
+ assert.equal(JSON.stringify(providerWallet).includes('providerFeeMode'),false)
  const stage={requestId,agreementVersion:1,contractRevision:contract.revision,digest:contract.digest,stageNo:1,accepted:true}
  await call('client','/messages/stages',{...stage,action:'fund'},400)
  await call('provider','/messages/stages',{...stage,action:'start'})
