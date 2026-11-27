@@ -7,7 +7,7 @@ const labels={pending:'Pendiente de inicio',in_progress:'En ejecución',delivere
 export function StageClaimsPanel({client,role,thread,initialStage,onBack}){
  const [tracking,setTracking]=useState(null),[claims,setClaims]=useState([]),[stage,setStage]=useState(''),[reason,setReason]=useState(''),[description,setDescription]=useState(''),[resolution,setResolution]=useState(''),[reference,setReference]=useState(''),[busy,setBusy]=useState(false),[error,setError]=useState(''),[notice,setNotice]=useState('')
  const [caseId,setCaseId]=useState(null),[mediationEnabled,setMediationEnabled]=useState(false)
- useEffect(()=>{let alive=true;fetch('/api/auth-preview/config').then(r=>r.ok?r.json():null).then(r=>{if(alive)setMediationEnabled(r?.mediationEnabled===true)}).catch(()=>{});return()=>{alive=false}},[])
+ useEffect(()=>{let alive=true;(client?.qaReadOnly===true?Promise.resolve(client.qaConfig):fetch('/api/auth-preview/config').then(r=>r.ok?r.json():null)).then(r=>{if(alive)setMediationEnabled(r?.mediationEnabled===true)}).catch(()=>{});return()=>{alive=false}},[])
  const submission=useRef(null),saving=useRef(false),requestId=thread.id
  async function load(){
   setBusy(true);setError('')
@@ -21,7 +21,7 @@ export function StageClaimsPanel({client,role,thread,initialStage,onBack}){
  useEffect(()=>{load()},[client,role,requestId])
  async function submit(e){
   e.preventDefault()
-  if(saving.current||!tracking||tracking.complete||!reason||description.trim().length<20||resolution.trim().length<5)return
+  if(client?.qaReadOnly===true||saving.current||!tracking||tracking.complete||!reason||description.trim().length<20||resolution.trim().length<5)return
   saving.current=true;setBusy(true);setError('');setNotice('')
   const payload={requestId,agreementVersion:tracking.agreementVersion,contractRevision:tracking.contractRevision,digest:tracking.digest,stageNo:Number(stage),reason,description,requestedResolution:resolution,contractReference:reference}
   const key=JSON.stringify(payload)
@@ -38,7 +38,7 @@ export function StageClaimsPanel({client,role,thread,initialStage,onBack}){
  <b>{thread.project}</b><p className="mut">Contraparte: {thread.peerName} · {thread.peerRole}</p>
  <p className="mut">Entorno de prueba. Usa datos ficticios. Presentar un reclamo no modifica el contrato ni mueve fondos.</p>
  {tracking&&<><div className="row sp"><span>Etapa actual</span><b>{tracking.complete?'Proyecto recibido conforme':'Etapa '+tracking.currentStage}</b></div>
- {!tracking.complete&&<form onSubmit={submit} className="ct-form">
+ {!tracking.complete&&client?.qaReadOnly!==true&&<form onSubmit={submit} className="ct-form">
  <label>Etapa afectada<select value={stage} onChange={e=>setStage(e.target.value)} required disabled={busy}>{tracking.stages.map(s=><option key={s.stageNo} value={s.stageNo}>Etapa {s.stageNo} · {s.title}</option>)}</select></label>
  {selected&&<div className="ct-fee-summary"><b>{selected.title}</b><p>Valor contractual: {money(selected.amount)} · Entrega prevista: {selected.date}</p>{selected.status&&<p>Estado: {labels[selected.status]||selected.status} · Avance: {selected.progressPercent} %</p>}</div>}
  <label>Motivo<select value={reason} required onChange={e=>setReason(e.target.value)} disabled={busy}><option value="">Seleccionar motivo</option>{reasons.map(([k,v])=><option key={k} value={k}>{v}</option>)}</select></label>
@@ -48,7 +48,7 @@ export function StageClaimsPanel({client,role,thread,initialStage,onBack}){
  <p className="mut">El contrato, los datos y el estado de la etapa se vinculan automáticamente. Después de registrar el reclamo podrás adjuntar evidencias en el expediente si la función está habilitada.</p>
  <button className="btn" disabled={busy||!selected||!reason||description.trim().length<20||resolution.trim().length<5}>Presentar reclamo · prueba</button>
  </form>}
- {tracking.complete&&<p className="mut">El procedimiento posterior al cierre y de garantías aún no está habilitado.</p>}</>}
+ {client?.qaReadOnly===true&&<p className="mut">Vista QA de consulta. No registra nuevos reclamos.</p>}{tracking.complete&&<p className="mut">El procedimiento posterior al cierre y de garantías aún no está habilitado.</p>}</>}
  {error&&<p role="alert" className="wf-error">{error}</p>}{notice&&<p role="status">{notice}</p>}
  <div className="row sp"><h4>Expedientes registrados</h4><button type="button" className="chip" disabled={busy} onClick={load}>Actualizar</button></div>
  {!busy&&!error&&!claims.length&&<p className="mut">Sin expedientes cargados.</p>}

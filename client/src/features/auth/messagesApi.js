@@ -1,4 +1,5 @@
 export async function messagesRequest(client,path,role,body,query={},fetcher=fetch){
+ if(client?.qaReadOnly===true&&typeof client.qaRequest==='function'){if(body!==undefined)throw Error('Vista QA de solo lectura');return client.qaRequest(path,role,query)}
  const token=await client.getJWTToken()
  if(typeof token!=='string'||!/^[-_A-Za-z0-9]+\.[-_A-Za-z0-9]+\.[-_A-Za-z0-9]+$/.test(token))throw Error('No se pudo comprobar tu sesión')
  const save=body!==undefined,params=new URLSearchParams({...query,role})

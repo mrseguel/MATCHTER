@@ -15,7 +15,7 @@ export function InspectionAttachments({client,role,orderId,claimId,canUpload=fal
  const isClaim=!!claimId,location=isClaim?{claimId}:{orderId},endpoint=isClaim?'mediation/evidence':'inspections/attachments'
  const get=(name,query)=>mediator?adminGet(client,isClaim?(name==='attachments'?'evidence':'evidence-file'):'inspection-'+name,query):messagesRequest(client,isClaim?(name==='attachments'?'mediation/evidence':'mediation/evidence-file'):'inspections/'+name,role,undefined,query)
  async function load(){if(running.current)return;running.current=true;setBusy(true);setError('');try{setFiles((await get('attachments',location)).files)}catch(e){setError(e.message)}finally{running.current=false;setBusy(false)}}
- useEffect(()=>{let alive=true;fetch('/api/auth-preview/config').then(r=>r.ok?r.json():null).then(r=>{if(alive)setEnabled((isClaim?r?.caseCompletionEnabled:r?.inspectionAttachmentsEnabled)===true)}).catch(()=>{});return()=>{alive=false}},[])
+ useEffect(()=>{let alive=true;(client?.qaReadOnly===true?Promise.resolve(client.qaConfig):fetch('/api/auth-preview/config').then(r=>r.ok?r.json():null)).then(r=>{if(alive)setEnabled((isClaim?r?.caseCompletionEnabled:r?.inspectionAttachmentsEnabled)===true)}).catch(()=>{});return()=>{alive=false}},[])
  useEffect(()=>{if(enabled)load()},[enabled,client,role,orderId,claimId,mediator])
  async function upload(e){
   e.preventDefault();if(!file||running.current)return
