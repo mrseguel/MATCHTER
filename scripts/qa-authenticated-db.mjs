@@ -149,4 +149,6 @@ try{
  assert.equal(JSON.stringify(exported).includes('PRIVATE_QA_TEXT'),false)
  assert.equal((await admin.query('SELECT count(*)::int AS n FROM matchter.project_stage_demos')).rows[0].n,0)
  console.log('AUTHENTICATED HTTP QA PASSED:',checks,'requests; real isolated PostgreSQL; no financial transfers')
+ const {verifyCaseInterface}=await import('./qa-case-interface.mjs')
+ await verifyCaseInterface({actors,winner,claimId,requestId,base,http:fetch})
 }finally{if(server)await new Promise(resolve=>server.close(resolve));if(db)await db.end();await admin.end()}
