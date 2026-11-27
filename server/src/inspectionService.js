@@ -93,6 +93,7 @@ export function createInspectionService({db,verifyIdentity,attachmentsEnabled=fa
     const a=await getActor(tx,header,body.role)
     if(a.profileId!==r.inspectorProfileId||a.accountId!==r.inspectorAccountId||r.inspectorRole!=='Profesional'||!r.enabled||!r.verifiedAt||[r.clientAccountId,r.providerAccountId].includes(a.accountId))fail(403,'Solo el inspector seleccionado puede adjuntar antecedentes')
     await tx.query("SELECT pg_advisory_xact_lock(hashtextextended('inspection:'||$1::text,0))",[r.caseId])
+    await attachmentAccess(tx,header,body)
     if((await tx.query("SELECT 1 FROM matchter.stage_claim_events WHERE claim_id=$1 AND actor_account_id=$2 AND data->>'side'='mediator' LIMIT 1",[r.caseId,a.accountId])).rows[0])fail(403,'Conflicto de interés')
     const prior=(await tx.query('SELECT '+attachmentFields+' FROM matchter.inspection_attachments WHERE order_id=$1 AND submission_id=$2',[r.id,body.submissionId])).rows[0]
     if(prior){if(prior.sha256!==file.sha256||prior.filename!==file.filename||prior.mediaType!==file.mediaType)fail(409,'Identificador ya utilizado')}
@@ -176,7 +177,7 @@ export function createInspectionService({db,verifyIdentity,attachmentsEnabled=fa
       if(award?.id!==r.id||inspectionState(await eventsFor(tx,r.id)).report)fail(409,'No se puede cancelar una inspección con informe o sin selección activa')
       shape(body.input,['reason'])
       if(typeof body.input.reason!=='string'||body.input.reason.trim().length<5||body.input.reason.length>1000)fail(400,'Indica el motivo de cancelación')
-      if(attachmentsEnabled&&(await tx.query('SELECT 1 FROM matchter.inspection_attachments WHERE order_id=$1 LIMIT 1',[r.id])).rows[0])fail(409,'Ya existen evidencias de inspección. Solicita revisión administrativa.')
+      if((await tx.query('SELECT 1 FROM matchter.inspection_attachments WHERE order_id=$1 LIMIT 1',[r.id])).rows[0])fail(409,'Ya existen evidencias de inspección. Solicita revisión administrativa.')
       await tx.query('UPDATE matchter.inspection_awards SET cancelled_at=now(),cancelled_by=$2,cancellation_reason=$3 WHERE order_id=$1 AND cancelled_at IS NULL',[r.id,a.profileId,body.input.reason.trim()])
       event={action:'cancel',reason:body.input.reason.trim(),author:a.profileId===r.inspectorProfileId?'inspector':'requester'}
      }else try{event=nextInspectionEvent({order,events:await eventsFor(tx,r.id),actor:a,action:body.action,input:body.input})}catch(e){if([400,403,409].includes(e.status))fail(e.status,e.message);throw e}
