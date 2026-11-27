@@ -9,7 +9,7 @@ export function quoteServiceFee(role,stages){
 }
 export const bilateral=c=>c?.terms?.serviceFee?.version===2
 export const needsFeeUpgrade=c=>!!c&&!c.clientSignedAt&&!c.providerSignedAt&&!bilateral(c)
-export const serviceFeeReady=c=>!c?.terms?.serviceFee||!!c.serviceFeePaidAt&&(!bilateral(c)||c.providerFeeMode==='deferred'||c.providerFeeMode==='upfront'&&!!c.providerFeePaidAt)
+export const serviceFeeReady=c=>c?.terms?.paymentMode==='direct'?!!(bilateral(c)&&c.serviceFeePaidAt&&c.providerFeeMode==='upfront'&&c.providerFeePaidAt):!c?.terms?.serviceFee||!!c.serviceFeePaidAt&&(!bilateral(c)||c.providerFeeMode==='deferred'||c.providerFeeMode==='upfront'&&!!c.providerFeePaidAt)
 export function deferredDeduction(c,stage){
- return bilateral(c)&&c.providerFeeMode==='deferred'&&!c.providerFeePaidAt&&Number(stage.amount)>=c.terms.serviceFee.amount?c.terms.serviceFee.amount:0
+ return c?.terms?.paymentMode!=='direct'&&bilateral(c)&&c.providerFeeMode==='deferred'&&!c.providerFeePaidAt&&Number(stage.amount)>=c.terms.serviceFee.amount?c.terms.serviceFee.amount:0
 }

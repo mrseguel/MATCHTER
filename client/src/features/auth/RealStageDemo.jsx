@@ -1,6 +1,7 @@
 import React,{useEffect,useRef,useState} from 'react'
 import {CheckCircle2,Lock,Clock3} from 'lucide-react'
 import {messagesRequest} from './messagesApi.js'
+import {DirectStagePanel} from './DirectStagePanel.jsx'
 const dateCL=d=>/^\d{4}-\d{2}-\d{2}$/.test(d||'')?d.split('-').reverse().join('-'):d
 const clp=n=>'$'+Number(n).toLocaleString('es-CL')+' CLP'
 function StageCard({stage:t,currentStage,complete}){
@@ -44,18 +45,18 @@ export function RealStageDemo({context,contract,onAdvance,onComplete}){
  }
  useEffect(()=>{alive.current=true;load();const timer=setInterval(load,8000);return()=>{alive.current=false;++seq.current;clearInterval(timer)}},[client,role,requestId,contract.digest])
  useEffect(()=>setAccepted(false),[state?.currentStage])
- async function save(action,s){
+ async function save(action,s,progressPercent){
   if(saving.current)return
   if(action==='fund'&&!window.confirm('¿Registrar depósito ficticio por '+clp(s.amount)+'? No se realizará ningún cargo.'))return
   saving.current=true;++seq.current;setBusy(true);setError('')
-  try{const r=await messagesRequest(client,'stages',role,{requestId,action,agreementVersion:contract.agreementVersion,contractRevision:contract.revision,digest:contract.digest,stageNo:s.stageNo,accepted:true})
-   if(alive.current){setState(r);setAccepted(false);onAdvance?.();if(action==='release'&&r.complete)onComplete?.()}
+  try{const r=await messagesRequest(client,'stages',role,{requestId,action,agreementVersion:contract.agreementVersion,contractRevision:contract.revision,digest:contract.digest,stageNo:s.stageNo,accepted:true,...(action==='progress'?{progressPercent}:{})})
+   if(alive.current){setState(r);setAccepted(false);onAdvance?.();if(['release','accept'].includes(action)&&r.complete)onComplete?.()}
   }catch(e){if(alive.current)setError(e.message)}finally{saving.current=false;if(alive.current)setBusy(false)}
  }
  const s=state?.stages.find(x=>x.stageNo===state.currentStage)
  return <section className="card wf-execution" aria-label="Seguimiento del proyecto"><div className="row sp"><h3>Seguimiento del proyecto</h3><button type="button" className="chip" disabled={busy} onClick={load}>Actualizar</button></div>
- <p className="mut">Pago protegido · simulación. No existe custodia ni transferencia de fondos reales. Los reclamos y la mediación todavía no están conectados a este flujo de prueba.</p>
- {!state?<p className="mut">Cargando hitos...</p>:<>
+ {state?.paymentMode!=='direct'&&<p className="mut">Pago protegido · simulación. No existe custodia ni transferencia de fondos reales. </p>}
+ {!state?<p className="mut">Cargando hitos...</p>:state.paymentMode==='direct'?<DirectStagePanel state={state} side={side} busy={busy} save={save} accepted={accepted} setAccepted={setAccepted}/>:<>
  <div className="wf-progress"><div><CheckCircle2 size={18} color="#16934a"/><span>Contrato formalizado · demo</span></div><ExecutionProgress stages={state.stages}/><div><CheckCircle2 size={18} color={state.complete?'#16934a':'#a5aab4'}/><span>Recepción conforme</span></div></div>
  {state.stages.map(t=><StageCard key={t.stageNo} stage={t} currentStage={state.currentStage} complete={state.complete}/>)}
  {state.serviceFee&&<div className="ct-fee-summary"><b>Tarifa del ejecutor</b><p className="mut">{state.serviceFee.providerPaidAt?'Registrada · '+clp(state.serviceFee.amount):'Descuento autorizado: '+clp(state.serviceFee.amount)+' del primer pago que permita cubrirla completa.'}</p>{s?.pendingProviderFeeDeduction>0&&<p>En esta etapa: monto contractual {clp(s.amount)} · tarifa {clp(s.pendingProviderFeeDeduction)} · neto al ejecutor {clp(s.amount-s.pendingProviderFeeDeduction)}.</p>}</div>}
@@ -65,5 +66,6 @@ export function RealStageDemo({context,contract,onAdvance,onComplete}){
  {s.fundedAt&&!s.deliveredAt&&(side==='provider'?<button type="button" className="btn" disabled={busy} onClick={()=>save('deliver',s)}>Notificar entrega de etapa {s.stageNo}</button>:<p className="mut">Depósito de prueba registrado. Esperando entrega de los trabajos.</p>)}
  {s.deliveredAt&&(side==='client'?<><label className="wf-confirm"><input type="checkbox" checked={accepted} onChange={e=>setAccepted(e.target.checked)}/> {s.stageNo===state.stages.length?'Recibí conforme el trabajo completo, según el contrato.':'Verifiqué la etapa y recibí conforme los trabajos acordados.'}</label><p className="mut">Al confirmar, autorizas la liberación simulada de {clp(s.amount)}.{s.pendingProviderFeeDeduction>0?' Se descontará la tarifa propia del ejecutor, dejando '+clp(s.amount-s.pendingProviderFeeDeduction)+' a su favor.':''} No se transferirá dinero real.</p><button type="button" className="btn gr" disabled={busy||!accepted} onClick={()=>save('release',s)}>Confirmar entrega de etapa {s.stageNo} y liberar pago · demo</button></>:<p className="mut">Entrega notificada. En el flujo definitivo, los fondos de esta etapa se liberarán a tu cuenta bancaria cuando el cliente confirme la recepción conforme de los trabajos. En esta beta, la liberación es simulada.</p>)}
  </>}</>}
+ {state&&context.onClaim&&<div style={{marginTop:12}}><button type="button" className="btn out" onClick={()=>context.onClaim(state.currentStage)}> {state.complete?'Consultar reclamos':'Presentar un reclamo'}</button></div>}
  {error&&<p className="wf-error" role="alert">{error}</p>}</section>
 }

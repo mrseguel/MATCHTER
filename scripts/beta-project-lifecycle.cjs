@@ -18,8 +18,8 @@
  const a='<button className="btn out" onClick=${()=>openDispute(j)}>';
  s=once(s,a,'<${Execution} key=${j.id+":"+j.paid} job=${j} actor=${actor} stages=${stages} onFund=${()=>setView({t:"wallet",id:j.pid})} onDeliver=${onDeliver} onRelease=${onRelease} onReview=${onReview} hasClaim=${hasClaim}/>'+a);
  s=once(s,"const t=[contractLabel(j),canPay(j)?'g':''];","const t=completed(j)?['Recibido conforme','g']:[contractLabel(j),canPay(j)?'g':''];");
- s=once(s,'const s=j&&(j.stages||STAGES)[j.paid];','const s=j&&(j.stages||STAGES)[j.paid];const funded=!!j&&!!currentStage(j).fundedAt;');
- s=once(s,'disabled=${locked||!c} onClick=${()=>pay(j,s,c)}>Simular pago protegido','disabled=${locked||funded||!c} onClick=${()=>pay(j,s,c)}>${funded?"Depósito en custodia · demo":"Depositar pago protegido · demo"}');
+ s=once(s,'const s=j&&(j.stages||STAGES)[j.paid],c=cards[Math.min(sel,cards.length-1)];','const s=j&&(j.stages||STAGES)[j.paid],c=cards[Math.min(sel,cards.length-1)],funded=!!j&&!!currentStage(j).fundedAt;');
+ s=once(s,'disabled=${!c} onClick=${()=>pay(j,s,c)}>Simular pago · ${fmt(s[2])}','disabled=${funded||!c} onClick=${()=>pay(j,s,c)}>${funded?"Depósito de prueba registrado":"Simular pago · "+fmt(s[2])}');
  s=once(s,'const j=jobs.find(x=>x.paid<3);','const j=jobs.find(x=>x.paid<stageCount(x)&&!currentStage(x).fundedAt);');
  return s;
  });

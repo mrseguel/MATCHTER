@@ -218,21 +218,17 @@ function NotaryFlow({j,p,onBack,onPatch}){
  <//>`;
 }
 function WalletBody({j,p,pay,cards,addCard,locked,onContract}){
- const [sel,setSel]=useState(0);
- const s=j&&(j.stages||STAGES)[j.paid];const c=cards[Math.min(sel,cards.length-1)];
- return html`<div>
-  <h2>Mi Wallet</h2><p className="mut">Tarjetas y pagos de demostración · no se realizan cobros reales.</p>
-  <div className="card" style=${{padding:0,overflow:'hidden'}}>
-   ${s&&p?html`<div style=${{padding:14}}><b style=${{fontSize:17}}>${j.project} - ${p.name}</b><div style=${{margin:'8px 0'}}><span className="tag" style=${{background:'var(--line)',color:'var(--tx)'}}>Etapa ${j.paid+1}: ${s[0]}</span></div>Monto a pagar: <b>${fmt(s[2])}</b></div>`:html`<div style=${{padding:14}}><b>No tienes pagos pendientes</b><p className="mut">Puedes administrar tus tarjetas mientras preparas tu próximo proyecto.</p></div>`}
-   <div className="row" style=${{background:'var(--soft)',padding:'12px 14px'}}><span style=${{fontSize:34,color:'#ff5a00'}}>🔒</span><div style=${{fontSize:14}}><b>Pago Protegido</b> por <b style=${{color:'#ff5a00'}}>MATCHTER</b> -<br/>Los pagos se liberarían por etapas según conformidad. Función simulada.</div></div></div>
-  <h3 style=${{marginBottom:6}}>Método de Pago</h3>
-  <div className="row sp"><b>Mis Tarjetas</b><span style=${{fontSize:20}}>›</span></div>
-  <div className="wcards">${cards.map((k,i)=>html`<div key=${i} className="wc" onClick=${()=>setSel(i)}><div className=${'wcard'+(sel===i?' on':'')} style=${{background:k.c}}><div className="row sp"><span className="chipic"></span>${/master/i.test(k.b)?html`<span className="mcc"><i style=${{background:'#3a3f55'}}></i><i style=${{background:'#ff5a00',marginLeft:-8}}></i></span>`:html`<b style=${{color:'#ff8a3d',fontStyle:'italic',fontSize:18}}>${k.b}</b>`}</div><div><div className="num">•••• ${k.l}</div><div style=${{color:'#ff9a57',fontSize:13}}>Exp: ${k.e}</div></div></div><div style=${{textAlign:'center',fontSize:13,height:18,marginTop:4}}>${i===0?'Favorita':''}</div></div>`)}</div>
-  <button className="btn out" onClick=${addCard}><span style=${{fontSize:20,verticalAlign:'-2px'}}>+</span> Agregar nueva tarjeta de prueba</button>
-  ${s&&html`<div style=${{borderTop:'1px solid var(--line)',margin:'14px 0 10px',paddingTop:10}}><div className="row sp"><span>Subtotal:</span><span>${fmt(s[2])}</span></div><div className="row sp"><span>Comisión de garantía:</span><span>$0 CLP (Gratis)</span></div><div className="row sp" style=${{marginTop:4}}><b style=${{fontSize:17}}>Total a transferir:</b><b style=${{color:'#ff5a00',fontSize:20}}>${fmt(s[2])}</b></div></div>`}
-  ${s&&locked&&html`<div className="tag b" style=${{display:'block',marginBottom:8,textAlign:'center'}}>Primero firma y certifica el contrato ante notaría para habilitar el pago <button className="chip" style=${{marginLeft:6}} onClick=${onContract}>Ver contrato</button></div>`}
-  ${s&&html`<button className="btn" disabled=${locked||!c} onClick=${()=>pay(j,s,c)}>Simular pago protegido</button>`}
-  <div className="trust"><div><span style=${{fontSize:26,color:'#ff5a00'}}>🔒</span><span>Seguridad<br/>de pagos</span></div><div><span style=${{fontSize:26,color:'#ff5a00'}}>🛡️</span><span>Conformidad<br/>por etapas</span></div><div><span style=${{fontSize:26,color:'#ff5a00'}}>🛡️</span><span>Integración de<br/>pago pendiente</span></div></div>
+ const [sel,setSel]=useState(0),[screen,setScreen]=useState('home');
+ const s=j&&(j.stages||STAGES)[j.paid],c=cards[Math.min(sel,cards.length-1)];
+ return html`<div className="mw-wallet">
+  <div className="mw-head"><h2>${screen==='methods'?'Medios de pago':'Mi Wallet'}</h2>${screen==='methods'&&html`<button type="button" className="mw-link" onClick=${()=>setScreen('home')}>Volver</button>`}</div>
+  <p className="mw-demo">Modo de prueba · No hay cobros reales.</p>
+  ${screen==='methods'?html`<div className="mw-panel">${cards.map((k,i)=>html`<label className="mw-card-choice" key=${i}><span className="mw-icon" aria-hidden="true">💳</span><span className="mw-copy"><strong>${k.b} •••• ${k.l}</strong><small>Tarjeta ficticia</small></span><input type="radio" name="demo-wallet-card" checked=${sel===i} onChange=${()=>setSel(i)}/></label>`)}${cards.length===0&&html`<div className="mw-empty"><strong>Sin tarjetas de prueba</strong></div>`}</div><button type="button" className="mw-primary" onClick=${()=>{addCard();setSel(cards.length)}}>+ Agregar tarjeta de prueba</button><p className="mw-security">No ingreses datos bancarios reales. Las tarjetas de esta vista son ficticias.</p>`:html`
+   <div className="mw-panel mw-pending"><span className="mw-eyebrow">${s&&p?'Próximo pago de prueba':'Pagos pendientes'}</span><strong className="mw-amount">${s&&p?fmt(s[2]):'Al día'}</strong><p className="mw-muted">${s&&p?j.project+' · Etapa '+(j.paid+1):'No tienes pagos pendientes de prueba.'}</p>${s&&p&&html`<p className="mw-muted">${s[0]}</p>`}${s&&p&&locked&&html`<button type="button" className="mw-primary" onClick=${onContract}>Ver contrato</button>`}</div>
+   <h3>Medios de pago</h3><div className="mw-panel"><button type="button" className="mw-row" onClick=${()=>setScreen('methods')}><span className="mw-icon" aria-hidden="true">💳</span><span className="mw-copy"><strong>${c?c.b+' •••• '+c.l:'Agregar tarjeta'}</strong><small>${c?'Tarjeta de prueba · Cambiar o agregar':'Crédito o débito · Demostración'}</small></span><span aria-hidden="true">›</span></button></div>
+   ${s&&p&&!locked&&html`<button type="button" className="mw-primary" disabled=${!c} onClick=${()=>pay(j,s,c)}>Simular pago · ${fmt(s[2])}</button>`}
+   <h3>Movimientos</h3><div className="mw-panel">${j&&p&&j.paid>0?(j.stages||STAGES).slice(0,j.paid).map((stage,i)=>html`<div className="mw-row" key=${i}><span className="mw-icon" aria-hidden="true">✓</span><span className="mw-copy"><strong>${stage[0]}</strong><small>Etapa ${i+1} · Registro de prueba</small></span><b className="mw-end">${fmt(stage[2])}</b></div>`):html`<div className="mw-row"><span className="mw-copy"><small>No hay movimientos de este proyecto de prueba.</small></span></div>`}</div>
+   <p className="mw-security">Esta vista es una demostración. No resguarda fondos ni acredita pagos reales.</p>`}
  </div>`;
 }
 function Wallet({j,p,onBack,pay,cards,addCard}){

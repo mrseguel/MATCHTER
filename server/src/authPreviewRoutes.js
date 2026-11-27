@@ -1,5 +1,10 @@
 import express from 'express'
 import pg from 'pg'
+import {createCaseNotices} from './caseNotices.js'
+import {createInspectorAdministration} from './caseAdministration.js'
+import {createInspectionService} from './inspectionService.js'
+import {createMediationService} from './mediationService.js'
+import {createPaymentAvailabilityService} from './paymentAvailabilityService.js'
 import {createMessagesService} from './messagesService.js'
 import {createSwipeService} from './swipeService.js'
 import {createProfileDetailsService} from './profileDetails.js'
@@ -21,7 +26,11 @@ export function createAuthRouter(env=process.env, dependencies={}) {
     pool=new pg.Pool({connectionString:dbUrl.href,ssl:{rejectUnauthorized:true},max:2,connectionTimeoutMillis:8000,idleTimeoutMillis:3000,statement_timeout:5000,application_name:'matchter-auth-preview'})
     pool.on('error',()=>console.error('Matchter auth pool error'))
     const verifyIdentity=createIdentityVerifier({issuer:auth.origin,audience:auth.origin,jwksUrl:jwks.href,algorithms:['EdDSA']})
-    service={...createAccountService({db:pool,verifyIdentity}),profiles:createProfilesService({db:pool,verifyIdentity}),details:createProfileDetailsService({db:pool,verifyIdentity}),swipe:createSwipeService({db:pool,verifyIdentity}),messages:createMessagesService({db:pool,verifyIdentity})}
+    const paymentAvailability=env.MATCHTER_PAYMENT_POLICY_ENABLED==='true'?createPaymentAvailabilityService({db:pool,verifyIdentity}):null
+    const mediation=env.MATCHTER_STAGE_CLAIMS_ENABLED==='true'&&env.MATCHTER_MEDIATION_ENABLED==='true'?createMediationService({db:pool,verifyIdentity,inspectionsEnabled:env.MATCHTER_INSPECTIONS_ENABLED==='true',evidenceEnabled:env.MATCHTER_CASE_COMPLETION_ENABLED==='true'}):null
+    const inspections=mediation&&env.MATCHTER_INSPECTIONS_ENABLED==='true'?createInspectionService({db:pool,verifyIdentity,attachmentsEnabled:env.MATCHTER_INSPECTION_ATTACHMENTS_ENABLED==='true'}):null
+    const caseCompletion=!!mediation&&!!inspections&&env.MATCHTER_CASE_COMPLETION_ENABLED==='true'
+    service={caseNotices:caseCompletion?createCaseNotices({db:pool,verifyIdentity}):null,inspectorAdmin:caseCompletion?createInspectorAdministration({db:pool,verifyIdentity}):null,mediation,inspections,...createAccountService({db:pool,verifyIdentity}),profiles:createProfilesService({db:pool,verifyIdentity}),details:createProfileDetailsService({db:pool,verifyIdentity}),swipe:createSwipeService({db:pool,verifyIdentity}),paymentAvailability,messages:createMessagesService({db:pool,verifyIdentity,paymentModeForNewContract:paymentAvailability?.modeForNewContract,claimsEnabled:env.MATCHTER_STAGE_CLAIMS_ENABLED==='true',walletEnabled:env.MATCHTER_WALLET_HISTORY_ENABLED==='true'})}
     return service
   }
   router.use((req,res,next)=>{
@@ -33,13 +42,48 @@ export function createAuthRouter(env=process.env, dependencies={}) {
   })
   router.get('/config',(_req,res)=>{
     if(!env.MATCHTER_NEON_AUTH_URL)return res.status(503).json({message:'Autenticación no configurada'})
-    return res.json({authUrl:env.MATCHTER_NEON_AUTH_URL})
+    return res.json({authUrl:env.MATCHTER_NEON_AUTH_URL,walletHistoryEnabled:env.MATCHTER_WALLET_HISTORY_ENABLED==='true',stageClaimsEnabled:env.MATCHTER_STAGE_CLAIMS_ENABLED==='true',mediationEnabled:env.MATCHTER_STAGE_CLAIMS_ENABLED==='true'&&env.MATCHTER_MEDIATION_ENABLED==='true',inspectionsEnabled:env.MATCHTER_STAGE_CLAIMS_ENABLED==='true'&&env.MATCHTER_MEDIATION_ENABLED==='true'&&env.MATCHTER_INSPECTIONS_ENABLED==='true',caseCompletionEnabled:env.MATCHTER_STAGE_CLAIMS_ENABLED==='true'&&env.MATCHTER_MEDIATION_ENABLED==='true'&&env.MATCHTER_INSPECTIONS_ENABLED==='true'&&env.MATCHTER_CASE_COMPLETION_ENABLED==='true',inspectionAttachmentsEnabled:env.MATCHTER_STAGE_CLAIMS_ENABLED==='true'&&env.MATCHTER_MEDIATION_ENABLED==='true'&&env.MATCHTER_INSPECTIONS_ENABLED==='true'&&env.MATCHTER_INSPECTION_ATTACHMENTS_ENABLED==='true'})
   })
   const handle=fn=>async(req,res)=>{
     if(!/^Bearer [A-Za-z0-9._-]{20,8192}$/.test(req.get('authorization')||''))return res.status(401).json({message:'Identidad no autenticada'})
     try{const svc=dependencies.service||configuredService();return res.json(await fn(svc,req))}
     catch(error){if(error instanceof AuthError)return res.status(error.status).json({message:error.message});console.error('Matchter auth request failed');return res.status(503).json({message:'Autenticación temporalmente no disponible'})}
   }
+  const paymentAdmin=s=>{if(!s.paymentAvailability)throw new AuthError(404,'Configuración no disponible');return s.paymentAvailability}
+  const mediation=s=>{if(!s.mediation)throw new AuthError(404,'Mediación aún no disponible');return s.mediation}
+  const inspections=s=>{if(!s.inspections)throw new AuthError(404,'Inspecciones aún no disponibles');return s.inspections}
+  const completion=(s,key)=>{if(!s[key])throw new AuthError(404,'Módulo aún no disponible');return s[key]}
+  router.get('/messages/case-notices',handle((s,r)=>completion(s,'caseNotices').get(r.get('authorization'),r.query)))
+  router.post('/messages/case-notices/read',handle((s,r)=>completion(s,'caseNotices').read(r.get('authorization'),r.body)))
+  router.get('/admin/inspectors/access',handle((s,r)=>completion(s,'inspectorAdmin').access(r.get('authorization'))))
+  router.get('/admin/inspectors',handle((s,r)=>completion(s,'inspectorAdmin').list(r.get('authorization'))))
+  router.post('/admin/inspectors',handle((s,r)=>completion(s,'inspectorAdmin').save(r.get('authorization'),r.body)))
+  router.get('/messages/mediation/evidence',handle((s,r)=>mediation(s).evidence(r.get('authorization'),r.query)))
+  router.get('/messages/mediation/evidence-file',handle((s,r)=>mediation(s).evidenceFile(r.get('authorization'),r.query)))
+  router.post('/messages/mediation/evidence',handle((s,r)=>mediation(s).addEvidence(r.get('authorization'),r.body)))
+  router.get('/admin/mediation/evidence',handle((s,r)=>mediation(s).evidence(r.get('authorization'),r.query,true)))
+  router.get('/admin/mediation/evidence-file',handle((s,r)=>mediation(s).evidenceFile(r.get('authorization'),r.query,true)))
+  router.get('/messages/inspections',handle((s,r)=>inspections(s).caseView(r.get('authorization'),r.query)))
+  router.post('/messages/inspections/select',handle((s,r)=>inspections(s).select(r.get('authorization'),r.body)))
+  router.get('/messages/inspections/inbox',handle((s,r)=>inspections(s).inbox(r.get('authorization'),r.query)))
+  router.get('/messages/inspections/attachments',handle((s,r)=>inspections(s).attachments(r.get('authorization'),r.query)))
+  router.get('/messages/inspections/attachment',handle((s,r)=>inspections(s).attachment(r.get('authorization'),r.query)))
+  router.post('/messages/inspections/attachments',handle((s,r)=>inspections(s).addAttachment(r.get('authorization'),r.body)))
+  router.get('/admin/mediation/inspection-attachments',handle((s,r)=>inspections(s).attachments(r.get('authorization'),r.query,true)))
+  router.get('/admin/mediation/inspection-attachment',handle((s,r)=>inspections(s).attachment(r.get('authorization'),r.query,true)))
+  router.get('/messages/inspections/conversation',handle((s,r)=>inspections(s).conversation(r.get('authorization'),r.query)))
+  router.post('/messages/inspections/change',handle((s,r)=>inspections(s).change(r.get('authorization'),r.body)))
+  router.get('/admin/mediation/access',handle((s,r)=>mediation(s).access(r.get('authorization'))))
+  router.get('/admin/mediation',handle((s,r)=>mediation(s).queue(r.get('authorization'))))
+  router.get('/admin/mediation/export',handle((s,r)=>mediation(s).exportCase(r.get('authorization'),r.query,true)))
+  router.get('/messages/mediation/export',handle((s,r)=>mediation(s).exportCase(r.get('authorization'),r.query)))
+  router.get('/admin/mediation/case',handle((s,r)=>mediation(s).get(r.get('authorization'),r.query,true)))
+  router.post('/admin/mediation/case',handle((s,r)=>mediation(s).change(r.get('authorization'),r.body,true)))
+  router.get('/messages/mediation',handle((s,r)=>mediation(s).get(r.get('authorization'),r.query)))
+  router.post('/messages/mediation',handle((s,r)=>mediation(s).change(r.get('authorization'),r.body)))
+  router.get('/admin/payments/access',handle((s,r)=>paymentAdmin(s).access(r.get('authorization'))))
+  router.get('/admin/payments',handle((s,r)=>paymentAdmin(s).get(r.get('authorization'))))
+  router.post('/admin/payments',handle((s,r)=>paymentAdmin(s).save(r.get('authorization'),r.body)))
   router.get('/me',handle((svc,req)=>svc.me(req.get('authorization'))))
   router.post('/onboard',handle((svc,req)=>svc.onboard(req.get('authorization'),req.body)))
   router.get('/profiles',handle((svc,req)=>svc.profiles.list(req.get('authorization'))))
@@ -56,12 +100,16 @@ export function createAuthRouter(env=process.env, dependencies={}) {
   router.post('/swipe/invite',handle((s,r)=>s.swipe.invite(r.get('authorization'),r.body)))
   router.post('/swipe/respond',handle((s,r)=>s.swipe.respond(r.get('authorization'),r.body)))
   router.get('/messages',handle((s,r)=>s.messages.list(r.get('authorization'),r.query.role)))
+  router.get('/messages/wallet/receipt',handle((s,r)=>s.messages.walletReceipt(r.get('authorization'),r.query)))
+  router.get('/messages/wallet',handle((s,r)=>s.messages.wallet(r.get('authorization'),r.query)))
   router.get('/messages/history',handle((s,r)=>s.messages.history(r.get('authorization'),r.query)))
   router.post('/messages/send',handle((s,r)=>s.messages.send(r.get('authorization'),r.body)))
   router.get('/messages/agreement',handle((s,r)=>s.messages.agreement(r.get('authorization'),r.query)))
   router.post('/messages/agreement',handle((s,r)=>s.messages.changeAgreement(r.get('authorization'),r.body)))
   router.get('/messages/contract',handle((s,r)=>s.messages.contract(r.get('authorization'),r.query)))
   router.post('/messages/contract',handle((s,r)=>s.messages.changeContract(r.get('authorization'),r.body)))
+  router.get('/messages/claims',handle((s,r)=>s.messages.claims(r.get('authorization'),r.query)))
+  router.post('/messages/claims',handle((s,r)=>s.messages.submitClaim(r.get('authorization'),r.body)))
   router.get('/messages/stages',handle((s,r)=>s.messages.stages(r.get('authorization'),r.query)))
   router.post('/messages/stages',handle((s,r)=>s.messages.changeStage(r.get('authorization'),r.body)))
   router.get('/messages/review',handle((s,r)=>s.messages.review(r.get('authorization'),r.query)))

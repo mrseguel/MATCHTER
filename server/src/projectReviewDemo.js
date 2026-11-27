@@ -1,6 +1,7 @@
 import {AuthError} from './identityAccounts.js'
 import {contractContext} from './projectContractDemo.js'
 import {stageReady} from './projectStageDemo.js'
+import {isDirectContract,readDirectStageEvents,directStageView} from './directStageService.js'
 const fail=(status,message)=>{throw new AuthError(status,message)}
 const cols='score,comment,created_at AS "createdAt"'
 export const REVIEW_WINDOW_MS=7*24*60*60*1000
@@ -15,6 +16,11 @@ export function validateReview(b){
 async function context(db,actor,id,lock=false){
  const {side,agreement,current}=await contractContext(db,actor,id,lock)
  if(!stageReady(current))fail(409,'Primero formaliza el contrato')
+ if(isDirectContract(current)){
+  const tracking=directStageView(agreement,current,await readDirectStageEvents(db,id,agreement,current))
+  if(!tracking.complete||!tracking.stages.length)fail(409,'Primero completa la recepción conforme de todas las etapas')
+  return {side,agreement,current}
+ }
  const count=agreement.data.stages.length
  const rows=(await db.query('SELECT stage_no AS "stageNo", released_at AS "releasedAt" FROM matchter.project_stage_demos WHERE request_id=$1 AND agreement_version=$2 AND contract_revision=$3',[id,agreement.version,current.revision])).rows
  if(!count||!agreement.data.stages.every((_,i)=>rows.some(r=>r.stageNo===i+1&&r.releasedAt)))fail(409,'Primero completa todas las etapas y libera los pagos de prueba')

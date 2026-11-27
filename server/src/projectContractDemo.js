@@ -28,7 +28,8 @@ export async function contractContext(db,a,id,lock){
  const current=(await db.query('SELECT '+fields+' FROM matchter.project_contract_demos WHERE request_id=$1 AND agreement_version=$2 ORDER BY revision DESC LIMIT 1',[id,agreement.version])).rows[0]
  return {side,agreement,current,providerRole:m.providerRole}
 }
-export function contractSnapshot(id,agreement,mode,revision,arrangement,fee){
+export function contractSnapshot(id,agreement,mode,revision,arrangement,fee,paymentMode){
+ if(paymentMode!==undefined&&paymentMode!=='direct')throw new AuthError(409,'La modalidad financiera aún no está disponible')
  if(!modes.includes(mode))throw new AuthError(400,'Se requiere un contrato escrito')
  const d=agreement.data
  const terms=documentTerms({project:d.title,scope:d.scope,startDate:d.start,endDate:d.end},{name:'Cliente de prueba'},{name:'Prestador de prueba'},d.stages)
@@ -37,15 +38,28 @@ export function contractSnapshot(id,agreement,mode,revision,arrangement,fee){
   terms.notaryArrangement={payer:arrangement.payer,proposedBy:arrangement.proposedBy,feeStatus:'pending_quote'}
   terms.clauses.push(['DÉCIMO. Costo del trámite notarial · propuesta de prueba','Responsable propuesto del costo completo: '+(arrangement.payer==='client'?'cliente':'prestador')+'. Tarifa definitiva pendiente de cotización y aceptación expresa. No se genera ningún cobro en esta beta.'])
  }
- if(fee?.version===2){terms.serviceFee=fee;terms.clauses.push(['Tarifa de servicio MATCHTER · simulación','Tarifa única de cada parte: '+fee.amount.toLocaleString('es-CL')+' CLP. El cliente paga su tarifa adicional al valor de la obra; el ejecutor elige pagar su propia tarifa tras ambas firmas o descontarla de la primera liberación suficiente a su favor. La tarifa remunera la conexión, negociación, acuerdos, gestión documental y formalización del contrato. Una vez prestados esos servicios y formalizado el contrato, no iniciar o continuar los trabajos no constituye por sí solo causal de devolución, sin perjuicio de los derechos irrenunciables y las responsabilidades legales de MATCHTER. Seguimiento, coordinación de pagos protegidos y mediación son prestaciones complementarias sin otra tarifa de gestión por etapa, no garantía técnica de la obra. No se descuenta la tarifa del ejecutor de fondos a restituir al cliente. Esta beta no mueve fondos reales.'])}else if(fee){terms.serviceFee=fee;terms.clauses.push(['Tarifa de servicio MATCHTER · simulación','Tarifa única del cliente: '+fee.amount.toLocaleString('es-CL')+' CLP, adicional al precio contractual y separada de las etapas y del trámite notarial. No reduce el monto del ejecutor. No se realiza ningún cargo real; los costos financieros e impuestos definitivos están pendientes de validación.'])}
+ if(paymentMode==='direct'){
+  if(fee?.version!==2)throw new AuthError(409,'Se requiere la tarifa bilateral vigente')
+  terms.paymentMode='direct'
+  const disputeClause=terms.clauses.find(c=>c[0].startsWith('OCTAVO.'))
+  if(!disputeClause)throw new AuthError(409,'No se pudo preparar la cláusula de controversias')
+  disputeClause[1]='En caso de controversia relativa a la calidad, alcance, atraso, abandono u otro incumplimiento de los trabajos, cualquiera de las partes podrá presentar un reclamo y aportar antecedentes. MATCHTER facilitará voluntariamente una mediación y formulará una propuesta de solución no vinculante. Si ambas partes la aceptan, se registrará el acuerdo. Si no existe acuerdo, se dejará constancia del cierre sin acuerdo; las partes podrán resolver la controversia directamente o recurrir a las autoridades y tribunales competentes. Cualquiera de las partes podrá solicitar o contratar una inspección técnica independiente, previa cotización y aceptación expresa de sus honorarios y alcance; se procurará designar al profesional de común acuerdo cuando corresponda. El informe podrá incorporarse al expediente como antecedente, con acceso autorizado y posibilidad de formular observaciones. Las decisiones económicas, pagos, reparaciones y descuentos serán gestionados por las partes fuera de MATCHTER conforme a derecho. La plataforma no resguarda, retiene ni distribuye fondos de obra en esta modalidad. La negativa a contratar una inspección o a aceptar una propuesta no equivale a consentimiento, renuncia ni reconocimiento de responsabilidad. No se restringen los derechos, garantías ni acciones legales que correspondan.'
+
+  terms.serviceFee={...fee,paymentMode:'direct',deferAvailable:false}
+  const paymentClause=terms.clauses.find(c=>c[0].startsWith('TERCERO.'))
+  if(paymentClause)paymentClause[1]+=' Los pagos de los trabajos serán gestionados directamente entre las partes. MATCHTER no recibe ni resguarda esos fondos; el registro de recepción conforme no ejecuta una transferencia.'
+  terms.clauses.push(['Tarifa de servicio MATCHTER · simulación','Tarifa única e individual de cada parte: '+fee.amount.toLocaleString('es-CL')+' CLP. Ambas tarifas se pagan directamente a MATCHTER tras las dos firmas, por separado de los pagos de obra. La tarifa remunera la conexión, negociación, acuerdos, gestión documental y formalización. Una vez prestados dichos servicios y formalizado el contrato, no iniciar o continuar los trabajos no constituye por sí solo causal de devolución, sin perjuicio de los derechos irrenunciables y responsabilidades legales de MATCHTER. El seguimiento de hitos y la mediación son prestaciones complementarias, sin otra tarifa de gestión por etapa; no constituyen garantía técnica de la obra. No se realiza ningún cargo real en esta beta.'])
+ }else if(fee?.version===2){terms.serviceFee=fee;terms.clauses.push(['Tarifa de servicio MATCHTER · simulación','Tarifa única de cada parte: '+fee.amount.toLocaleString('es-CL')+' CLP. El cliente paga su tarifa adicional al valor de la obra; el ejecutor elige pagar su propia tarifa tras ambas firmas o descontarla de la primera liberación suficiente a su favor. La tarifa remunera la conexión, negociación, acuerdos, gestión documental y formalización del contrato. Una vez prestados esos servicios y formalizado el contrato, no iniciar o continuar los trabajos no constituye por sí solo causal de devolución, sin perjuicio de los derechos irrenunciables y las responsabilidades legales de MATCHTER. Seguimiento, coordinación de pagos protegidos y mediación son prestaciones complementarias sin otra tarifa de gestión por etapa, no garantía técnica de la obra. No se descuenta la tarifa del ejecutor de fondos a restituir al cliente. Esta beta no mueve fondos reales.'])}else if(fee){terms.serviceFee=fee;terms.clauses.push(['Tarifa de servicio MATCHTER · simulación','Tarifa única del cliente: '+fee.amount.toLocaleString('es-CL')+' CLP, adicional al precio contractual y separada de las etapas y del trámite notarial. No reduce el monto del ejecutor. No se realiza ningún cargo real; los costos financieros e impuestos definitivos están pendientes de validación.'])}
  const digest=createHash('sha256').update(JSON.stringify({id,agreementVersion:agreement.version,revision,mode,terms})).digest('hex')
  return {terms,digest}
 }
-export async function readContractDemo(db,a,id){
+export async function readContractDemo(db,a,id,{paymentModeForNewContract}={}){
  const {agreement,current,providerRole}=await contractContext(db,a,id,false)
- return {agreementVersion:agreement.version,serviceFee:current&&!needsFeeUpgrade(current)?current.terms?.serviceFee||null:quoteServiceFee(providerRole,agreement.data.stages),feeUpgradeRequired:needsFeeUpgrade(current),contract:view(current)}
+ let fee=current&&!needsFeeUpgrade(current)?current.terms?.serviceFee||null:quoteServiceFee(providerRole,agreement.data.stages)
+ if(!current&&paymentModeForNewContract){const mode=await paymentModeForNewContract(db);if(mode!=='direct')throw new AuthError(409,'La modalidad financiera aún no está disponible');fee={...fee,paymentMode:mode,deferAvailable:false}}
+ return {agreementVersion:agreement.version,serviceFee:fee,feeUpgradeRequired:needsFeeUpgrade(current),contract:view(current)}
 }
-export async function changeContractDemo(db,a,id,b){
+export async function changeContractDemo(db,a,id,b,{paymentModeForNewContract}={}){
  validateContractAction(b)
  const tx=await db.connect()
  try{
@@ -57,7 +71,8 @@ export async function changeContractDemo(db,a,id,b){
   if(b.action==='choose'){
    if(needsFeeUpgrade(current)||current?.mode!==b.mode||b.mode==='notary'&&(current?.terms?.notaryArrangement?.payer!==b.payer||!current?.terms?.notaryArrangement)){ 
     if(current?.clientSignedAt||current?.providerSignedAt)throw new AuthError(409,'La modalidad ya tiene una confirmación y no se puede cambiar')
-    const {terms,digest}=contractSnapshot(id,agreement,b.mode,revision+1,b.mode==='notary'?{payer:b.payer,proposedBy:side}:undefined,current&&!needsFeeUpgrade(current)?current.terms?.serviceFee:quoteServiceFee(providerRole,agreement.data.stages))
+    const paymentMode=current?current.terms?.paymentMode:paymentModeForNewContract?await paymentModeForNewContract(tx):undefined
+    const {terms,digest}=contractSnapshot(id,agreement,b.mode,revision+1,b.mode==='notary'?{payer:b.payer,proposedBy:side}:undefined,current&&!needsFeeUpgrade(current)?current.terms?.serviceFee:quoteServiceFee(providerRole,agreement.data.stages),paymentMode)
     saved=(await tx.query('INSERT INTO matchter.project_contract_demos(request_id,agreement_version,revision,mode,terms,digest) VALUES($1,$2,$3,$4,$5,$6) RETURNING '+fields,[id,agreement.version,revision+1,b.mode,JSON.stringify(terms),digest])).rows[0]
    }
   }else if(b.action==='acceptNotary'){
@@ -73,6 +88,7 @@ export async function changeContractDemo(db,a,id,b){
    if(!bilateral(current)||b.digest!==current.digest||!current.clientSignedAt||!current.providerSignedAt)throw new AuthError(409,'Confirma ambas firmas del contrato bilateral')
    const fee=current.terms.serviceFee,mode=b.action==='payProviderFeeDemo'?'upfront':'deferred'
    if(mode==='upfront'&&b.demoAmount!==fee.amount)throw new AuthError(409,'La tarifa no coincide')
+   if(mode==='deferred'&&current.terms?.paymentMode==='direct')throw new AuthError(409,'Sin resguardo de fondos, debes pagar tu tarifa directamente')
    if(mode==='deferred'&&!fee.deferAvailable)throw new AuthError(409,'Ninguna etapa tiene monto suficiente para el descuento')
    if(current.providerFeeMode&&current.providerFeeMode!==mode)throw new AuthError(409,'La modalidad de tarifa ya fue registrada')
    if(!current.providerFeeMode)saved=(await tx.query('UPDATE matchter.project_contract_demos SET provider_fee_demo_mode=$4,provider_fee_demo_paid_at=CASE WHEN $4=\'upfront\' THEN now() ELSE NULL END WHERE request_id=$1 AND agreement_version=$2 AND revision=$3 AND provider_fee_demo_mode IS NULL RETURNING '+fields,[id,agreement.version,revision,mode])).rows[0]

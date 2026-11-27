@@ -1,6 +1,7 @@
 import {serviceFeeReady,bilateral,deferredDeduction} from './serviceFeeDemo.js'
 import {AuthError} from './identityAccounts.js'
 import {contractContext,DEMO_NOTARY_FEE} from './projectContractDemo.js'
+import {isDirectContract,readDirectStageEvents,directStageView,recordDirectStage} from './directStageService.js'
 const cols='stage_no AS "stageNo",amount,funded_at AS "fundedAt",delivered_at AS "deliveredAt",released_at AS "releasedAt"'
 const fail=(status,msg)=>{throw new AuthError(status,msg)}
 export function stageReady(c){return !!(serviceFeeReady(c)&&c?.clientSignedAt&&c?.providerSignedAt&&(c.mode==='simple'||c.mode==='notary'&&c.notaryAcceptedAt&&c.notaryDemoPaidAt&&c.notaryDemoFee===DEMO_NOTARY_FEE&&c.notaryDemoAuthorizedAt))}
@@ -16,12 +17,14 @@ function state(a,c,rows){
  return {demo:true,serviceFee:fee?{amount:fee.amount,clientPaidAt:c.serviceFeePaidAt||null,providerMode:c.providerFeeMode,providerPaidAt:c.providerFeePaidAt||null,providerStageNo:c.providerFeeStageNo||null}:null,agreementVersion:a.version,contractRevision:c.revision,digest:c.digest,stages:stageViews,currentStage,complete:currentStage===null}
 }
 async function readyContext(db,actor,id,lock){const {side,agreement,current}=await contractContext(db,actor,id,lock);if(!stageReady(current))fail(409,'Primero formaliza el contrato de prueba');return {side,agreement,current}}
-export async function readStageDemo(db,actor,id){const {agreement,current}=await readyContext(db,actor,id,false);return state(agreement,current,await rowsFor(db,id,agreement,current))}
+export async function readStageDemo(db,actor,id){const {agreement,current}=await readyContext(db,actor,id,false);return isDirectContract(current)?directStageView(agreement,current,await readDirectStageEvents(db,id,agreement,current)):state(agreement,current,await rowsFor(db,id,agreement,current))}
 export async function changeStageDemo(db,actor,id,b){
- validateStageAction(b);const tx=await db.connect()
+ const tx=await db.connect()
  try{
   await tx.query('BEGIN')
   const {side,agreement,current}=await readyContext(tx,actor,id,true)
+  if(isDirectContract(current)){const result=await recordDirectStage(tx,actor,id,agreement,current,side,b);await tx.query('COMMIT');return result}
+  validateStageAction(b)
   if(b.agreementVersion!==agreement.version||b.contractRevision!==current.revision||b.digest!==current.digest)fail(409,'El contrato no coincide')
   if(side!==(b.action==='deliver'?'provider':'client'))fail(403,'Acción reservada al perfil correspondiente')
   const rows=await rowsFor(tx,id,agreement,current),before=state(agreement,current,rows),s=before.stages[b.stageNo-1]

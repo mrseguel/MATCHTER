@@ -1,3 +1,4 @@
+import './features/auth/wallet.css'
 import {roleForLabel,ROLE_BY_LABEL,displayRole} from './profileRoles.js'
 import React, { useRef, useState, useEffect } from 'react'
 import { DEMO_CLIENT, DEMO_CLIENTS, DEMO_PROJECTS, ROLE_PROFILE_IDS, DEMO_JOBS, DEMO_CHATS, demoPortrait } from './demoData.js'
@@ -294,7 +295,7 @@ export function App() {
   const vp=view?.t==='pro'?profileById(view.id):j?contactForJob(j):null
   const goTab=k=>{setView(null);setTab(k==='explorar'&&role!=='Cliente'?'proyectos':k)}
  return html`<div className="app">
-  ${tab!=='videos'&&html`<div className="hd"><button className="chip" style=${{width:44}} onClick=${()=>{if(['trabajos','wallet'].includes(tab)){goTab('perfil');return}setAccount(null);setView(null);setMatch(null);setRequestDraft(null)}}>←</button><span className="logo">MATCHTER${SUB[tab]?html`<small>${SUB[tab]}</small>`:''}</span>${tab==='wallet'?html`<button className="chip" style=${{minWidth:44,borderRadius:'50%'}} onClick=${()=>toast('Pago protegido: tus fondos quedan en custodia hasta dar tu conformidad')}>?</button>`:tab==='explorar'?html`<button className="chip" style=${{minWidth:44}} onClick=${()=>setFiltersOpen(f=>!f)}>🎚️${(filters.cats.length+['inm','ver','top','emp'].filter(k=>filters[k]).length+(filters.dist?1:0))||''}</button>`:html`<span style=${{width:44}}></span>`}</div>`}
+  ${tab!=='videos'&&html`<div className="hd"><button className="chip" style=${{width:44}} onClick=${()=>{if(['trabajos','wallet'].includes(tab)){goTab('perfil');return}setAccount(null);setView(null);setMatch(null);setRequestDraft(null)}}>←</button><span className="logo">MATCHTER${SUB[tab]?html`<small>${SUB[tab]}</small>`:''}</span>${tab==='wallet'?html`<button className="chip" style=${{minWidth:44,borderRadius:'50%'}} onClick=${()=>toast('Wallet de prueba: no se realizan cobros ni se resguardan fondos')}>?</button>`:tab==='explorar'?html`<button className="chip" style=${{minWidth:44}} onClick=${()=>setFiltersOpen(f=>!f)}>🎚️${(filters.cats.length+['inm','ver','top','emp'].filter(k=>filters[k]).length+(filters.dist?1:0))||''}</button>`:html`<span style=${{width:44}}></span>`}</div>`}
   <div className=${'main'+(tab==='explorar'?' fit':'')+(tab==='videos'?' community-main':'')}>
    <div hidden=${tab!=='videos'} className="community-mount"><${Community} active=${tab==='videos'} actor=${role==='Cliente'?activeClient:roleProfile} role=${role} profiles=${pros} clients=${DEMO_CLIENTS} inboxSignal=${communityInboxSignal} onOpenProfile=${p=>setView({t:'pro',id:p.id})}/></div>
    ${tab==='explorar'&&role==='Cliente'&&html`<${Explore} pros=${pros} seen=${seen} act=${act} setView=${setView} saved=${saved} filt=${filtersOpen} setFilt=${setFiltersOpen} fl=${filters} setFl=${setFilters}/>`}
