@@ -12,6 +12,8 @@ import {readFile,readdir} from 'node:fs/promises'
 import express from 'express'
 import pg from 'pg'
 import {generateKeyPair,SignJWT} from 'jose'
+import {createSandboxProviderTransport} from '../server/src/sandboxProviderTransport.js'
+import {createSandboxPaymentWorker} from '../server/src/sandboxPaymentWorker.js'
 import {createSandboxReconciliation} from '../server/src/sandboxPaymentReconciliation.js'
 import {createSandboxPaymentAttempts} from '../server/src/sandboxPaymentAttempts.js'
 import {createAuthRouter} from '../server/src/authPreviewRoutes.js'
@@ -96,17 +98,38 @@ try{
  assert.equal(race.filter(r=>r.status==='fulfilled').length,1)
  assert.equal(race.find(r=>r.status==='rejected').reason.status,409)
  const winnerAttempt=race.find(r=>r.status==='fulfilled').value
- assert.equal((await sandboxAttempts.markDispatchUnknown(winnerAttempt.id,actors.client.profileId)).state,'creation_unknown')
- await assert.rejects(sandboxAttempts.cancelUnsent(auth('client'),{role:'Cliente',attemptId:winnerAttempt.id}),{status:409})
- await assert.rejects(sandboxAttempts.reserve(auth('client'),{...baseAttempt,submissionId:randomUUID()}),{status:409})
  const otherAttempt=await sandboxAttempts.reserve(auth('provider'),{...baseAttempt,provider:winnerAttempt.provider==='khipu'?'mercadopago':'khipu',role:actors.provider.role,submissionId:randomUUID()})
  assert.notEqual(otherAttempt.id,winnerAttempt.id)
- await sandboxAttempts.markDispatchUnknown(otherAttempt.id,actors.provider.profileId)
- const reconciliation=createSandboxReconciliation({db,mode:'isolated_test',merchants:{khipu:'9876',mercadopago:'9876'}})
+ const merchants={khipu:'9876',mercadopago:'9876'}
+ const reconciliation=createSandboxReconciliation({db,mode:'isolated_test',merchants})
  const ka=[winnerAttempt,otherAttempt].find(a=>a.provider==='khipu'),ma=[winnerAttempt,otherAttempt].find(a=>a.provider==='mercadopago')
  const kc={payment_id:'abc123def456',payment_url:'https://khipu.com/payment/info/abc123def456'}
  const mc={id:'qa-pref-1',collector_id:9876,external_reference:ma.id,sandbox_init_point:'https://sandbox.mercadopago.cl/checkout/pay'}
+ const calls=[]
+ const fixtureK={payment_id:kc.payment_id,receiver_id:9876,transaction_id:ka.id,currency:'CLP',amount:'2990.00',status:'verifying',status_detail:'pending',out_of_date_conciliation:false}
+ const fixtureM={id:'123456789',collector_id:9876,external_reference:ma.id,currency_id:'CLP',transaction_amount:2990,live_mode:false,status:'rejected',status_detail:'cc_rejected_other_reason',payment_type_id:'debit_card',transaction_amount_refunded:0,order:{type:'mercadopago',id:'123'}}
+ const fixtureOrder={id:'123',preference_id:mc.id,external_reference:ma.id,collector:{id:9876},payments:[{id:fixtureM.id}]}
+ const transport=createSandboxProviderTransport({mode:'isolated_test',origin:'https://qa.invalid',credentials:{khipu:{environment:'sandbox',merchantId:'9876',secret:'fixture-khipu'},mercadopago:{environment:'sandbox',merchantId:'9876',secret:'fixture-mp'}},fetchImpl:async(url,opts)=>{
+  calls.push({url,method:opts.method})
+  let value
+  if(opts.method==='POST'){
+   const body=JSON.parse(opts.body),id=body.transaction_id||body.external_reference
+   assert.equal((await db.query('SELECT state FROM matchter.sandbox_payment_attempt_events WHERE attempt_id=$1 ORDER BY sequence DESC LIMIT 1',[id])).rows[0].state,'creation_unknown')
+   value=url.includes('khipu.com')?kc:mc
+  }else value=url.includes('khipu.com')?fixtureK:url.includes('/merchant_orders/')?fixtureOrder:fixtureM
+  return new Response(JSON.stringify(value),{headers:{'Content-Type':'application/json'}})
+ }})
+ const worker=createSandboxPaymentWorker({mode:'isolated_test',db,attempts:sandboxAttempts,reconciliation,transport,merchants})
+ const dispatched=await Promise.all([worker.dispatch(winnerAttempt.id,actors.client.profileId),worker.dispatch(otherAttempt.id,actors.provider.profileId)])
+ assert.ok(dispatched.every(x=>x.realPayment===false))
+ await assert.rejects(worker.dispatch(winnerAttempt.id,actors.client.profileId),{status:409})
+ assert.equal(calls.filter(c=>c.method==='POST').length,2)
+ await assert.rejects(sandboxAttempts.cancelUnsent(auth('client'),{role:'Cliente',attemptId:winnerAttempt.id}),{status:409})
+ await assert.rejects(sandboxAttempts.reserve(auth('client'),{...baseAttempt,submissionId:randomUUID()}),{status:409})
  await assert.rejects(reconciliation.bindCheckout(reserved.id,kc),{status:409})
+ assert.equal((await worker.reconcile(ka.id)).status,'pending')
+ assert.equal((await worker.reconcile(ma.id,fixtureM.id)).status,'declined')
+ console.log('SANDBOX WORKER QA PASSED: real database dispatch before fixture HTTP, both provider bindings, authenticated response reconciliation, no external calls')
  assert.equal((await reconciliation.bindCheckout(ka.id,kc)).status,'checkout_created')
  assert.equal((await reconciliation.bindCheckout(ka.id,kc)).status,'checkout_created')
  await assert.rejects(reconciliation.bindCheckout(ka.id,{...kc,payment_id:'abc123def457'}),{status:409})
