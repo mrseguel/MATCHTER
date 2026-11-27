@@ -55,24 +55,25 @@ function FeeInformation({bilateral,amount}){
  </div>
 }
 function CounterpartyFeeStatus({party,confirmed,canContact}){
- const id=useId(),[open,setOpen]=useState(false),anchor=useRef(null),trigger=useRef(null)
- useEffect(()=>{setOpen(false)},[party,confirmed,canContact])
+ const autoOpen=!confirmed&&canContact
+ const id=useId(),[open,setOpen]=useState(autoOpen),anchor=useRef(null),trigger=useRef(null)
+ useEffect(()=>{setOpen(autoOpen)},[party,autoOpen])
  useEffect(()=>{
-  if(!open)return
+  if(!open||confirmed)return
   const outside=e=>{if(!anchor.current?.contains(e.target))setOpen(false)}
   const escape=e=>{if(e.key==='Escape'){setOpen(false);trigger.current?.focus()}}
   document.addEventListener('pointerdown',outside);document.addEventListener('keydown',escape)
   return ()=>{document.removeEventListener('pointerdown',outside);document.removeEventListener('keydown',escape)}
- },[open])
+ },[open,confirmed])
  const client=party==='Cliente',company=party==='Empresa',professional=party==='Profesional',trade=party==='Maestro/contratista'||party==='Maestro o contratista'
  const label=client?'del cliente':company?'de la empresa':professional?'del profesional':trade?'del maestro o contratista':'de la contraparte'
  const subject=client?'El cliente':company?'La empresa':professional?'El profesional':trade?'El maestro o contratista':'La contraparte'
- const status='Tarifa '+label+(confirmed?' confirmada':' pendiente de confirmación')
- const detail=confirmed?subject+' ya completó este trámite.':!canContact?'El pago de las tarifas se habilita cuando ambas partes hayan firmado el contrato.':subject+(client?' aún no ha realizado el pago de su tarifa MATCHTER.':' aún no ha completado este trámite.')+' Puedes '+(company||!client&&!professional&&!trade?'contactarla':'contactarlo')+' a través de esta conversación para coordinar '+(client?'el pago':'su confirmación')+' y avanzar a la siguiente etapa.'
+ const status='Tarifa '+label+(confirmed?(client?' pagada y confirmada':' confirmada'):' pendiente de confirmación')
+ const detail=!canContact?'El pago de las tarifas se habilita cuando ambas partes hayan firmado el contrato.':subject+(client?' aún no ha realizado el pago de su tarifa MATCHTER.':' aún no ha completado este trámite.')+' Puedes '+(company||!client&&!professional&&!trade?'contactarla':'contactarlo')+' a través de esta conversación para coordinar '+(client?'el pago':'su confirmación')+' y avanzar a la siguiente etapa.'
  const close=()=>{setOpen(false);trigger.current?.focus()}
  return <div ref={anchor} style={{position:'relative',minWidth:0}}>
-  <div className="ct-status" style={{display:'flex',alignItems:'center',justifyContent:'space-between',gap:8}}><span style={{display:'flex',alignItems:'center',gap:6,color:confirmed?'#15803d':'#a65d16',fontWeight:600,minWidth:0}}>{confirmed?<CheckCircle2 size={17} style={{flexShrink:0}}/>:<Clock size={17} style={{flexShrink:0}}/>}{status}</span><button ref={trigger} type="button" aria-label={'Información: '+status} aria-expanded={open} aria-controls={open?id:undefined} style={{display:'inline-flex',alignItems:'center',justifyContent:'center',background:'transparent',color:'#e87922',padding:3,border:0,cursor:'pointer',flexShrink:0}} onClick={()=>setOpen(v=>!v)}><Info size={19}/></button></div>
-  {open&&<div id={id} role="region" aria-label="Información sobre la tarifa de la contraparte" style={{position:'absolute',top:'calc(100% + 4px)',right:0,zIndex:30,width:'min(100%, 340px)',boxSizing:'border-box',background:'var(--card,#fff)',color:'var(--tx,#202124)',border:'1px solid #e87922',borderRadius:12,padding:12,boxShadow:'0 6px 20px #0003',fontSize:14,lineHeight:1.5}}>
+  <div className="ct-status" style={{display:'flex',alignItems:'center',justifyContent:'space-between',gap:8}}><span style={{display:'flex',alignItems:'center',gap:6,color:confirmed?'#15803d':'#a65d16',fontWeight:600,minWidth:0}}>{confirmed?<CheckCircle2 size={17} style={{flexShrink:0}}/>:<Clock size={17} style={{flexShrink:0}}/>}{status}</span>{!confirmed&&<button ref={trigger} type="button" aria-label={'Información: '+status} aria-expanded={open} aria-controls={open?id:undefined} style={{display:'inline-flex',alignItems:'center',justifyContent:'center',background:'transparent',color:'#e87922',padding:3,border:0,cursor:'pointer',flexShrink:0}} onClick={()=>setOpen(v=>!v)}><Info size={19}/></button>}</div>
+  {!confirmed&&open&&<div id={id} role="region" aria-label="Información sobre la tarifa de la contraparte" style={{position:'absolute',top:'calc(100% + 4px)',right:0,zIndex:30,width:'min(100%, 340px)',boxSizing:'border-box',background:'var(--card,#fff)',color:'var(--tx,#202124)',border:'1px solid #e87922',borderRadius:12,padding:12,boxShadow:'0 6px 20px #0003',fontSize:14,lineHeight:1.5}}>
    <div style={{display:'flex',alignItems:'center',justifyContent:'space-between',gap:8}}><Info size={22} color="#e87922"/><button type="button" aria-label="Cerrar información" style={{display:'inline-flex',background:'transparent',color:'inherit',border:0,padding:6,cursor:'pointer'}} onClick={close}><X size={19}/></button></div><p style={{margin:'8px 0 0'}}>{detail}</p>
   </div>}
  </div>
