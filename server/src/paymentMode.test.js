@@ -74,3 +74,12 @@ test('physical progress, evidence, delivery and acceptance remain enabled in bot
   assert.equal(protectedPlan.stageTracking.financialCustody,true);
   assert.equal(protectedPlan.stageTracking.financialRelease,true);
 });
+
+test('payment mode preserves the fee quoted by the existing role-based tariff policy', () => {
+  const direct=paymentPlan({stageAmounts:[100000],feeAmount:4990});
+  assert.equal(direct.clientSeparateFeeDue,4990);
+  assert.equal(direct.providerFeeDue,4990);
+  const protectedPlan=paymentPlan({mode:PAYMENT_MODE.PROTECTED,verifiedCustody:true,stageAmounts:[100000],feeAmount:9990});
+  assert.equal(protectedPlan.clientFirstStageAmount,109990);
+  assert.throws(()=>paymentPlan({stageAmounts:[100000],feeAmount:0}));
+});
