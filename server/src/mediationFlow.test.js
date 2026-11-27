@@ -46,3 +46,13 @@ test('inspection and statements do not imply payment or financial authorization'
  assert.throws(()=>apply(e,'other','comment',{text:'Acceso indebido'}),{status:403})
  assert.throws(()=>apply(e,'client','review'),{status:409})
 })
+
+test('direct inspection can be requested after failed mediation without reopening the case',()=>{
+ const e=active();apply(e,'mediator','close',{text:'Sin acuerdo'})
+ assert.throws(()=>apply(e,'client','inspection',{text:'Evaluar terminaciones',mode:'legacy_demo'}),{status:409})
+ apply(e,'client','inspection',{text:'Evaluar terminaciones',mode:'direct'})
+ assert.equal(mediationState(e).status,'closed_without_agreement')
+ assert.deepEqual(mediationState(e).inspectionRequested,['client'])
+ assert.throws(()=>apply(e,'client','inspection',{text:'Evaluar terminaciones',mode:'direct'}),{status:409})
+ assert.throws(()=>apply(e,'client','comment',{text:'Reabrir caso',mode:'direct'}),{status:409})
+})
