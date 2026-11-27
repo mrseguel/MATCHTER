@@ -30,18 +30,19 @@ async function orderRow(q,orderId,a,lock=false){
  if(!r)fail(404,'Inspección no disponible')
  return r
 }
-async function eventsFor(q,orderId){return (await q.query('SELECT id,data FROM matchter.inspection_order_events WHERE order_id=$1 ORDER BY seq',[orderId])).rows.map(r=>{const {fingerprint,...event}=r.data;return {id:r.id,...event}})}
+async function eventsFor(q,orderId){return (await q.query('SELECT id,data,created_at AS "createdAt" FROM matchter.inspection_order_events WHERE order_id=$1 ORDER BY seq',[orderId])).rows.map(r=>{const {fingerprint,...event}=r.data;return {id:r.id,...event,createdAt:r.createdAt}})}
 function view(r,events,a){
  const s=inspectionState(events),own=r.requesterProfileId===a.profileId,assigned=r.inspectorProfileId===a.profileId
+ const messages=own||assigned?events.filter(e=>e.action==='message').map(e=>({id:e.id,text:e.text,author:e.author,createdAt:e.createdAt})):[]
  const q=s.quote,quote=q?{id:q.id,scope:q.scope,feeCLP:q.feeCLP,currency:q.currency,validUntil:q.validUntil}:null
- return {id:r.id,caseId:r.caseId,scope:r.scope,createdAt:r.createdAt,own,assigned,requesterSide:r.requesterProfileId===r.clientProfileId?'client':'provider',inspector:{displayName:r.displayName,specialty:r.specialty,serviceArea:r.serviceArea},status:s.status,quote,visit:s.visit,report:s.report,noMoneyMoved:true}
+ return {id:r.id,caseId:r.caseId,scope:r.scope,createdAt:r.createdAt,own,assigned,requesterSide:r.requesterProfileId===r.clientProfileId?'client':'provider',inspector:{displayName:r.displayName,specialty:r.specialty,serviceArea:r.serviceArea},status:s.status,quote,messages,visit:s.visit,report:s.report,noMoneyMoved:true}
 }
 // Only call after the parent mediation case has been authorized.
 export async function inspectionCaseRecord(q,claimId){
- const r=(await q.query('SELECT '+rowFields+joins+' WHERE o.claim_id=$1',[claimId])).rows[0]
+ const r=(await q.query('SELECT '+rowFields+joins+' WHERE o.id=(SELECT order_id FROM matchter.inspection_awards WHERE claim_id=$1)',[claimId])).rows[0]
  if(!r)return null
  const rows=(await q.query('SELECT id,actor_profile_id AS "actorProfileId",data,created_at AS "createdAt" FROM matchter.inspection_order_events WHERE order_id=$1 ORDER BY seq',[r.id])).rows
- const events=rows.map(row=>{
+ const events=rows.filter(row=>row.data.action!=='message').map(row=>{
   const {fingerprint,...e}=row.data
   if(e.quote){const {scope,feeCLP,currency,validUntil}=e.quote;e.quote={scope,feeCLP,currency,validUntil}}
   return {id:row.id,createdAt:row.createdAt,author:row.actorProfileId===r.inspectorProfileId?'inspector':row.actorProfileId===r.requesterProfileId?'requester':'unknown',...e}
@@ -54,8 +55,10 @@ export function createInspectionService({db,verifyIdentity}){
  return Object.freeze({
   async caseView(header,query){
    const a=await getActor(db,header,query.role),c=await caseFor(db,query.claimId,a)
-   const r=(await db.query('SELECT '+rowFields+joins+' WHERE o.claim_id=$1',[c.id])).rows[0]
-   return {order:r?view(r,await eventsFor(db,r.id),a):null,canSelect:c.requested&&!r,inspectors:c.requested&&!r?await directory(db,c):[]}
+   const award=(await db.query('SELECT order_id AS id FROM matchter.inspection_awards WHERE claim_id=$1',[c.id])).rows[0]
+   const rows=(await db.query('SELECT '+rowFields+joins+' WHERE o.claim_id=$1 AND (o.requester_profile_id=$2 OR o.id=$3) ORDER BY o.created_at DESC LIMIT 100',[c.id,a.profileId,award?.id??null])).rows
+   const orders=[];for(const r of rows)orders.push({...view(r,await eventsFor(db,r.id),a),awarded:award?.id===r.id,caseAwarded:!!award})
+   return {orders,canSelect:c.requested&&!award,inspectors:c.requested&&!award?await directory(db,c):[]}
   },
   async select(header,body){
    shape(body,['role','claimId','inspectorProfileId','scope'])
@@ -66,11 +69,12 @@ export function createInspectionService({db,verifyIdentity}){
     await tx.query('BEGIN')
     const a=await getActor(tx,header,body.role),c=await caseFor(tx,body.claimId,a,true)
     if(!c.requested)fail(409,'Primero registra tu solicitud de inspección')
-    const previous=(await tx.query('SELECT '+rowFields+joins+' WHERE o.claim_id=$1',[c.id])).rows[0]
+    const previous=(await tx.query('SELECT '+rowFields+joins+' WHERE o.claim_id=$1 AND o.requester_profile_id=$2 AND o.inspector_profile_id=$3',[c.id,a.profileId,body.inspectorProfileId])).rows[0]
     if(previous){
-     if(previous.requesterProfileId!==a.profileId||previous.inspectorProfileId!==body.inspectorProfileId||previous.scope!==body.scope.trim())fail(409,'El expediente ya tiene una solicitud de cotización')
+     // Reopening a conversation must not create a duplicate or replace its original scope.
      const result=view(previous,await eventsFor(tx,previous.id),a);await tx.query('COMMIT');return {order:result}
     }
+    if((await tx.query('SELECT 1 FROM matchter.inspection_awards WHERE claim_id=$1',[c.id])).rows[0])fail(409,'Ya se contrató una inspección para el expediente')
     const eligible=(await directory(tx,c)).some(i=>i.profileId===body.inspectorProfileId)
     if(!eligible)fail(403,'Profesional independiente no disponible')
     const {id:orderId}=(await tx.query('INSERT INTO matchter.inspection_orders(claim_id,requester_profile_id,inspector_profile_id,scope) VALUES($1,$2,$3,$4) RETURNING id',[c.id,a.profileId,body.inspectorProfileId,body.scope.trim()])).rows[0]
@@ -83,7 +87,7 @@ export function createInspectionService({db,verifyIdentity}){
    const registered=(await db.query('SELECT 1 FROM matchter.inspector_registry WHERE profile_id=$1 AND enabled AND verified_at IS NOT NULL',[a.profileId])).rows[0]
    if(!registered)return {enabled:false,orders:[]}
    const rows=(await db.query('SELECT '+rowFields+joins+' WHERE o.inspector_profile_id=$1 ORDER BY o.created_at DESC LIMIT 100',[a.profileId])).rows
-   const orders=[];for(const r of rows)orders.push(view(r,await eventsFor(db,r.id),a))
+   const orders=[];for(const r of rows){const award=(await db.query('SELECT order_id AS id FROM matchter.inspection_awards WHERE claim_id=$1',[r.caseId])).rows[0];orders.push({...view(r,await eventsFor(db,r.id),a),awarded:award?.id===r.id,caseAwarded:!!award})}
    return {enabled:true,orders}
   },
   async change(header,body){
@@ -91,18 +95,24 @@ export function createInspectionService({db,verifyIdentity}){
    const tx=await db.connect()
    try{
     await tx.query('BEGIN')
-    const a=await getActor(tx,header,body.role),r=await orderRow(tx,body.orderId,a,true)
+    const a=await getActor(tx,header,body.role),initial=await orderRow(tx,body.orderId,a)
+    // Serialize every award across all conversations in the same case.
+    await tx.query('SELECT id FROM matchter.stage_claims WHERE id=$1 FOR UPDATE',[initial.caseId])
+    const r=await orderRow(tx,body.orderId,a,true)
     if(![r.requesterProfileId,r.inspectorProfileId].includes(a.profileId))fail(403,'Acción no autorizada')
+    const award=(await tx.query('SELECT order_id AS id FROM matchter.inspection_awards WHERE claim_id=$1',[r.caseId])).rows[0]
     const fingerprint=JSON.stringify([body.action,body.input])
     const prior=(await tx.query('SELECT data FROM matchter.inspection_order_events WHERE order_id=$1 AND actor_profile_id=$2 AND submission_id=$3',[r.id,a.profileId,body.submissionId])).rows[0]
     if(prior){if(prior.data.fingerprint!==fingerprint)fail(409,'Identificador ya utilizado')}
     else{
+     if(award&&award.id!==r.id)fail(409,'Se eligió otro inspector para este expediente')
      const conflicted=(await tx.query("SELECT 1 FROM matchter.stage_claim_events WHERE claim_id=$1 AND actor_account_id=$2 AND data->>'side'='mediator' LIMIT 1",[r.caseId,r.inspectorAccountId])).rows[0]
      const order={...r,partyAccountIds:[r.clientAccountId,r.providerAccountId],inspector:{accountId:r.inspectorAccountId,profileId:r.inspectorProfileId,verified:!!r.verifiedAt,eligible:r.enabled===true&&r.inspectorRole==='Profesional'&&!conflicted&&![r.clientAccountId,r.providerAccountId].includes(r.inspectorAccountId)}}
      let event;try{event=nextInspectionEvent({order,events:await eventsFor(tx,r.id),actor:a,action:body.action,input:body.input})}catch(e){if([400,403,409].includes(e.status))fail(e.status,e.message);throw e}
+     if(event.action==='accept')await tx.query('INSERT INTO matchter.inspection_awards(claim_id,order_id) VALUES($1,$2)',[r.caseId,r.id])
      await tx.query('INSERT INTO matchter.inspection_order_events(order_id,actor_profile_id,submission_id,data) VALUES($1,$2,$3,$4)',[r.id,a.profileId,body.submissionId,JSON.stringify({...event,fingerprint})])
     }
-    const result=view(r,await eventsFor(tx,r.id),a);await tx.query('COMMIT');return {order:result}
+    const awarded=award?.id===r.id||body.action==='accept';const result={...view(r,await eventsFor(tx,r.id),a),awarded,caseAwarded:!!award||awarded};await tx.query('COMMIT');return {order:result}
    }catch(e){try{await tx.query('ROLLBACK')}catch{}throw e}finally{tx.release()}
   }
  })
