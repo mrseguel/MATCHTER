@@ -18,5 +18,9 @@ CREATE UNIQUE INDEX IF NOT EXISTS direct_stage_once ON matchter.project_direct_s
  (request_id,agreement_version,contract_revision,stage_no,action) WHERE action<>'progress';
 CREATE INDEX IF NOT EXISTS direct_stage_history ON matchter.project_direct_stage_events
  (request_id,agreement_version,contract_revision,stage_no,event_id);
--- Access grants and actor permissions must be verified in a test database before rollout.
+-- The authenticated application service checks participant, role, contract and sequence under lock.
+GRANT SELECT ON matchter.project_direct_stage_events TO matchter_auth_app;
+GRANT INSERT (request_id,agreement_version,contract_revision,stage_no,action,actor_profile_id,progress_percent) ON matchter.project_direct_stage_events TO matchter_auth_app;
+GRANT USAGE ON SEQUENCE matchter.project_direct_stage_events_event_id_seq TO matchter_auth_app;
+-- Validate role privileges in a test database before rollout. No UPDATE or DELETE grants.
 COMMIT;
