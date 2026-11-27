@@ -39,6 +39,13 @@ export function paymentPlan({ mode = PAYMENT_MODE.DIRECT, stageAmounts, clientFe
   return {
     mode, currency: 'CLP', contractTotal: total, baseFee: BASE_FEE_CLP,
     workPaymentsInformational: !protectedMode,
+    // Physical execution and contractual milestones are independent of fund custody.
+    stageTracking: {
+      enabled: true, progressReporting: true, evidence: true,
+      deliveryReporting: true, acceptanceAndCloseout: true,
+      financialCustody: protectedMode,
+      financialRelease: protectedMode
+    },
     clientSeparateFeeDue: protectedMode ? 0 : clientFeeDue,
     // Scheduled amount, not a charge authorization or a claim that the stage is unpaid.
     clientFirstStageAmount: protectedMode ? stageAmounts[0] + clientFeeDue : null,
