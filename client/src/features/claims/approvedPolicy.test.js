@@ -1,0 +1,4 @@
+import test from 'node:test';import assert from 'node:assert/strict';import {premiumQuote,claimState,caseCode} from './approvedPolicy.js'
+test('Premium includes contractual fee, mediation and inspection reserve',()=>{assert.equal(premiumQuote(1000000),71770);assert.equal(premiumQuote(500000),57370);assert.equal(premiumQuote(100000),45850);assert.equal(premiumQuote(0),null);assert.equal(premiumQuote(-1),null);assert.equal(premiumQuote(1.5),null)})
+test('technical agreement overrides unsuccessful initial mediation',()=>{assert.equal(claimState({}, {status:'closed_without_agreement',inspectionResolution:{status:'closed_with_agreement'}}).finished,true);assert.equal(claimState({}, {status:'closed_without_agreement',inspectionRequested:['client']}).finished,false)})
+test('unreviewed intake does not imply notification or response deadline',()=>{assert.equal(claimState({}, {status:'received'}).title,'Reclamo recibido');assert.equal(caseCode({id:'a-b'}),'REC-A-B')})
