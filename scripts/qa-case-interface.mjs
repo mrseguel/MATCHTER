@@ -84,13 +84,24 @@ export async function verifyCaseInterface({actors,winner,claimId,requestId,base,
  })
  for(const who of ['client','provider']){
   await open(who,'wallet',async({root,wait,has,click})=>{
-   await wait(()=>has('Pago de prueba registrado')&&has('Tarifa de servicio MATCHTER'),'own wallet record')
+   await wait(()=>has('Pago de prueba registrado')&&has('Tarifa MATCHTER'),'own wallet record')
    assert.equal(root.querySelectorAll('article').length,1)
-   assert.ok(has('no hay dinero disponible'))
+   assert.ok(has('No hay cobros reales.'))
+   await click('Ver todos')
    await click('Pendientes')
    await wait(()=>has('No hay movimientos en esta sección.'),'pending filter')
    await click('Registrados')
    await wait(()=>root.querySelectorAll('article').length===1,'recorded filter')
+   root.querySelector('article button').click()
+   await wait(()=>has('Descargar comprobante de prueba')&&has('Detalle del movimiento'),'movement details')
+   root.querySelector('button[aria-label="Volver"]').click()
+   await wait(()=>has('Movimientos'),'return to history')
+   root.querySelector('button[aria-label="Volver"]').click()
+   await wait(()=>has('Mi Wallet'),'return to overview')
+   root.querySelector('button.mw-row').click()
+   await wait(()=>has('Aún no tienes tarjetas registradas'),'payment methods')
+   assert.ok(root.querySelector('button.mw-primary').disabled)
+   assert.equal(root.querySelectorAll('input').length,0)
   })
  }
  await open('alternative','wallet',async({root,wait,has})=>{
