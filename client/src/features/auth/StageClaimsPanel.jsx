@@ -1,10 +1,13 @@
 import React,{useEffect,useRef,useState} from 'react'
+import {MediationPanel} from './MediationPanel.jsx'
 import {messagesRequest} from './messagesApi.js'
 const reasons=[['quality_scope','Calidad o alcance de los trabajos'],['delay','Retraso'],['nonperformance','Incumplimiento o abandono'],['payment_disagreement','Desacuerdo de pago'],['communication','Comunicación'],['other','Otro motivo']]
 const money=n=>Number(n).toLocaleString('es-CL',{style:'currency',currency:'CLP'})
 const labels={pending:'Pendiente de inicio',in_progress:'En ejecución',delivered:'Entrega notificada',accepted:'Recibida conforme'}
 export function StageClaimsPanel({client,role,thread,initialStage,onBack}){
  const [tracking,setTracking]=useState(null),[claims,setClaims]=useState([]),[stage,setStage]=useState(''),[reason,setReason]=useState(''),[description,setDescription]=useState(''),[resolution,setResolution]=useState(''),[reference,setReference]=useState(''),[busy,setBusy]=useState(false),[error,setError]=useState(''),[notice,setNotice]=useState('')
+ const [caseId,setCaseId]=useState(null),[mediationEnabled,setMediationEnabled]=useState(false)
+ useEffect(()=>{let alive=true;fetch('/api/auth-preview/config').then(r=>r.ok?r.json():null).then(r=>{if(alive)setMediationEnabled(r?.mediationEnabled===true)}).catch(()=>{});return()=>{alive=false}},[])
  const submission=useRef(null),saving=useRef(false),requestId=thread.id
  async function load(){
   setBusy(true);setError('')
@@ -29,6 +32,7 @@ export function StageClaimsPanel({client,role,thread,initialStage,onBack}){
    submission.current=null;setReason('');setDescription('');setResolution('');setReference('');setNotice('Reclamo registrado. Pendiente de revisión.')
   }catch(e){setError(e.message)}finally{saving.current=false;setBusy(false)}
  }
+ if(caseId)return <MediationPanel key={caseId} client={client} role={role} claimId={caseId} onBack={()=>{setCaseId(null);load()}}/>
  const selected=tracking?.stages.find(s=>String(s.stageNo)===stage)
  return <section className="card ct-form"><div className="row sp"><h3>Reclamos y mediación</h3><button type="button" className="chip" disabled={busy} onClick={onBack}>Volver</button></div>
  <b>{thread.project}</b><p className="mut">Contraparte: {thread.peerName} · {thread.peerRole}</p>
@@ -48,7 +52,7 @@ export function StageClaimsPanel({client,role,thread,initialStage,onBack}){
  {error&&<p role="alert" className="wf-error">{error}</p>}{notice&&<p role="status">{notice}</p>}
  <div className="row sp"><h4>Expedientes registrados</h4><button type="button" className="chip" disabled={busy} onClick={load}>Actualizar</button></div>
  {!claims.length&&<p className="mut">Sin expedientes cargados.</p>}
- {claims.map(c=><article className="ct-fee-summary" key={c.id}><b>Etapa {c.stageNo} · {c.stageSnapshot.title}</b><p className="mut">{c.submittedByMe?'Presentado por ti':'Presentado por la contraparte'} · {new Date(c.createdAt).toLocaleString('es-CL')} · Recibido</p><p>{reasons.find(r=>r[0]===c.reason)?.[1]}</p><p>{c.description}</p><p><b>Solución solicitada:</b> {c.requestedResolution}</p>{c.contractReference&&<p>Referencia: {c.contractReference}</p>}<small>Expediente {c.id}</small></article>)}
+ {claims.map(c=><article className="ct-fee-summary" key={c.id}><b>Etapa {c.stageNo} · {c.stageSnapshot.title}</b><p className="mut">{c.submittedByMe?'Presentado por ti':'Presentado por la contraparte'} · {new Date(c.createdAt).toLocaleString('es-CL')}</p><p>{reasons.find(r=>r[0]===c.reason)?.[1]}</p><p>{c.description}</p><p><b>Solución solicitada:</b> {c.requestedResolution}</p>{c.contractReference&&<p>Referencia: {c.contractReference}</p>}<small>Expediente {c.id}</small>{mediationEnabled&&<button type="button" className="btn out" onClick={()=>setCaseId(c.id)}>Consultar expediente y mediación</button>}</article>)}
  </section>
 }
 export function ClaimsCenter({client,role,onBack}){
