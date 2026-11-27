@@ -1,5 +1,7 @@
 import express from 'express'
 import pg from 'pg'
+import {createCaseNotices} from './caseNotices.js'
+import {createInspectorAdministration} from './caseAdministration.js'
 import {createInspectionService} from './inspectionService.js'
 import {createMediationService} from './mediationService.js'
 import {createPaymentAvailabilityService} from './paymentAvailabilityService.js'
@@ -25,9 +27,10 @@ export function createAuthRouter(env=process.env, dependencies={}) {
     pool.on('error',()=>console.error('Matchter auth pool error'))
     const verifyIdentity=createIdentityVerifier({issuer:auth.origin,audience:auth.origin,jwksUrl:jwks.href,algorithms:['EdDSA']})
     const paymentAvailability=env.MATCHTER_PAYMENT_POLICY_ENABLED==='true'?createPaymentAvailabilityService({db:pool,verifyIdentity}):null
-    const mediation=env.MATCHTER_STAGE_CLAIMS_ENABLED==='true'&&env.MATCHTER_MEDIATION_ENABLED==='true'?createMediationService({db:pool,verifyIdentity,inspectionsEnabled:env.MATCHTER_INSPECTIONS_ENABLED==='true'}):null
+    const mediation=env.MATCHTER_STAGE_CLAIMS_ENABLED==='true'&&env.MATCHTER_MEDIATION_ENABLED==='true'?createMediationService({db:pool,verifyIdentity,inspectionsEnabled:env.MATCHTER_INSPECTIONS_ENABLED==='true',evidenceEnabled:env.MATCHTER_CASE_COMPLETION_ENABLED==='true'}):null
     const inspections=mediation&&env.MATCHTER_INSPECTIONS_ENABLED==='true'?createInspectionService({db:pool,verifyIdentity,attachmentsEnabled:env.MATCHTER_INSPECTION_ATTACHMENTS_ENABLED==='true'}):null
-    service={mediation,inspections,...createAccountService({db:pool,verifyIdentity}),profiles:createProfilesService({db:pool,verifyIdentity}),details:createProfileDetailsService({db:pool,verifyIdentity}),swipe:createSwipeService({db:pool,verifyIdentity}),paymentAvailability,messages:createMessagesService({db:pool,verifyIdentity,paymentModeForNewContract:paymentAvailability?.modeForNewContract,claimsEnabled:env.MATCHTER_STAGE_CLAIMS_ENABLED==='true'})}
+    const caseCompletion=!!mediation&&!!inspections&&env.MATCHTER_CASE_COMPLETION_ENABLED==='true'
+    service={caseNotices:caseCompletion?createCaseNotices({db:pool,verifyIdentity}):null,inspectorAdmin:caseCompletion?createInspectorAdministration({db:pool,verifyIdentity}):null,mediation,inspections,...createAccountService({db:pool,verifyIdentity}),profiles:createProfilesService({db:pool,verifyIdentity}),details:createProfileDetailsService({db:pool,verifyIdentity}),swipe:createSwipeService({db:pool,verifyIdentity}),paymentAvailability,messages:createMessagesService({db:pool,verifyIdentity,paymentModeForNewContract:paymentAvailability?.modeForNewContract,claimsEnabled:env.MATCHTER_STAGE_CLAIMS_ENABLED==='true'})}
     return service
   }
   router.use((req,res,next)=>{
@@ -39,7 +42,7 @@ export function createAuthRouter(env=process.env, dependencies={}) {
   })
   router.get('/config',(_req,res)=>{
     if(!env.MATCHTER_NEON_AUTH_URL)return res.status(503).json({message:'Autenticación no configurada'})
-    return res.json({authUrl:env.MATCHTER_NEON_AUTH_URL,stageClaimsEnabled:env.MATCHTER_STAGE_CLAIMS_ENABLED==='true',mediationEnabled:env.MATCHTER_STAGE_CLAIMS_ENABLED==='true'&&env.MATCHTER_MEDIATION_ENABLED==='true',inspectionsEnabled:env.MATCHTER_STAGE_CLAIMS_ENABLED==='true'&&env.MATCHTER_MEDIATION_ENABLED==='true'&&env.MATCHTER_INSPECTIONS_ENABLED==='true',inspectionAttachmentsEnabled:env.MATCHTER_STAGE_CLAIMS_ENABLED==='true'&&env.MATCHTER_MEDIATION_ENABLED==='true'&&env.MATCHTER_INSPECTIONS_ENABLED==='true'&&env.MATCHTER_INSPECTION_ATTACHMENTS_ENABLED==='true'})
+    return res.json({authUrl:env.MATCHTER_NEON_AUTH_URL,stageClaimsEnabled:env.MATCHTER_STAGE_CLAIMS_ENABLED==='true',mediationEnabled:env.MATCHTER_STAGE_CLAIMS_ENABLED==='true'&&env.MATCHTER_MEDIATION_ENABLED==='true',inspectionsEnabled:env.MATCHTER_STAGE_CLAIMS_ENABLED==='true'&&env.MATCHTER_MEDIATION_ENABLED==='true'&&env.MATCHTER_INSPECTIONS_ENABLED==='true',caseCompletionEnabled:env.MATCHTER_STAGE_CLAIMS_ENABLED==='true'&&env.MATCHTER_MEDIATION_ENABLED==='true'&&env.MATCHTER_INSPECTIONS_ENABLED==='true'&&env.MATCHTER_CASE_COMPLETION_ENABLED==='true',inspectionAttachmentsEnabled:env.MATCHTER_STAGE_CLAIMS_ENABLED==='true'&&env.MATCHTER_MEDIATION_ENABLED==='true'&&env.MATCHTER_INSPECTIONS_ENABLED==='true'&&env.MATCHTER_INSPECTION_ATTACHMENTS_ENABLED==='true'})
   })
   const handle=fn=>async(req,res)=>{
     if(!/^Bearer [A-Za-z0-9._-]{20,8192}$/.test(req.get('authorization')||''))return res.status(401).json({message:'Identidad no autenticada'})
@@ -49,6 +52,17 @@ export function createAuthRouter(env=process.env, dependencies={}) {
   const paymentAdmin=s=>{if(!s.paymentAvailability)throw new AuthError(404,'Configuración no disponible');return s.paymentAvailability}
   const mediation=s=>{if(!s.mediation)throw new AuthError(404,'Mediación aún no disponible');return s.mediation}
   const inspections=s=>{if(!s.inspections)throw new AuthError(404,'Inspecciones aún no disponibles');return s.inspections}
+  const completion=(s,key)=>{if(!s[key])throw new AuthError(404,'Módulo aún no disponible');return s[key]}
+  router.get('/messages/case-notices',handle((s,r)=>completion(s,'caseNotices').get(r.get('authorization'),r.query)))
+  router.post('/messages/case-notices/read',handle((s,r)=>completion(s,'caseNotices').read(r.get('authorization'),r.body)))
+  router.get('/admin/inspectors/access',handle((s,r)=>completion(s,'inspectorAdmin').access(r.get('authorization'))))
+  router.get('/admin/inspectors',handle((s,r)=>completion(s,'inspectorAdmin').list(r.get('authorization'))))
+  router.post('/admin/inspectors',handle((s,r)=>completion(s,'inspectorAdmin').save(r.get('authorization'),r.body)))
+  router.get('/messages/mediation/evidence',handle((s,r)=>mediation(s).evidence(r.get('authorization'),r.query)))
+  router.get('/messages/mediation/evidence-file',handle((s,r)=>mediation(s).evidenceFile(r.get('authorization'),r.query)))
+  router.post('/messages/mediation/evidence',handle((s,r)=>mediation(s).addEvidence(r.get('authorization'),r.body)))
+  router.get('/admin/mediation/evidence',handle((s,r)=>mediation(s).evidence(r.get('authorization'),r.query,true)))
+  router.get('/admin/mediation/evidence-file',handle((s,r)=>mediation(s).evidenceFile(r.get('authorization'),r.query,true)))
   router.get('/messages/inspections',handle((s,r)=>inspections(s).caseView(r.get('authorization'),r.query)))
   router.post('/messages/inspections/select',handle((s,r)=>inspections(s).select(r.get('authorization'),r.body)))
   router.get('/messages/inspections/inbox',handle((s,r)=>inspections(s).inbox(r.get('authorization'),r.query)))
