@@ -36,6 +36,19 @@ function view(r,events,a){
  const q=s.quote,quote=q?{id:q.id,scope:q.scope,feeCLP:q.feeCLP,currency:q.currency,validUntil:q.validUntil}:null
  return {id:r.id,caseId:r.caseId,scope:r.scope,createdAt:r.createdAt,own,assigned,requesterSide:r.requesterProfileId===r.clientProfileId?'client':'provider',inspector:{displayName:r.displayName,specialty:r.specialty,serviceArea:r.serviceArea},status:s.status,quote,visit:s.visit,report:s.report,noMoneyMoved:true}
 }
+// Only call after the parent mediation case has been authorized.
+export async function inspectionCaseRecord(q,claimId){
+ const r=(await q.query('SELECT '+rowFields+joins+' WHERE o.claim_id=$1',[claimId])).rows[0]
+ if(!r)return null
+ const rows=(await q.query('SELECT id,actor_profile_id AS "actorProfileId",data,created_at AS "createdAt" FROM matchter.inspection_order_events WHERE order_id=$1 ORDER BY seq',[r.id])).rows
+ const events=rows.map(row=>{
+  const {fingerprint,...e}=row.data
+  if(e.quote){const {scope,feeCLP,currency,validUntil}=e.quote;e.quote={scope,feeCLP,currency,validUntil}}
+  return {id:row.id,createdAt:row.createdAt,author:row.actorProfileId===r.inspectorProfileId?'inspector':row.actorProfileId===r.requesterProfileId?'requester':'unknown',...e}
+ })
+ const record=view(r,await eventsFor(q,r.id),{profileId:null})
+ return {...record,events,limitations:['Registro de prueba. No acredita pago ni visita de manera independiente.','Informe técnico sin firma profesional ni archivos originales adjuntos.','No constituye orden de deducción o liberación de fondos.']}
+}
 export function createInspectionService({db,verifyIdentity}){
  const getActor=(q,header,role)=>actor(q,verifyIdentity,header,role)
  return Object.freeze({
