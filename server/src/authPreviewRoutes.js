@@ -23,7 +23,7 @@ export function createAuthRouter(env=process.env, dependencies={}) {
     pool.on('error',()=>console.error('Matchter auth pool error'))
     const verifyIdentity=createIdentityVerifier({issuer:auth.origin,audience:auth.origin,jwksUrl:jwks.href,algorithms:['EdDSA']})
     const paymentAvailability=env.MATCHTER_PAYMENT_POLICY_ENABLED==='true'?createPaymentAvailabilityService({db:pool,verifyIdentity}):null
-    service={...createAccountService({db:pool,verifyIdentity}),profiles:createProfilesService({db:pool,verifyIdentity}),details:createProfileDetailsService({db:pool,verifyIdentity}),swipe:createSwipeService({db:pool,verifyIdentity}),paymentAvailability,messages:createMessagesService({db:pool,verifyIdentity,paymentModeForNewContract:paymentAvailability?.modeForNewContract})}
+    service={...createAccountService({db:pool,verifyIdentity}),profiles:createProfilesService({db:pool,verifyIdentity}),details:createProfileDetailsService({db:pool,verifyIdentity}),swipe:createSwipeService({db:pool,verifyIdentity}),paymentAvailability,messages:createMessagesService({db:pool,verifyIdentity,paymentModeForNewContract:paymentAvailability?.modeForNewContract,claimsEnabled:env.MATCHTER_STAGE_CLAIMS_ENABLED==='true'})}
     return service
   }
   router.use((req,res,next)=>{
@@ -68,6 +68,8 @@ export function createAuthRouter(env=process.env, dependencies={}) {
   router.post('/messages/agreement',handle((s,r)=>s.messages.changeAgreement(r.get('authorization'),r.body)))
   router.get('/messages/contract',handle((s,r)=>s.messages.contract(r.get('authorization'),r.query)))
   router.post('/messages/contract',handle((s,r)=>s.messages.changeContract(r.get('authorization'),r.body)))
+  router.get('/messages/claims',handle((s,r)=>s.messages.claims(r.get('authorization'),r.query)))
+  router.post('/messages/claims',handle((s,r)=>s.messages.submitClaim(r.get('authorization'),r.body)))
   router.get('/messages/stages',handle((s,r)=>s.messages.stages(r.get('authorization'),r.query)))
   router.post('/messages/stages',handle((s,r)=>s.messages.changeStage(r.get('authorization'),r.body)))
   router.get('/messages/review',handle((s,r)=>s.messages.review(r.get('authorization'),r.query)))
