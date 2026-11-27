@@ -12,6 +12,7 @@ import {readFile,readdir} from 'node:fs/promises'
 import express from 'express'
 import pg from 'pg'
 import {generateKeyPair,SignJWT} from 'jose'
+import {createSandboxReconciliation} from '../server/src/sandboxPaymentReconciliation.js'
 import {createSandboxPaymentAttempts} from '../server/src/sandboxPaymentAttempts.js'
 import {createAuthRouter} from '../server/src/authPreviewRoutes.js'
 import {createIdentityVerifier,createAccountService} from '../server/src/identityAccounts.js'
@@ -38,6 +39,7 @@ try{
  await admin.query(await readFile('docs/migrations/019-025_fresh_qa.sql','utf8'))
  await admin.query(await readFile('docs/migrations/026_case_completion.draft.sql','utf8'))
  await admin.query(await readFile('docs/migrations/027_sandbox_payment_attempts.draft.sql','utf8'))
+ await admin.query(await readFile('docs/migrations/028_sandbox_payment_reconciliation.draft.sql','utf8'))
  db=new Pool({host:'127.0.0.1',port:5432,database:'matchter_qa',user:'matchter_auth_app',password:'qa_app_local_only'})
  const {privateKey,publicKey}=await generateKeyPair('EdDSA')
  const verifyIdentity=createIdentityVerifier({issuer,audience:issuer,jwksUrl:issuer+'/.well-known/jwks.json',algorithms:['EdDSA']},publicKey)
@@ -97,9 +99,34 @@ try{
  assert.equal((await sandboxAttempts.markDispatchUnknown(winnerAttempt.id,actors.client.profileId)).state,'creation_unknown')
  await assert.rejects(sandboxAttempts.cancelUnsent(auth('client'),{role:'Cliente',attemptId:winnerAttempt.id}),{status:409})
  await assert.rejects(sandboxAttempts.reserve(auth('client'),{...baseAttempt,submissionId:randomUUID()}),{status:409})
- const otherAttempt=await sandboxAttempts.reserve(auth('provider'),{...baseAttempt,role:actors.provider.role,submissionId:randomUUID()})
+ const otherAttempt=await sandboxAttempts.reserve(auth('provider'),{...baseAttempt,provider:winnerAttempt.provider==='khipu'?'mercadopago':'khipu',role:actors.provider.role,submissionId:randomUUID()})
  assert.notEqual(otherAttempt.id,winnerAttempt.id)
- assert.equal((await sandboxAttempts.cancelUnsent(auth('provider'),{role:actors.provider.role,attemptId:otherAttempt.id})).state,'cancelled_unsent')
+ await sandboxAttempts.markDispatchUnknown(otherAttempt.id,actors.provider.profileId)
+ const reconciliation=createSandboxReconciliation({db,mode:'isolated_test',merchants:{khipu:'9876',mercadopago:'9876'}})
+ const ka=[winnerAttempt,otherAttempt].find(a=>a.provider==='khipu'),ma=[winnerAttempt,otherAttempt].find(a=>a.provider==='mercadopago')
+ const kc={payment_id:'abc123def456',payment_url:'https://khipu.com/payment/info/abc123def456'}
+ const mc={id:'qa-pref-1',collector_id:9876,external_reference:ma.id,sandbox_init_point:'https://sandbox.mercadopago.cl/checkout/pay'}
+ await assert.rejects(reconciliation.bindCheckout(reserved.id,kc),{status:409})
+ assert.equal((await reconciliation.bindCheckout(ka.id,kc)).status,'checkout_created')
+ assert.equal((await reconciliation.bindCheckout(ka.id,kc)).status,'checkout_created')
+ await assert.rejects(reconciliation.bindCheckout(ka.id,{...kc,payment_id:'abc123def457'}),{status:409})
+ assert.equal((await reconciliation.bindCheckout(ma.id,mc)).status,'checkout_created')
+ const kp={payment_id:kc.payment_id,receiver_id:9876,transaction_id:ka.id,currency:'CLP',amount:'2990.00',status:'done',status_detail:'normal',out_of_date_conciliation:false,bank_account_number:'QA-private'}
+ const mp={id:'123456789',collector_id:9876,external_reference:ma.id,currency_id:'CLP',transaction_amount:2990,live_mode:false,status:'approved',status_detail:'accredited',payment_type_id:'debit_card',transaction_amount_refunded:0,order:{type:'mercadopago',id:'123'},payer:{email:'qa@example.invalid'}}
+ const link={paymentId:mp.id,merchantOrder:{id:'123',preference_id:mc.id,external_reference:ma.id,collector:{id:9876},payments:[{id:mp.id}]}}
+ await assert.rejects(reconciliation.observe(ma.id,mp,{...link,merchantOrder:{...link.merchantOrder,preference_id:'wrong'}}),{status:409})
+ await assert.rejects(reconciliation.observe(ka.id,{...kp,amount:2991}))
+ assert.equal((await reconciliation.observe(ka.id,{...kp,status:'verifying',status_detail:'pending'})).status,'pending')
+ assert.equal((await reconciliation.observe(ka.id,kp)).status,'verified_test')
+ assert.equal((await reconciliation.observe(ka.id,kp)).status,'verified_test')
+ assert.equal((await reconciliation.observe(ma.id,{...mp,status:'rejected'},link)).status,'declined')
+ assert.equal((await reconciliation.observe(ma.id,mp,link)).status,'verified_test')
+ assert.equal((await reconciliation.observe(ka.id,{...kp,status_detail:'fully-refunded'})).status,'review')
+ assert.equal((await reconciliation.observe(ka.id,kp)).status,'review')
+ assert.equal((await reconciliation.observe(ma.id,{...mp,status:'refunded'},link)).status,'review')
+ assert.equal((await db.query('SELECT count(*)::int n FROM matchter.sandbox_payment_observations')).rows[0].n,6)
+ assert.equal((await db.query("SELECT has_table_privilege(current_user,'matchter.sandbox_payment_observations','UPDATE') AS can_rewrite")).rows[0].can_rewrite,false)
+ console.log('SANDBOX RECONCILIATION QA PASSED: both providers, strict linkage, duplicate observation, decline, refund review; no provider calls')
  assert.equal((await db.query("SELECT count(*)::int n FROM matchter.sandbox_payment_attempts WHERE request_id=$1",[requestId])).rows[0].n,3)
  assert.deepEqual((await db.query("SELECT has_table_privilege(current_user,'matchter.sandbox_payment_attempts','DELETE') AS can_delete,has_table_privilege(current_user,'matchter.sandbox_payment_attempt_events','UPDATE') AS can_rewrite")).rows[0],{can_delete:false,can_rewrite:false})
  console.log('SANDBOX PAYMENT RESERVATIONS QA PASSED: persistent idempotency, concurrent cross-provider exclusion, cancellation before dispatch, ambiguous outcome blocks retry, private ownership; no provider calls')
