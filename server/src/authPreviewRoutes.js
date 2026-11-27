@@ -26,7 +26,7 @@ export function createAuthRouter(env=process.env, dependencies={}) {
     const verifyIdentity=createIdentityVerifier({issuer:auth.origin,audience:auth.origin,jwksUrl:jwks.href,algorithms:['EdDSA']})
     const paymentAvailability=env.MATCHTER_PAYMENT_POLICY_ENABLED==='true'?createPaymentAvailabilityService({db:pool,verifyIdentity}):null
     const mediation=env.MATCHTER_STAGE_CLAIMS_ENABLED==='true'&&env.MATCHTER_MEDIATION_ENABLED==='true'?createMediationService({db:pool,verifyIdentity,inspectionsEnabled:env.MATCHTER_INSPECTIONS_ENABLED==='true'}):null
-    const inspections=mediation&&env.MATCHTER_INSPECTIONS_ENABLED==='true'?createInspectionService({db:pool,verifyIdentity}):null
+    const inspections=mediation&&env.MATCHTER_INSPECTIONS_ENABLED==='true'?createInspectionService({db:pool,verifyIdentity,attachmentsEnabled:env.MATCHTER_INSPECTION_ATTACHMENTS_ENABLED==='true'}):null
     service={mediation,inspections,...createAccountService({db:pool,verifyIdentity}),profiles:createProfilesService({db:pool,verifyIdentity}),details:createProfileDetailsService({db:pool,verifyIdentity}),swipe:createSwipeService({db:pool,verifyIdentity}),paymentAvailability,messages:createMessagesService({db:pool,verifyIdentity,paymentModeForNewContract:paymentAvailability?.modeForNewContract,claimsEnabled:env.MATCHTER_STAGE_CLAIMS_ENABLED==='true'})}
     return service
   }
@@ -39,7 +39,7 @@ export function createAuthRouter(env=process.env, dependencies={}) {
   })
   router.get('/config',(_req,res)=>{
     if(!env.MATCHTER_NEON_AUTH_URL)return res.status(503).json({message:'Autenticación no configurada'})
-    return res.json({authUrl:env.MATCHTER_NEON_AUTH_URL,stageClaimsEnabled:env.MATCHTER_STAGE_CLAIMS_ENABLED==='true',mediationEnabled:env.MATCHTER_STAGE_CLAIMS_ENABLED==='true'&&env.MATCHTER_MEDIATION_ENABLED==='true',inspectionsEnabled:env.MATCHTER_STAGE_CLAIMS_ENABLED==='true'&&env.MATCHTER_MEDIATION_ENABLED==='true'&&env.MATCHTER_INSPECTIONS_ENABLED==='true'})
+    return res.json({authUrl:env.MATCHTER_NEON_AUTH_URL,stageClaimsEnabled:env.MATCHTER_STAGE_CLAIMS_ENABLED==='true',mediationEnabled:env.MATCHTER_STAGE_CLAIMS_ENABLED==='true'&&env.MATCHTER_MEDIATION_ENABLED==='true',inspectionsEnabled:env.MATCHTER_STAGE_CLAIMS_ENABLED==='true'&&env.MATCHTER_MEDIATION_ENABLED==='true'&&env.MATCHTER_INSPECTIONS_ENABLED==='true',inspectionAttachmentsEnabled:env.MATCHTER_STAGE_CLAIMS_ENABLED==='true'&&env.MATCHTER_MEDIATION_ENABLED==='true'&&env.MATCHTER_INSPECTIONS_ENABLED==='true'&&env.MATCHTER_INSPECTION_ATTACHMENTS_ENABLED==='true'})
   })
   const handle=fn=>async(req,res)=>{
     if(!/^Bearer [A-Za-z0-9._-]{20,8192}$/.test(req.get('authorization')||''))return res.status(401).json({message:'Identidad no autenticada'})
@@ -52,6 +52,11 @@ export function createAuthRouter(env=process.env, dependencies={}) {
   router.get('/messages/inspections',handle((s,r)=>inspections(s).caseView(r.get('authorization'),r.query)))
   router.post('/messages/inspections/select',handle((s,r)=>inspections(s).select(r.get('authorization'),r.body)))
   router.get('/messages/inspections/inbox',handle((s,r)=>inspections(s).inbox(r.get('authorization'),r.query)))
+  router.get('/messages/inspections/attachments',handle((s,r)=>inspections(s).attachments(r.get('authorization'),r.query)))
+  router.get('/messages/inspections/attachment',handle((s,r)=>inspections(s).attachment(r.get('authorization'),r.query)))
+  router.post('/messages/inspections/attachments',handle((s,r)=>inspections(s).addAttachment(r.get('authorization'),r.body)))
+  router.get('/admin/mediation/inspection-attachments',handle((s,r)=>inspections(s).attachments(r.get('authorization'),r.query,true)))
+  router.get('/admin/mediation/inspection-attachment',handle((s,r)=>inspections(s).attachment(r.get('authorization'),r.query,true)))
   router.get('/messages/inspections/conversation',handle((s,r)=>inspections(s).conversation(r.get('authorization'),r.query)))
   router.post('/messages/inspections/change',handle((s,r)=>inspections(s).change(r.get('authorization'),r.body)))
   router.get('/admin/mediation/access',handle((s,r)=>mediation(s).access(r.get('authorization'))))
