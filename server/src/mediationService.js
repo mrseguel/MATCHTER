@@ -1,3 +1,4 @@
+import {listClaimEvidence,readClaimEvidence,appendClaimEvidence} from './claimEvidence.js'
 import {inspectionResolutionState,isInspectionResolutionAction,checkInspectionResolutionAction} from './inspectionResolution.js'
 import {inspectionCaseRecord} from './inspectionService.js'
 import {signedDisputeReminder} from './signedDisputeReminder.js'
@@ -30,7 +31,7 @@ async function detail(q,claimId,actor,inspectionsEnabled=false){
  const inspectionResolution=claim.mode==='direct'?inspectionResolutionState(events,reportId):null
  return {id:c.id,requestId:c.requestId,claim,createdAt:c.createdAt,side,contractReminder,inspection,inspectionResolution,...mediationState(events)}
 }
-export function createMediationService({db,verifyIdentity,inspectionsEnabled=false}){
+export function createMediationService({db,verifyIdentity,inspectionsEnabled=false,evidenceEnabled=false}){
  async function actor(header,role,mediator,q=db){
   const identity=await verifyIdentity(header)
   const query=mediator?'SELECT a.id AS "accountId" FROM matchter.accounts a JOIN matchter.mediation_administrators m ON m.account_id=a.id WHERE a.auth_issuer=$1 AND a.auth_subject=$2':'SELECT a.id AS "accountId",p.id AS "profileId",p.role FROM matchter.accounts a JOIN matchter.account_active_profiles s ON s.account_id=a.id JOIN matchter.account_profiles p ON p.account_id=a.id AND p.role=s.role WHERE a.auth_issuer=$1 AND a.auth_subject=$2'
@@ -42,6 +43,32 @@ export function createMediationService({db,verifyIdentity,inspectionsEnabled=fal
   async access(header){await actor(header,null,true);return {authorized:true}},
   async queue(header){const a=await actor(header,null,true);const rows=(await db.query('SELECT c.id,c.request_id AS "requestId",c.data,c.created_at AS "createdAt" FROM matchter.stage_claims c JOIN matchter.swipe_requests r ON r.id=c.request_id WHERE NOT EXISTS (SELECT 1 FROM matchter.account_profiles p WHERE p.account_id=$1 AND p.id IN (r.sender_profile_id,r.recipient_profile_id)) ORDER BY c.created_at DESC,c.id DESC LIMIT 100',[a.accountId])).rows;return {cases:rows.map(r=>({id:r.id,requestId:r.requestId,createdAt:r.createdAt,projectTitle:r.data.projectTitle,stageNo:r.data.stageNo}))}},
   async get(header,query,mediator=false){return detail(db,query.claimId,await actor(header,query.role,mediator),inspectionsEnabled)},
+  async evidence(header,query,mediator=false){
+   if(!evidenceEnabled)fail(404,'Evidencias no disponibles')
+   await context(db,query.claimId,await actor(header,query.role,mediator))
+   return {files:await listClaimEvidence(db,query.claimId)}
+  },
+  async evidenceFile(header,query,mediator=false){
+   if(!evidenceEnabled)fail(404,'Evidencias no disponibles')
+   await context(db,query.claimId,await actor(header,query.role,mediator))
+   return readClaimEvidence(db,query.claimId,query.fileId)
+  },
+  async addEvidence(header,body){
+   if(!evidenceEnabled)fail(404,'Evidencias no disponibles')
+   const tx=await db.connect()
+   try{
+    await tx.query('BEGIN')
+    const a=await actor(header,body?.role,false,tx)
+    await tx.query("SELECT pg_advisory_xact_lock(hashtextextended('mediation:'||$1::text,0))",[body?.claimId])
+    const {c}=await context(tx,body?.claimId,a)
+    const events=await eventsFor(tx,c.id),state=mediationState(events)
+    const inspection=inspectionsEnabled?await inspectionCaseRecord(tx,c.id):null
+    const final=inspectionResolutionState(events,inspection?.events.find(e=>e.action==='report')?.id)
+    if(state.status==='closed_with_agreement'||final?.status.startsWith('closed'))fail(409,'El expediente está cerrado; conserva los nuevos antecedentes por separado')
+    const result=await appendClaimEvidence(tx,c.id,a.profileId,body)
+    await tx.query('COMMIT');return result
+   }catch(e){try{await tx.query('ROLLBACK')}catch{}throw e}finally{tx.release()}
+  },
   async exportCase(header,query,mediator=false){
    const a=await actor(header,query.role,mediator)
    const record=await detail(db,query.claimId,a,inspectionsEnabled),c=record.claim
@@ -49,7 +76,8 @@ export function createMediationService({db,verifyIdentity,inspectionsEnabled=fal
    const agreement=(await db.query('SELECT version,data,client_confirmed_at AS "clientConfirmedAt",provider_confirmed_at AS "providerConfirmedAt" FROM matchter.project_agreement_versions WHERE request_id=$1 AND version=$2',[record.requestId,c.agreementVersion])).rows[0]
    if(!signed||!agreement)fail(409,'No se pudo verificar el documento original del expediente')
    const inspection=record.inspection
-   return {format:'matchter-mediation-record-v1',exportedAt:new Date().toISOString(),case:record,contract:signed,agreement,inspection,limitations:['Firmas de prueba, no certificación legal.','Los reclamos son alegaciones, no hechos comprobados.','No incluye archivos originales de evidencia ni conversaciones ajenas al expediente.']}
+   const evidence=evidenceEnabled?await listClaimEvidence(db,c.id??record.id):[]
+   return {format:'matchter-mediation-record-v1',exportedAt:new Date().toISOString(),case:record,contract:signed,agreement,inspection,evidence,limitations:['Firmas de prueba, no certificación legal.','Los reclamos son alegaciones, no hechos comprobados.','No incluye archivos originales de evidencia ni conversaciones ajenas al expediente.']}
   },
   async change(header,body,mediator=false){
    if(!body||typeof body!=='object'||Array.isArray(body)||Object.keys(body).some(k=>!['role','claimId','submissionId','action','text','reference'].includes(k))||!validId(body.claimId)||!validId(body.submissionId)||typeof body.action!=='string')fail(400,'Actuación no válida')
