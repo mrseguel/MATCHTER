@@ -53,11 +53,12 @@ export function contractSnapshot(id,agreement,mode,revision,arrangement,fee,paym
  const digest=createHash('sha256').update(JSON.stringify({id,agreementVersion:agreement.version,revision,mode,terms})).digest('hex')
  return {terms,digest}
 }
-export async function readContractDemo(db,a,id,{paymentModeForNewContract}={}){
+export async function readContractDemo(db,a,id,{paymentModeForNewContract,sandboxFeeProjection}={}){
  const {agreement,current,providerRole}=await contractContext(db,a,id,false)
  let fee=current&&!needsFeeUpgrade(current)?current.terms?.serviceFee||null:quoteServiceFee(providerRole,agreement.data.stages)
  if(!current&&paymentModeForNewContract){const mode=await paymentModeForNewContract(db);if(mode!=='direct')throw new AuthError(409,'La modalidad financiera aún no está disponible');fee={...fee,paymentMode:mode,deferAvailable:false}}
- return {agreementVersion:agreement.version,serviceFee:fee,feeUpgradeRequired:needsFeeUpgrade(current),contract:view(current)}
+ const projected=sandboxFeeProjection?await sandboxFeeProjection(a,id,current):current
+  return {agreementVersion:agreement.version,serviceFee:fee,feeUpgradeRequired:needsFeeUpgrade(current),contract:view(projected),...(sandboxFeeProjection?{sandboxFeeVerification:projected?.sandboxFeeVerification||null}:{})}
 }
 export async function changeContractDemo(db,a,id,b,{paymentModeForNewContract}={}){
  validateContractAction(b)

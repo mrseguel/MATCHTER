@@ -68,7 +68,7 @@ export function workflowSnapshot({agreements=[],contracts=[],stages=[],directEve
  else next=step('contract','Revisar formalización contractual')
  return {demo:true,next,events,complete,review,providerLabel:providerLabel(providerRole),agreement:a?{version:a.version,data:a.data,confirmed:{client:stamp(a.clientConfirmedAt),provider:stamp(a.providerConfirmedAt)}}:null,contract:c?{revision:c.revision,agreementVersion:c.agreementVersion,digest:c.digest,mode:c.mode}:null,notaryAvailable:c?.mode==='notary',stagesAvailable:ready}
 }
-export async function readWorkflow(db,actor,id){
+export async function readWorkflow(db,actor,id,{sandboxFeeProjection}={}){
  const row=(await db.query(`SELECT r.sender_profile_id AS "senderId",r.recipient_profile_id AS "recipientId",
  (SELECT p.role FROM matchter.account_profiles p WHERE p.id=r.recipient_profile_id) AS "providerRole",
  COALESCE((SELECT jsonb_agg(jsonb_build_object('version',a.version,'data',a.data,'proposedBy',CASE WHEN a.proposed_by=r.sender_profile_id THEN 'client' ELSE 'provider' END,'createdAt',a.created_at,'clientConfirmedAt',a.client_confirmed_at,'providerConfirmedAt',a.provider_confirmed_at) ORDER BY a.version) FROM matchter.project_agreement_versions a WHERE a.request_id=r.id),'[]'::jsonb) AS agreements,
@@ -80,6 +80,7 @@ export async function readWorkflow(db,actor,id){
  const side=row.senderId===actor.id?'client':'provider'
  if((side==='client')!==(actor.role==='Cliente'))throw new AuthError(403,'Perfil no autorizado')
  const a=row.agreements.at(-1),c=row.contracts.filter(x=>x.agreementVersion===a?.version).at(-1)
+ if(sandboxFeeProjection&&c){const projected=await sandboxFeeProjection(actor,id,c);row.contracts=row.contracts.map(x=>x===c?projected:x)}
  const directEvents=isDirectContract(c)?await readDirectStageEvents(db,id,a,c):[]
  return workflowSnapshot({...row,side,directEvents})
 }
