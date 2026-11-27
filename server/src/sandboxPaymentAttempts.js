@@ -50,7 +50,9 @@ export function createSandboxPaymentAttempts({db,verifyIdentity,mode}){
   async read(header,b){
    if(!b||!uuid.test(b.attemptId||''))fail(400,'Intento inválido')
    const a=await actor(db,header,b.role),r=await byId(db,b.attemptId,a.id)
-   if(!r)fail(404,'Intento no disponible');return view(r)
+   if(!r)fail(404,'Intento no disponible')
+   const o=(await db.query('SELECT status,observed_at AS "observedAt" FROM matchter.sandbox_payment_observations WHERE attempt_id=$1 ORDER BY sequence DESC LIMIT 1',[r.id])).rows[0]
+   return {...view(r),reconciliationStatus:o?.status??null,reconciledAt:o?.observedAt??null}
   },
   // Cancel only a reservation never dispatched. An unknown creation outcome stays blocked.
   async cancelUnsent(header,b){
