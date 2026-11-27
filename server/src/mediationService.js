@@ -1,3 +1,4 @@
+import {signedDisputeReminder} from './signedDisputeReminder.js'
 import {AuthError} from './identityAccounts.js'
 import {mediationState,checkMediationAction} from './mediationFlow.js'
 const uuid=/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
@@ -20,7 +21,9 @@ async function detail(q,claimId,actor){
  const {c,side}=await context(q,claimId,actor)
  const events=await eventsFor(q,claimId)
  const {submissionId,...claim}=c.data
- return {id:c.id,requestId:c.requestId,claim,createdAt:c.createdAt,side,...mediationState(events)}
+ const signed=(await q.query('SELECT revision,agreement_version AS "agreementVersion",terms,digest,client_signed_at AS "clientSignedAt",provider_signed_at AS "providerSignedAt" FROM matchter.project_contract_demos WHERE request_id=$1 AND agreement_version=$2 AND revision=$3 AND digest=$4',[c.requestId,claim.agreementVersion,claim.contractRevision,claim.digest])).rows[0]
+ const contractReminder=signedDisputeReminder(claim,signed)
+ return {id:c.id,requestId:c.requestId,claim,createdAt:c.createdAt,side,contractReminder,...mediationState(events)}
 }
 export function createMediationService({db,verifyIdentity}){
  async function actor(header,role,mediator,q=db){
