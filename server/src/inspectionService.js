@@ -1,3 +1,4 @@
+import {validateInspectionAttachment} from './inspectionAttachment.js'
 import {AuthError} from './identityAccounts.js'
 import {mediationState} from './mediationFlow.js'
 import {inspectionState,nextInspectionEvent} from './inspectionLifecycle.js'
@@ -50,9 +51,59 @@ export async function inspectionCaseRecord(q,claimId){
  const record=view(r,rows.map(row=>{const {fingerprint,...event}=row.data;return {id:row.id,...event}}),{profileId:null})
  return {...record,awarded:true,events,limitations:['Registro de prueba. No acredita pago ni visita de manera independiente.','Informe técnico sin firma profesional ni archivos originales adjuntos.','No constituye orden de deducción o liberación de fondos.']}
 }
-export function createInspectionService({db,verifyIdentity}){
+export function createInspectionService({db,verifyIdentity,attachmentsEnabled=false}){
  const getActor=(q,header,role)=>actor(q,verifyIdentity,header,role)
+ const attachmentFields='id,filename,media_type AS "mediaType",octet_length(bytes) AS size,sha256,created_at AS "createdAt"'
+ async function attachmentAccess(q,header,query,mediator=false){
+  if(!attachmentsEnabled)fail(404,'Archivos aún no disponibles')
+  const orderId=id(query.orderId)
+  let r
+  if(mediator){
+   const identity=await verifyIdentity(header)
+   const m=(await q.query('SELECT a.id FROM matchter.accounts a JOIN matchter.mediation_administrators m ON m.account_id=a.id WHERE a.auth_issuer=$1 AND a.auth_subject=$2',[identity.issuer,identity.subject])).rows[0]
+   if(!m)fail(403,'Acceso no autorizado')
+   r=(await q.query('SELECT '+rowFields+joins+' WHERE o.id=$1 AND $2 NOT IN (cp.account_id,pp.account_id,ip.account_id)',[orderId,m.id])).rows[0]
+  }else{
+   const a=await getActor(q,header,query.role)
+   r=await orderRow(q,orderId,a)
+  }
+  if(!r||!(await q.query('SELECT 1 FROM matchter.inspection_awards WHERE claim_id=$1 AND order_id=$2',[r.caseId,r.id])).rows[0])fail(404,'Inspección no disponible')
+  return r
+ }
  return Object.freeze({
+  async attachments(header,query,mediator=false){
+   const r=await attachmentAccess(db,header,query,mediator)
+   return {files:(await db.query('SELECT '+attachmentFields+' FROM matchter.inspection_attachments WHERE order_id=$1 ORDER BY created_at,id',[r.id])).rows}
+  },
+  async attachment(header,query,mediator=false){
+   const r=await attachmentAccess(db,header,query,mediator)
+   const file=(await db.query('SELECT '+attachmentFields+',bytes FROM matchter.inspection_attachments WHERE order_id=$1 AND id=$2',[r.id,id(query.fileId)])).rows[0]
+   if(!file)fail(404,'Archivo no disponible')
+   const {bytes,...metadata}=file;return {...metadata,base64:bytes.toString('base64')}
+  },
+  async addAttachment(header,body){
+   shape(body,['role','orderId','submissionId','filename','mediaType','base64']);id(body.submissionId)
+   if(!attachmentsEnabled)fail(404,'Archivos aún no disponibles')
+   let file;try{file=validateInspectionAttachment(body)}catch(e){if(e.status===400)fail(400,e.message);throw e}
+   const tx=await db.connect()
+   try{
+    await tx.query('BEGIN')
+    const r=await attachmentAccess(tx,header,body)
+    const a=await getActor(tx,header,body.role)
+    if(a.profileId!==r.inspectorProfileId||a.accountId!==r.inspectorAccountId||r.inspectorRole!=='Profesional'||!r.enabled||!r.verifiedAt||[r.clientAccountId,r.providerAccountId].includes(a.accountId))fail(403,'Solo el inspector seleccionado puede adjuntar antecedentes')
+    await tx.query("SELECT pg_advisory_xact_lock(hashtextextended('inspection:'||$1::text,0))",[r.caseId])
+    if((await tx.query("SELECT 1 FROM matchter.stage_claim_events WHERE claim_id=$1 AND actor_account_id=$2 AND data->>'side'='mediator' LIMIT 1",[r.caseId,a.accountId])).rows[0])fail(403,'Conflicto de interés')
+    const prior=(await tx.query('SELECT '+attachmentFields+' FROM matchter.inspection_attachments WHERE order_id=$1 AND submission_id=$2',[r.id,body.submissionId])).rows[0]
+    if(prior){if(prior.sha256!==file.sha256||prior.filename!==file.filename||prior.mediaType!==file.mediaType)fail(409,'Identificador ya utilizado')}
+    else{
+     const count=(await tx.query('SELECT count(*)::int AS n FROM matchter.inspection_attachments WHERE order_id=$1',[r.id])).rows[0].n
+     if(count>=10)fail(409,'Límite de 10 archivos de prueba por inspección')
+     await tx.query('INSERT INTO matchter.inspection_attachments(order_id,uploader_profile_id,submission_id,filename,media_type,bytes,sha256) VALUES($1,$2,$3,$4,$5,$6,$7)',[r.id,a.profileId,body.submissionId,file.filename,file.mediaType,file.bytes,file.sha256])
+    }
+    const files=(await tx.query('SELECT '+attachmentFields+' FROM matchter.inspection_attachments WHERE order_id=$1 ORDER BY created_at,id',[r.id])).rows
+    await tx.query('COMMIT');return {files}
+   }catch(e){try{await tx.query('ROLLBACK')}catch{}throw e}finally{tx.release()}
+  },
   async caseView(header,query){
    const a=await getActor(db,header,query.role),c=await caseFor(db,query.claimId,a)
    const award=(await db.query('SELECT order_id AS id FROM matchter.inspection_awards WHERE claim_id=$1',[c.id])).rows[0]
