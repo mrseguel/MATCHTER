@@ -48,3 +48,14 @@ test('provider errors, invalid content, oversize and ambiguous POST are not retr
   await assert.rejects(t.createCheckout(order),{message:'No se pudo verificar la respuesta de la pasarela de prueba'});assert.equal(n,1)
  }
 })
+
+test('explicit Khipu-only transport needs no Mercado Pago credentials and blocks its network calls',async()=>{
+ const calls=[]
+ const t=createSandboxProviderTransport({mode:'isolated_test',providers:['khipu'],credentials:{khipu:credentials.khipu},fetchImpl:async(url,opts)=>{calls.push(url);return json(opts.method==='POST'?kc:kp)},origin:'https://qa.example.invalid'})
+ await assert.rejects(t.createCheckout(mp))
+ await assert.rejects(t.locateMercadoPagoPayment('123456'))
+ assert.equal(calls.length,0)
+ assert.equal((await t.createCheckout(order)).checkout.checkoutId,kc.payment_id)
+ assert.equal(calls.length,2)
+ for(const providers of [[],['khipu','khipu'],['unknown']])assert.throws(()=>createSandboxProviderTransport({mode:'isolated_test',providers,credentials,fetchImpl:async()=>{},origin:'https://qa.example.invalid'}))
+})
