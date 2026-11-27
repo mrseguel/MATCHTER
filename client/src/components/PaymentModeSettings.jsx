@@ -16,7 +16,7 @@ export function PaymentModeSettings({mode='direct',verifiedCustody=false,onSave,
   <p className="mut">Modalidad vigente: {mode==='protected'?'Con resguardo de fondos':'Sin resguardo de fondos'}</p>
   <fieldset disabled={locked} style={{border:0,padding:0,margin:0,display:'grid',gap:12}}>
    <legend className="mut">Selecciona la modalidad para nuevos contratos</legend>
-   <label><input type="radio" name="matchterPaymentMode" checked={selected==='direct'} onChange={()=>setSelected('direct')}/> <b>Sin resguardo de fondos</b><p className="mut">Cada parte paga su tarifa MATCHTER de $2.990. Los montos de los trabajos son informativos.</p></label>
+   <label><input type="radio" name="matchterPaymentMode" checked={selected==='direct'} onChange={()=>setSelected('direct')}/> <b>Sin resguardo de fondos</b><p className="mut">Cada parte paga su tarifa MATCHTER de $2.990. Los montos de los trabajos son informativos; el seguimiento y cierre de etapas se mantiene.</p></label>
    <label><input type="radio" name="matchterPaymentMode" checked={selected==='protected'} disabled={!verifiedCustody} onChange={()=>setSelected('protected')}/> <b>Con resguardo de fondos</b><p className="mut">El cliente paga la primera etapa junto con su tarifa. El prestador paga su tarifa o autoriza su descuento al liberar el primer pago que permita cubrirla.</p></label>
   </fieldset>
   {!verifiedCustody&&<p className="mut">Para habilitar el resguardo, se requiere una integración financiera operativa y verificada.</p>}
