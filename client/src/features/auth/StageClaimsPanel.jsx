@@ -29,7 +29,7 @@ export function StageClaimsPanel({client,role,thread,initialStage,onBack}){
    if(submission.current?.key!==key)submission.current={key,id:crypto.randomUUID()}
    const r=await messagesRequest(client,'claims',role,{...payload,submissionId:submission.current.id})
    setClaims(old=>[r.claim,...old.filter(c=>c.id!==r.claim.id)])
-   submission.current=null;setReason('');setDescription('');setResolution('');setReference('');setNotice('Reclamo registrado. Pendiente de revisión.')
+   submission.current=null;setReason('');setDescription('');setResolution('');setReference('');setNotice('Reclamo registrado. Pendiente de revisión.');if(mediationEnabled)setCaseId(r.claim.id)
   }catch(e){setError(e.message)}finally{saving.current=false;setBusy(false)}
  }
  if(caseId)return <MediationPanel key={caseId} client={client} role={role} claimId={caseId} onBack={()=>{setCaseId(null);load()}}/>
@@ -45,13 +45,13 @@ export function StageClaimsPanel({client,role,thread,initialStage,onBack}){
  <label>Describe lo ocurrido<textarea required minLength={20} maxLength={4000} value={description} disabled={busy} onChange={e=>setDescription(e.target.value)}/></label>
  <label>Solución solicitada<textarea required minLength={5} maxLength={1500} value={resolution} disabled={busy} onChange={e=>setResolution(e.target.value)}/></label>
  <label>Referencia contractual (opcional)<input maxLength={1000} value={reference} disabled={busy} onChange={e=>setReference(e.target.value)}/></label>
- <p className="mut">El contrato, los datos y el estado de la etapa se vinculan automáticamente. Carga privada de fotografías e informes aún no disponible.</p>
+ <p className="mut">El contrato, los datos y el estado de la etapa se vinculan automáticamente. Después de registrar el reclamo podrás adjuntar evidencias en el expediente si la función está habilitada.</p>
  <button className="btn" disabled={busy||!selected||!reason||description.trim().length<20||resolution.trim().length<5}>Presentar reclamo · prueba</button>
  </form>}
  {tracking.complete&&<p className="mut">El procedimiento posterior al cierre y de garantías aún no está habilitado.</p>}</>}
  {error&&<p role="alert" className="wf-error">{error}</p>}{notice&&<p role="status">{notice}</p>}
  <div className="row sp"><h4>Expedientes registrados</h4><button type="button" className="chip" disabled={busy} onClick={load}>Actualizar</button></div>
- {!claims.length&&<p className="mut">Sin expedientes cargados.</p>}
+ {!busy&&!error&&!claims.length&&<p className="mut">Sin expedientes cargados.</p>}
  {claims.map(c=><article className="ct-fee-summary" key={c.id}><b>Etapa {c.stageNo} · {c.stageSnapshot.title}</b><p className="mut">{c.submittedByMe?'Presentado por ti':'Presentado por la contraparte'} · {new Date(c.createdAt).toLocaleString('es-CL')}</p><p>{reasons.find(r=>r[0]===c.reason)?.[1]}</p><p>{c.description}</p><p><b>Solución solicitada:</b> {c.requestedResolution}</p>{c.contractReference&&<p>Referencia: {c.contractReference}</p>}<small>Expediente {c.id}</small>{mediationEnabled&&<button type="button" className="btn out" onClick={()=>setCaseId(c.id)}>Consultar expediente y mediación</button>}</article>)}
  </section>
 }
