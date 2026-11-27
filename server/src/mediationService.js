@@ -34,6 +34,14 @@ export function createMediationService({db,verifyIdentity}){
   async access(header){await actor(header,null,true);return {authorized:true}},
   async queue(header){const a=await actor(header,null,true);const rows=(await db.query('SELECT c.id,c.request_id AS "requestId",c.data,c.created_at AS "createdAt" FROM matchter.stage_claims c JOIN matchter.swipe_requests r ON r.id=c.request_id WHERE NOT EXISTS (SELECT 1 FROM matchter.account_profiles p WHERE p.account_id=$1 AND p.id IN (r.sender_profile_id,r.recipient_profile_id)) ORDER BY c.created_at DESC,c.id DESC LIMIT 100',[a.accountId])).rows;return {cases:rows.map(r=>({id:r.id,requestId:r.requestId,createdAt:r.createdAt,projectTitle:r.data.projectTitle,stageNo:r.data.stageNo}))}},
   async get(header,query,mediator=false){return detail(db,query.claimId,await actor(header,query.role,mediator))},
+  async exportCase(header,query,mediator=false){
+   const a=await actor(header,query.role,mediator)
+   const record=await detail(db,query.claimId,a),c=record.claim
+   const signed=(await db.query('SELECT revision,agreement_version AS "agreementVersion",mode,terms,digest,created_at AS "createdAt",client_signed_at AS "clientSignedAt",provider_signed_at AS "providerSignedAt" FROM matchter.project_contract_demos WHERE request_id=$1 AND agreement_version=$2 AND revision=$3 AND digest=$4',[record.requestId,c.agreementVersion,c.contractRevision,c.digest])).rows[0]
+   const agreement=(await db.query('SELECT version,data,client_confirmed_at AS "clientConfirmedAt",provider_confirmed_at AS "providerConfirmedAt" FROM matchter.project_agreement_versions WHERE request_id=$1 AND version=$2',[record.requestId,c.agreementVersion])).rows[0]
+   if(!signed||!agreement)fail(409,'No se pudo verificar el documento original del expediente')
+   return {format:'matchter-mediation-record-v1',exportedAt:new Date().toISOString(),case:record,contract:signed,agreement,limitations:['Firmas de prueba, no certificación legal.','Los reclamos son alegaciones, no hechos comprobados.','No incluye archivos originales de evidencia ni conversaciones ajenas al expediente.']}
+  },
   async change(header,body,mediator=false){
    if(!body||typeof body!=='object'||Array.isArray(body)||Object.keys(body).some(k=>!['role','claimId','submissionId','action','text','reference'].includes(k))||!validId(body.claimId)||!validId(body.submissionId)||typeof body.action!=='string')fail(400,'Actuación no válida')
    const tx=await db.connect()
