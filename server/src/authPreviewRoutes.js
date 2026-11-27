@@ -52,6 +52,7 @@ export function createAuthRouter(env=process.env, dependencies={}) {
   router.get('/messages/inspections',handle((s,r)=>inspections(s).caseView(r.get('authorization'),r.query)))
   router.post('/messages/inspections/select',handle((s,r)=>inspections(s).select(r.get('authorization'),r.body)))
   router.get('/messages/inspections/inbox',handle((s,r)=>inspections(s).inbox(r.get('authorization'),r.query)))
+  router.get('/messages/inspections/conversation',handle((s,r)=>inspections(s).conversation(r.get('authorization'),r.query)))
   router.post('/messages/inspections/change',handle((s,r)=>inspections(s).change(r.get('authorization'),r.body)))
   router.get('/admin/mediation/access',handle((s,r)=>mediation(s).access(r.get('authorization'))))
   router.get('/admin/mediation',handle((s,r)=>mediation(s).queue(r.get('authorization'))))
