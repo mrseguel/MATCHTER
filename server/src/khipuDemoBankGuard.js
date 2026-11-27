@@ -24,7 +24,10 @@ export function createKhipuDemoBankGuard({fetchImpl,merchantId,developerAccountC
    if(!Array.isArray(banks)||banks.length!==1)throw refuse()
    const b=banks[0]
    if(typeof b?.name!=='string'||!names.has(normalize(b.name))||typeof b.bank_id!=='string'||! /^[A-Za-z0-9_-]{1,5}$/.test(b.bank_id)||body.bank_id!==undefined&&body.bank_id!==b.bank_id)throw refuse()
-   if(!Number.isFinite(b.min_amount)||b.min_amount<0||body.amount<b.min_amount)throw refuse()
+   const rawMinimum=b.min_amount
+   // The API can return a decimal string even though its example is numeric.
+   const minimum=typeof rawMinimum==='string'&&/^\d+(?:\.\d{1,4})?$/.test(rawMinimum)?Number(rawMinimum):typeof rawMinimum==='number'?rawMinimum:NaN
+   if(!Number.isFinite(minimum)||minimum<0||minimum>Number.MAX_SAFE_INTEGER||body.amount<minimum)throw refuse()
    if(options.signal.aborted)throw refuse()
    return await fetchImpl(url,{...options,body:JSON.stringify({...body,bank_id:b.bank_id,send_email:false,send_reminders:false})})
   }catch{throw refuse()}
