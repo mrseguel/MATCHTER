@@ -54,7 +54,9 @@ export function createMediationService({db,verifyIdentity,inspectionsEnabled=fal
    try{
     await tx.query('BEGIN')
     const a=await actor(header,body.role,mediator,tx)
-    const {side,c}=await context(tx,body.claimId,a,true)
+    await context(tx,body.claimId,a)
+    await tx.query("SELECT pg_advisory_xact_lock(hashtextextended('mediation:'||$1::text,0))",[body.claimId])
+    const {side,c}=await context(tx,body.claimId,a)
     const previous=(await tx.query('SELECT data FROM matchter.stage_claim_events WHERE claim_id=$1 AND actor_account_id=$2 AND submission_id=$3',[body.claimId,a.accountId,body.submissionId])).rows[0]
     const fingerprint=JSON.stringify([side,body.action,body.text??null,body.reference??null])
     if(previous){if(previous.data.fingerprint!==fingerprint)fail(409,'Identificador ya utilizado')}
