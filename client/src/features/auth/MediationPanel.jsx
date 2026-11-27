@@ -1,4 +1,5 @@
 import React,{useEffect,useRef,useState} from 'react'
+import {InspectionCasePanel} from './InspectionPanel.jsx'
 import {messagesRequest} from './messagesApi.js'
 const statuses={received:'Recibido',review:'En revisión',invited:'Invitación a mediación',mediation:'Mediación en curso',closed_with_agreement:'Cerrado con acuerdo',closed_without_agreement:'Cerrado sin acuerdo'}
 const actions={comment:'Antecedentes',review:'Revisión iniciada',invite:'Invitación a mediación',join:'Aceptó participar',decline:'Declinó la mediación',propose:'Propuesta de solución',accept:'Aceptó la propuesta',reject:'Rechazó la propuesta',decision_decline:'No aceptó la propuesta de mediación',close:'Cierre sin acuerdo',inspection:'Solicitud de inspección'}
@@ -31,6 +32,8 @@ function SignedDisputeReminder({reminder}){
 }
 export function MediationPanel({client,role,claimId,mediator=false,onBack}){
  const [data,setData]=useState(null),[error,setError]=useState(''),[busy,setBusy]=useState(false),[note,setNote]=useState(''),[kind,setKind]=useState('comment')
+ const [inspectionsEnabled,setInspectionsEnabled]=useState(false)
+ useEffect(()=>{let alive=true;fetch('/api/auth-preview/config').then(r=>r.ok?r.json():null).then(r=>{if(alive)setInspectionsEnabled(r?.inspectionsEnabled===true)}).catch(()=>{});return()=>{alive=false}},[])
  const pending=useRef(null),running=useRef(false),alive=useRef(false)
  async function request(body){return mediator?adminRequest(client,'/case'+(body?'':'?'+new URLSearchParams({claimId})),body):messagesRequest(client,'mediation',role,body,{claimId})}
  async function load(){if(running.current)return;running.current=true;setBusy(true);setError('');try{const r=await request();if(alive.current)setData(r)}catch(e){if(alive.current)setError(e.message)}finally{running.current=false;if(alive.current)setBusy(false)}}
@@ -61,8 +64,8 @@ export function MediationPanel({client,role,claimId,mediator=false,onBack}){
  <h4>Inspección técnica</h4><p>La mediación terminó sin acuerdo. Una evaluación independiente puede determinar el estado de los trabajos, las reparaciones o partidas pendientes y su costo estimado.</p>
  <SignedDisputeReminder reminder={data.contractReminder}/>
  {data.claim.mode==='direct'?<><p className="mut">Contratación directa: la inspección es voluntaria. Se debe buscar un profesional independiente, cotizar el alcance y los honorarios y aceptar el precio antes de contratar. Quien solicite el servicio acuerda su costo, salvo acuerdo distinto entre las partes. El informe no ordena descuentos ni movimientos de fondos dentro de MATCHTER.</p>
- {data.inspectionRequested.length>0&&<p role="status">Solicitud registrada por: {data.inspectionRequested.map(x=>roles[x]).join(', ')}. Cotización y contratación aún pendientes.</p>}
- {!mediator&&!data.inspectionRequested.includes(side)&&<form className="ct-form" onSubmit={e=>{e.preventDefault();if(note.trim().length>=5)act('inspection',note)}}><label>Describe qué debe evaluar el profesional<textarea required minLength={5} maxLength={4000} value={note} onChange={e=>setNote(e.target.value)}/></label><button type="submit" className="btn out" disabled={busy||note.trim().length<5}>Solicitar inspección técnica</button></form>}</>:<p className="mut">La contratación protegida y su procedimiento pericial todavía no están habilitados. Consulta las condiciones del documento original; no se aplican nuevas obligaciones a este contrato.</p>}
+ {data.inspectionRequested.length>0&&<p role="status">Solicitud registrada por: {data.inspectionRequested.map(x=>roles[x]).join(', ')}. Consulta el estado de la cotización y contratación en el panel de inspección.</p>}
+ {!mediator&&!data.inspectionRequested.includes(side)&&<form className="ct-form" onSubmit={e=>{e.preventDefault();if(note.trim().length>=5)act('inspection',note)}}><label>Describe qué debe evaluar el profesional<textarea required minLength={5} maxLength={4000} value={note} onChange={e=>setNote(e.target.value)}/></label><button type="submit" className="btn out" disabled={busy||note.trim().length<5}>Solicitar inspección técnica</button></form>}{inspectionsEnabled&&!mediator&&<InspectionCasePanel key={claimId} client={client} role={role} claimId={claimId} requested={data.inspectionRequested.includes(side)}/>}</>:<p className="mut">La contratación protegida y su procedimiento pericial todavía no están habilitados. Consulta las condiciones del documento original; no se aplican nuevas obligaciones a este contrato.</p>}
  </section>}
 
  <h4>Historial</h4>{data.events.map(e=><div className="ct-fee-summary" key={e.id}><b>{actions[e.action]} · {roles[e.side]}</b><small style={{display:'block'}}>{new Date(e.recordedAt).toLocaleString('es-CL')}</small>{e.text&&<p>{e.text}</p>}</div>)}<button className="btn out" disabled={busy} onClick={exportRecord}>Descargar expediente</button><p className="mut">Incluye el registro, acuerdo y contrato de prueba originales en JSON. Fotografías e informe técnico adjunto pendientes de integración.</p></>}
