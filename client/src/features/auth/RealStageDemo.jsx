@@ -55,7 +55,7 @@ export function RealStageDemo({context,contract,onAdvance,onComplete}){
  }
  const s=state?.stages.find(x=>x.stageNo===state.currentStage)
  return <section className="card wf-execution" aria-label="Seguimiento del proyecto"><div className="row sp"><h3>Seguimiento del proyecto</h3><button type="button" className="chip" disabled={busy} onClick={load}>Actualizar</button></div>
- {state?.paymentMode!=='direct'&&<p className="mut">Pago protegido · simulación. No existe custodia ni transferencia de fondos reales. Los reclamos y la mediación todavía no están conectados a este flujo de prueba.</p>}
+ {state?.paymentMode!=='direct'&&<p className="mut">Pago protegido · simulación. No existe custodia ni transferencia de fondos reales. </p>}
  {!state?<p className="mut">Cargando hitos...</p>:state.paymentMode==='direct'?<DirectStagePanel state={state} side={side} busy={busy} save={save} accepted={accepted} setAccepted={setAccepted}/>:<>
  <div className="wf-progress"><div><CheckCircle2 size={18} color="#16934a"/><span>Contrato formalizado · demo</span></div><ExecutionProgress stages={state.stages}/><div><CheckCircle2 size={18} color={state.complete?'#16934a':'#a5aab4'}/><span>Recepción conforme</span></div></div>
  {state.stages.map(t=><StageCard key={t.stageNo} stage={t} currentStage={state.currentStage} complete={state.complete}/>)}
@@ -66,5 +66,6 @@ export function RealStageDemo({context,contract,onAdvance,onComplete}){
  {s.fundedAt&&!s.deliveredAt&&(side==='provider'?<button type="button" className="btn" disabled={busy} onClick={()=>save('deliver',s)}>Notificar entrega de etapa {s.stageNo}</button>:<p className="mut">Depósito de prueba registrado. Esperando entrega de los trabajos.</p>)}
  {s.deliveredAt&&(side==='client'?<><label className="wf-confirm"><input type="checkbox" checked={accepted} onChange={e=>setAccepted(e.target.checked)}/> {s.stageNo===state.stages.length?'Recibí conforme el trabajo completo, según el contrato.':'Verifiqué la etapa y recibí conforme los trabajos acordados.'}</label><p className="mut">Al confirmar, autorizas la liberación simulada de {clp(s.amount)}.{s.pendingProviderFeeDeduction>0?' Se descontará la tarifa propia del ejecutor, dejando '+clp(s.amount-s.pendingProviderFeeDeduction)+' a su favor.':''} No se transferirá dinero real.</p><button type="button" className="btn gr" disabled={busy||!accepted} onClick={()=>save('release',s)}>Confirmar entrega de etapa {s.stageNo} y liberar pago · demo</button></>:<p className="mut">Entrega notificada. En el flujo definitivo, los fondos de esta etapa se liberarán a tu cuenta bancaria cuando el cliente confirme la recepción conforme de los trabajos. En esta beta, la liberación es simulada.</p>)}
  </>}</>}
+ {state&&context.onClaim&&<div style={{marginTop:12}}><button type="button" className="btn out" onClick={()=>context.onClaim(state.currentStage)}> {state.complete?'Consultar reclamos':'Presentar un reclamo'}</button></div>}
  {error&&<p className="wf-error" role="alert">{error}</p>}</section>
 }
