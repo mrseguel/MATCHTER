@@ -17,7 +17,7 @@ export function nextInspectionEvent({order,events=[],actor,action,input={},now=D
  const s=inspectionState(events),inspector=actor.profileId===order.inspectorProfileId&&actor.accountId===order.inspector.accountId,
  requester=actor.profileId===order.requesterProfileId&&actor.accountId===order.requesterAccountId
  if(!inspector&&!requester)fail(403,'Acción reservada a solicitante o inspector asignado')
- if(s.status==='report_delivered')fail(409,'Informe ya entregado')
+ if(s.status==='report_delivered'&&action!=='message')fail(409,'Informe ya entregado')
  if(inspector&&(!order.inspector.verified||!order.inspector.eligible))fail(403,'Inspector no habilitado')
  const shape=keys=>{if(!input||typeof input!=='object'||Array.isArray(input)||Object.keys(input).some(k=>!keys.includes(k)))fail(400,'Datos no válidos')}
  if(action==='message'){
@@ -49,7 +49,7 @@ export function nextInspectionEvent({order,events=[],actor,action,input={},now=D
  }
  if(action==='report'){
   shape(['findings','limitations','items','visitedAt'])
-  if(!inspector||s.status!=='visit_confirmed'||typeof input.visitedAt!=='string'||!Number.isFinite(Date.parse(input.visitedAt))||Date.parse(input.visitedAt)>now||Date.parse(input.visitedAt)<Date.parse(s.visit.at))fail(409,'Registra la visita realizada antes del informe')
+  if(!inspector||!['accepted_pending_coordination','visit_proposed','visit_confirmed'].includes(s.status)||typeof input.visitedAt!=='string'||!Number.isFinite(Date.parse(input.visitedAt))||Date.parse(input.visitedAt)>now||(s.status==='visit_confirmed'&&Date.parse(input.visitedAt)<Date.parse(s.visit.at)))fail(409,'Registra la visita realizada antes del informe')
   const report=validateInspectionReport({order:{...s.quote,status:'accepted_pending_coordination'},actorAccountId:actor.accountId,findings:input.findings,limitations:input.limitations,items:input.items})
   return {action,report:{...report,status:'submitted_demo',visitedAt:new Date(input.visitedAt).toISOString(),authorizesDeduction:false}}
  }
