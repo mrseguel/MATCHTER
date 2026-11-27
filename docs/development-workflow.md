@@ -11,3 +11,7 @@ Aprobada por el titular del proyecto el 27-11-2026.
 - La continuidad es dentro de una sesión de trabajo activa y las herramientas disponibles; no prometer ejecución en segundo plano sin configurar una tarea autorizada.
 
 Si un módulo está bloqueado por una dependencia externa, identificar tareas independientes seguras que puedan adelantarse y explicar qué intervención es indispensable para resolver el bloqueo.
+
+## Supervisión por etapas — precisión del titular
+
+Completar cada etapa técnica aprobada de principio a fin, con correcciones y validaciones, sin pausas de autorización intermedias. Al finalizar, iniciar inmediatamente la siguiente etapa dentro del alcance autorizado, comunicar su objetivo y realizar sus primeros avances. Presentar entonces un punto de revisión para que el titular, que sigue activamente el desarrollo, pueda indicar continuidad, ajustes o retorno a una etapa anterior. Si requiere acceso personal, autorización de riesgo, costo o cambio sustancial, detenerse antes de ejecutar esa acción. Las tareas internas rutinarias de GitHub, Vercel y Neon no requieren aprobación individual; se mantienen los límites sobre producción, secretos, dinero real y datos existentes.
