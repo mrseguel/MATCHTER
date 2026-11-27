@@ -35,7 +35,7 @@ export function createAuthRouter(env=process.env, dependencies={}) {
   })
   router.get('/config',(_req,res)=>{
     if(!env.MATCHTER_NEON_AUTH_URL)return res.status(503).json({message:'Autenticación no configurada'})
-    return res.json({authUrl:env.MATCHTER_NEON_AUTH_URL})
+    return res.json({authUrl:env.MATCHTER_NEON_AUTH_URL,stageClaimsEnabled:env.MATCHTER_STAGE_CLAIMS_ENABLED==='true'})
   })
   const handle=fn=>async(req,res)=>{
     if(!/^Bearer [A-Za-z0-9._-]{20,8192}$/.test(req.get('authorization')||''))return res.status(401).json({message:'Identidad no autenticada'})
