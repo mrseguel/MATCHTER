@@ -1,3 +1,4 @@
+import {sandboxProviders} from './sandboxProviderSelection.js'
 import {AuthError,PROFILE_ROLES} from './identityAccounts.js'
 import {contractContext} from './projectContractDemo.js'
 const uuid=/^[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}$/i
@@ -6,8 +7,9 @@ const fields='a.id,a.request_id AS "requestId",a.agreement_version AS "agreement
 const select='SELECT '+fields+',e.state,e.sequence FROM matchter.sandbox_payment_attempts a JOIN LATERAL (SELECT state,sequence FROM matchter.sandbox_payment_attempt_events WHERE attempt_id=a.id ORDER BY sequence DESC LIMIT 1) e ON true '
 const view=r=>({...r,demo:true,realPayment:false})
 // Internal sandbox service only. No HTTP route or external provider credentials.
-export function createSandboxPaymentAttempts({db,verifyIdentity,mode}){
+export function createSandboxPaymentAttempts({db,verifyIdentity,mode,providers}){
  if(mode!=='isolated_test')throw Error('Sandbox payment reservations require isolated_test mode')
+ const selected=sandboxProviders(providers)
  async function actor(q,header,role){
   if(!PROFILE_ROLES.includes(role))fail(400,'Perfil inválido')
   const i=await verifyIdentity(header)
@@ -27,7 +29,7 @@ export function createSandboxPaymentAttempts({db,verifyIdentity,mode}){
  async function append(q,id,seq,state){await q.query('INSERT INTO matchter.sandbox_payment_attempt_events(attempt_id,sequence,state) VALUES($1,$2,$3)',[id,seq,state])}
  return Object.freeze({
   async reserve(header,b){
-   if(!b||Object.keys(b).some(k=>!['role','requestId','agreementVersion','contractRevision','digest','provider','submissionId'].includes(k))||!uuid.test(b.requestId||'')||!uuid.test(b.submissionId||'')||!['khipu','mercadopago'].includes(b.provider)||!Number.isInteger(b.agreementVersion)||b.agreementVersion<1||!Number.isInteger(b.contractRevision)||b.contractRevision<1||typeof b.digest!=='string'||!/^[a-f0-9]{64}$/.test(b.digest))fail(400,'Datos de intento inválidos')
+   if(!b||Object.keys(b).some(k=>!['role','requestId','agreementVersion','contractRevision','digest','provider','submissionId'].includes(k))||!uuid.test(b.requestId||'')||!uuid.test(b.submissionId||'')||!selected.includes(b.provider)||!Number.isInteger(b.agreementVersion)||b.agreementVersion<1||!Number.isInteger(b.contractRevision)||b.contractRevision<1||typeof b.digest!=='string'||!/^[a-f0-9]{64}$/.test(b.digest))fail(400,'Datos de intento inválidos')
    return transaction(async q=>{
     const a=await actor(q,header,b.role)
     // Lock the same request as contract mutation, then the provider-independent slot.
@@ -73,6 +75,7 @@ export function createSandboxPaymentAttempts({db,verifyIdentity,mode}){
    return transaction(async q=>{
     const initial=await byId(q,attemptId,ownerId)
     if(!initial)fail(404,'Intento no disponible')
+    if(!selected.includes(initial.provider))fail(409,'Proveedor de prueba no habilitado')
     // Preserve lock order used by reserve: contract request first, then payment slot.
     const owner=(await q.query('SELECT id,role FROM matchter.account_profiles WHERE id=$1',[ownerId])).rows[0]
     if(!owner)fail(404,'Perfil no disponible')
