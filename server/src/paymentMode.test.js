@@ -1,10 +1,11 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { choosePaymentMode, paymentPlan, PAYMENT_MODE } from './paymentMode.js';
+import { choosePaymentMode, paymentPlan, PAYMENT_MODE, validateAdminPaymentModeChange } from './paymentMode.js';
 
 test('new contracts default to direct mode without verified custody', () => {
   assert.equal(choosePaymentMode(), PAYMENT_MODE.DIRECT);
-  assert.equal(choosePaymentMode({verifiedCustody:true}), PAYMENT_MODE.PROTECTED);
+  assert.equal(choosePaymentMode({verifiedCustody:true}), PAYMENT_MODE.DIRECT);
+  assert.equal(choosePaymentMode({selectedMode:PAYMENT_MODE.PROTECTED,verifiedCustody:true}), PAYMENT_MODE.PROTECTED);
 });
 test('direct mode charges only the separate fee; work stages are informational', () => {
   const p = paymentPlan({stageAmounts:[100000, 50000]});
@@ -45,4 +46,18 @@ test('protected mode fails closed if custody is unavailable', () => {
 test('invalid modes and amounts are rejected', () => {
   assert.throws(()=>paymentPlan({mode:'unknown',stageAmounts:[100000]}));
   for (const stageAmounts of [[],[0],[-1],[1.2],[Infinity]]) assert.throws(()=>paymentPlan({stageAmounts}));
+});
+
+test('only an administrator can change the selected mode', () => {
+  assert.throws(()=>validateAdminPaymentModeChange({requestedMode:PAYMENT_MODE.DIRECT}),/Administrator/);
+});
+test('admin cannot activate protection without a verified integration', () => {
+  assert.throws(()=>validateAdminPaymentModeChange({isAdmin:true,requestedMode:PAYMENT_MODE.PROTECTED}),/custody/);
+});
+test('administrator can choose either mode after verification; existing contracts remain unchanged', () => {
+  const enabled=validateAdminPaymentModeChange({isAdmin:true,requestedMode:PAYMENT_MODE.PROTECTED,verifiedCustody:true});
+  assert.deepEqual(enabled,{selectedMode:'protected',previousMode:'direct',changed:true,appliesTo:'new-contracts-only'});
+  const disabled=validateAdminPaymentModeChange({isAdmin:true,currentMode:'protected',requestedMode:'direct'});
+  assert.equal(disabled.selectedMode,'direct');
+  assert.equal(disabled.appliesTo,'new-contracts-only');
 });
