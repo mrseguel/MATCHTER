@@ -46,7 +46,7 @@ export function createSandboxNotificationInbox({mode,db,worker,transport,credent
    const row=await take(eventKey)
    if(!row)return {processed:false,environment:'sandbox',realPayment:false}
    let state='processed'
-   try{const r=await resolve(row);if(r.status==='review')state='review';else if(!['pending','declined','verified_test'].includes(r.status))throw Error('Unknown outcome')}
+   try{const r=await resolve(row);if(r.status==='review')state='review';else if(row.provider==='khipu'&&r.status==='pending')state=row.tries>=MAX_TRIES?'review':'pending';else if(!['pending','declined','verified_test'].includes(r.status))throw Error('Unknown outcome')}
    catch{state=row.tries>=MAX_TRIES?'review':'pending'}
    const acknowledged=await finish(row,state)
    return {processed:acknowledged,state:acknowledged?state:'lease_lost',environment:'sandbox',realPayment:false}
