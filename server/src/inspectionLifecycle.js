@@ -20,6 +20,11 @@ export function nextInspectionEvent({order,events=[],actor,action,input={},now=D
  if(s.status==='report_delivered')fail(409,'Informe ya entregado')
  if(inspector&&(!order.inspector.verified||!order.inspector.eligible))fail(403,'Inspector no habilitado')
  const shape=keys=>{if(!input||typeof input!=='object'||Array.isArray(input)||Object.keys(input).some(k=>!keys.includes(k)))fail(400,'Datos no válidos')}
+ if(action==='message'){
+  shape(['text'])
+  if(!text(input.text,1,2000))fail(400,'Escribe un mensaje de hasta 2000 caracteres')
+  return {action,text:input.text.trim(),author:inspector?'inspector':'requester'}
+ }
  if(action==='quote'){
   shape(['feeCLP','validUntil','scope'])
   if(!inspector||!['awaiting_quote','quoted'].includes(s.status))fail(409,'Cotización no disponible')
