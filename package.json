@@ -23,5 +23,11 @@
   },
   "devDependencies": {
     "concurrently": "^9.1.2"
+  },
+  "overrides": {
+    "@neondatabase/auth": {
+      "better-auth": "1.7.7",
+      "zod": "4.6.6"
+    }
   }
 }
