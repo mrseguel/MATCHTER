@@ -3,7 +3,7 @@ import {InspectionCasePanel} from './InspectionPanel.jsx'
 import {InspectionAttachments} from './InspectionAttachments.jsx'
 import {messagesRequest} from './messagesApi.js'
 const statuses={received:'Recibido',review:'En revisión',invited:'Invitación a mediación',mediation:'Mediación en curso',closed_with_agreement:'Cerrado con acuerdo',closed_without_agreement:'Cerrado sin acuerdo'}
-const actions={comment:'Antecedentes',review:'Revisión iniciada',invite:'Invitación a mediación',join:'Aceptó participar',decline:'Declinó la mediación',propose:'Propuesta de solución',accept:'Aceptó la propuesta',reject:'Rechazó la propuesta',decision_decline:'No aceptó la propuesta de mediación',close:'Cierre sin acuerdo',inspection:'Solicitud de inspección'}
+const actions={comment:'Antecedentes',review:'Revisión iniciada',invite:'Invitación a mediación',join:'Aceptó participar',decline:'Declinó la mediación',propose:'Propuesta de solución',accept:'Aceptó la propuesta',reject:'Rechazó la propuesta',decision_decline:'No aceptó la propuesta de mediación',close:'Cierre sin acuerdo',inspection:'Solicitud de inspección',inspection_observation:'Observación al informe',inspection_propose:'Propuesta posterior al informe',inspection_accept:'Aceptó resolución técnica',inspection_decline:'No aceptó resolución técnica',inspection_close:'Cierre de revisión técnica sin acuerdo'}
 const roles={client:'Cliente',provider:'Prestador',mediator:'Mediador'}
 async function adminRequest(client,path='',body){
  const token=await client.getJWTToken()
@@ -31,6 +31,17 @@ function SignedDisputeReminder({reminder}){
  <small className="mut">Acuerdo versión {reminder.agreementVersion} · Contrato revisión {reminder.contractRevision}. Recordatorio informativo; no constituye nueva aceptación ni autorización de pago.</small>
  </section>
 }
+function InspectionResolutionPanel({state,side,busy,onAct}){
+ const [note,setNote]=useState(''),[kind,setKind]=useState('inspection_propose')
+ const mediator=side==='mediator',closed=state.status.startsWith('closed')
+ const responded=state.accepted.includes(side)||state.rejected.includes(side)
+ async function submit(e){e.preventDefault();if(note.trim().length<5)return;await onAct(mediator?kind:'inspection_observation',note,state.reportId);setNote('')}
+ return <section className="ct-fee-summary"><h4>Resolución posterior a la inspección</h4>
+ <p className="mut">Contratación directa: el informe es un antecedente técnico. Las partes conservan sus derechos y gestionan los pagos, descuentos o reparaciones fuera de MATCHTER.</p>
+ {state.proposal&&<div className="card"><b>Propuesta de solución</b><p>{state.proposal.text}</p><p>Conforme: {state.accepted.length} · No conforme: {state.rejected.length}</p>{!closed&&!mediator&&!responded&&<><button className="btn gr" disabled={busy} onClick={()=>onAct('inspection_accept',undefined,state.proposal.id)}>Estoy de acuerdo</button><button className="btn out" disabled={busy} onClick={()=>onAct('inspection_decline',undefined,state.proposal.id)}>No estoy de acuerdo</button></>}</div>}
+ {closed?<p role="status"><b>{state.status==='closed_with_agreement'?'Revisión cerrada con acuerdo registrado':'Revisión cerrada sin acuerdo. Las partes pueden resolver externamente.'}</b></p>:<form className="ct-form" onSubmit={submit}>{mediator&&<label>Actuación<select value={kind} onChange={e=>setKind(e.target.value)}><option value="inspection_propose">Proponer resolución</option><option value="inspection_close">Cerrar sin acuerdo</option></select></label>}<label>{mediator?'Fundamento de la resolución':'Observaciones al informe'}<textarea required minLength={5} maxLength={4000} value={note} onChange={e=>setNote(e.target.value)}/></label><button className="btn out" disabled={busy||note.trim().length<5}>Registrar</button></form>}
+ </section>
+}
 export function MediationPanel({client,role,claimId,mediator=false,onBack}){
  const [data,setData]=useState(null),[error,setError]=useState(''),[busy,setBusy]=useState(false),[note,setNote]=useState(''),[kind,setKind]=useState('comment')
  const [inspectionsEnabled,setInspectionsEnabled]=useState(false)
@@ -38,7 +49,7 @@ export function MediationPanel({client,role,claimId,mediator=false,onBack}){
  const pending=useRef(null),running=useRef(false),alive=useRef(false)
  async function request(body){return mediator?adminRequest(client,'/case'+(body?'':'?'+new URLSearchParams({claimId})),body):messagesRequest(client,'mediation',role,body,{claimId})}
  async function load(){if(running.current)return;running.current=true;setBusy(true);setError('');try{const r=await request();if(alive.current)setData(r)}catch(e){if(alive.current)setError(e.message)}finally{running.current=false;if(alive.current)setBusy(false)}}
- useEffect(()=>{alive.current=true;load();return()=>{alive.current=false}},[claimId,client,role,mediator])
+ useEffect(()=>{alive.current=true;load();const timer=setInterval(async()=>{if(running.current)return;running.current=true;try{const result=await request();if(alive.current)setData(result)}catch{}finally{running.current=false}},8000);return()=>{alive.current=false;clearInterval(timer)}},[claimId,client,role,mediator])
  async function act(action,text,reference){
   if(running.current)return
   running.current=true;setBusy(true);setError('')
@@ -69,6 +80,7 @@ export function MediationPanel({client,role,claimId,mediator=false,onBack}){
  {!mediator&&!data.inspectionRequested.includes(side)&&<button type="button" className="btn out" disabled={busy||!inspectionsEnabled} onClick={()=>act('inspection','Consulta de inspección técnica independiente.')}>Buscar inspectores técnicos</button>}{inspectionsEnabled&&!mediator&&<InspectionCasePanel key={claimId} client={client} role={role} claimId={claimId} requested={data.inspectionRequested.includes(side)}/>}</>:<p className="mut">La contratación protegida y su procedimiento pericial todavía no están habilitados. Consulta las condiciones del documento original; no se aplican nuevas obligaciones a este contrato.</p>}
  </section>}
 
+ {data.inspectionResolution&&<InspectionResolutionPanel state={data.inspectionResolution} side={side} busy={busy} onAct={act}/>}
  <h4>Historial</h4>{data.events.map(e=><div className="ct-fee-summary" key={e.id}><b>{actions[e.action]} · {roles[e.side]}</b><small style={{display:'block'}}>{new Date(e.recordedAt).toLocaleString('es-CL')}</small>{e.text&&<p>{e.text}</p>}</div>)}<button className="btn out" disabled={busy} onClick={exportRecord}>Descargar expediente</button><p className="mut">Incluye el registro, acuerdo, contrato original de prueba y, si existe, el registro e informe textual de inspección en JSON. Los archivos adjuntos se descargan individualmente desde el expediente; no se incluyen en el JSON.</p></>}
  </section>
 }
