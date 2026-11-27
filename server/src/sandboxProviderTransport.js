@@ -1,3 +1,4 @@
+import {sandboxProviders} from './sandboxProviderSelection.js'
 import {buildCheckoutRequest,readCheckoutResponse,verifyProviderPayment} from './paymentProviderContracts.js'
 import {assertPreferenceLink} from './sandboxPaymentReconciliation.js'
 const digits=/^[0-9]{1,20}$/
@@ -11,10 +12,10 @@ const mFields=['id','live_mode','collector_id','external_reference','currency_id
 // Server-only, explicit injected HTTP transport. No automatic network or environment
 // discovery; no production mode. A future isolated worker must verify development
 // merchant credentials independently before providing a real HTTPS transport.
-export function createSandboxProviderTransport({mode,credentials,fetchImpl,origin,timeoutMs=8000}={}){
+export function createSandboxProviderTransport({mode,credentials,fetchImpl,origin,timeoutMs=8000,providers}={}){
  if(mode!=='isolated_test'||typeof fetchImpl!=='function'||!Number.isInteger(timeoutMs)||timeoutMs<100||timeoutMs>15000)throw safeError()
  const config={}
- for(const provider of ['khipu','mercadopago']){
+ for(const provider of sandboxProviders(providers)){
   const c=credentials?.[provider]
   if(c?.environment!=='sandbox'||typeof c.merchantId!=='string'||!digits.test(c.merchantId)||typeof c.secret!=='string'||c.secret.length<8||c.secret.length>512||/[^\x21-\x7e]/.test(c.secret))throw safeError()
   config[provider]=Object.freeze({merchantId:c.merchantId,secret:c.secret})
@@ -24,7 +25,8 @@ export function createSandboxProviderTransport({mode,credentials,fetchImpl,origi
   return order
  }
  async function request(provider,url,method,body){
-  const c=config[provider],controller=new AbortController(),timer=setTimeout(()=>controller.abort(),timeoutMs)
+  const c=config[provider];if(!c)throw safeError()
+  const controller=new AbortController(),timer=setTimeout(()=>controller.abort(),timeoutMs)
   const headers={Accept:'application/json',...(provider==='khipu'?{'x-api-key':c.secret}:{Authorization:'Bearer '+c.secret}),...(body?{'Content-Type':'application/json'}:{})}
   try{
    const res=await fetchImpl(url,{method,headers,redirect:'error',cache:'no-store',signal:controller.signal,...(body?{body:JSON.stringify(body)}:{})})
