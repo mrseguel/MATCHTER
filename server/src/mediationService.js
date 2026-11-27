@@ -76,8 +76,10 @@ export function createMediationService({db,verifyIdentity,inspectionsEnabled=fal
    const agreement=(await db.query('SELECT version,data,client_confirmed_at AS "clientConfirmedAt",provider_confirmed_at AS "providerConfirmedAt" FROM matchter.project_agreement_versions WHERE request_id=$1 AND version=$2',[record.requestId,c.agreementVersion])).rows[0]
    if(!signed||!agreement)fail(409,'No se pudo verificar el documento original del expediente')
    const inspection=record.inspection
-   const evidence=evidenceEnabled?await listClaimEvidence(db,c.id??record.id):[]
-   return {format:'matchter-mediation-record-v1',exportedAt:new Date().toISOString(),case:record,contract:signed,agreement,inspection,evidence,limitations:['Firmas de prueba, no certificación legal.','Los reclamos son alegaciones, no hechos comprobados.','No incluye archivos originales de evidencia ni conversaciones ajenas al expediente.']}
+   const evidence=evidenceEnabled?await listClaimEvidence(db,record.id):[]
+   const inspectionFiles=evidenceEnabled&&inspection?(await db.query('SELECT id,filename,media_type AS "mediaType",octet_length(bytes) AS size,sha256,created_at AS "createdAt" FROM matchter.inspection_attachments WHERE order_id=$1 ORDER BY created_at,id',[inspection.id])).rows:[]
+   const cancellations=evidenceEnabled?(await db.query('SELECT a.order_id AS "orderId",a.cancelled_at AS "cancelledAt",a.cancellation_reason AS reason,i.display_name AS "inspectorName" FROM matchter.inspection_awards a JOIN matchter.inspection_orders o ON o.id=a.order_id JOIN matchter.inspector_registry i ON i.profile_id=o.inspector_profile_id WHERE a.claim_id=$1 AND a.cancelled_at IS NOT NULL ORDER BY a.cancelled_at',[record.id])).rows:[]
+   return {format:'matchter-mediation-record-v1',exportedAt:new Date().toISOString(),case:record,contract:signed,agreement,inspection,evidence,inspectionFiles,cancellations,limitations:['Firmas de prueba, no certificación legal.','Los reclamos son alegaciones, no hechos comprobados.','No incluye archivos originales de evidencia ni conversaciones ajenas al expediente.']}
   },
   async change(header,body,mediator=false){
    if(!body||typeof body!=='object'||Array.isArray(body)||Object.keys(body).some(k=>!['role','claimId','submissionId','action','text','reference'].includes(k))||!validId(body.claimId)||!validId(body.submissionId)||typeof body.action!=='string')fail(400,'Actuación no válida')
