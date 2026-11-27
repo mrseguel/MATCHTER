@@ -35,7 +35,7 @@ function view(r,events,a){
  const s=inspectionState(events),own=r.requesterProfileId===a.profileId,assigned=r.inspectorProfileId===a.profileId
  const messages=own||assigned?events.filter(e=>e.action==='message').map(e=>({id:e.id,text:e.text,author:e.author,createdAt:e.createdAt})):[]
  const q=s.quote,quote=(own||assigned)&&q?{id:q.id,scope:q.scope,feeCLP:q.feeCLP,currency:q.currency,validUntil:q.validUntil}:null
- return {id:r.id,caseId:r.caseId,scope:own||assigned?r.scope:null,createdAt:r.createdAt,own,assigned,requesterSide:r.requesterProfileId===r.clientProfileId?'client':'provider',inspector:{displayName:r.displayName,specialty:r.specialty,serviceArea:r.serviceArea},status:s.status,quote,messages,visit:s.visit,report:s.report,noMoneyMoved:true}
+ return {id:r.id,caseId:r.caseId,scope:own||assigned?r.scope:null,createdAt:r.createdAt,own,assigned,requesterSide:r.requesterProfileId===r.clientProfileId?'client':'provider',inspector:{profileId:r.inspectorProfileId,displayName:r.displayName,specialty:r.specialty,serviceArea:r.serviceArea},status:s.status,quote,messages,visit:s.visit,report:s.report,noMoneyMoved:true}
 }
 // Only call after the parent mediation case has been authorized.
 export async function inspectionCaseRecord(q,claimId){
@@ -48,7 +48,7 @@ export async function inspectionCaseRecord(q,claimId){
   return {id:row.id,createdAt:row.createdAt,author:row.actorProfileId===r.inspectorProfileId?'inspector':row.actorProfileId===r.requesterProfileId?'requester':'unknown',...e}
  })
  const record=view(r,rows.map(row=>{const {fingerprint,...event}=row.data;return {id:row.id,...event}}),{profileId:null})
- return {...record,events,limitations:['Registro de prueba. No acredita pago ni visita de manera independiente.','Informe técnico sin firma profesional ni archivos originales adjuntos.','No constituye orden de deducción o liberación de fondos.']}
+ return {...record,awarded:true,events,limitations:['Registro de prueba. No acredita pago ni visita de manera independiente.','Informe técnico sin firma profesional ni archivos originales adjuntos.','No constituye orden de deducción o liberación de fondos.']}
 }
 export function createInspectionService({db,verifyIdentity}){
  const getActor=(q,header,role)=>actor(q,verifyIdentity,header,role)
@@ -118,6 +118,7 @@ export function createInspectionService({db,verifyIdentity}){
      const conflicted=(await tx.query("SELECT 1 FROM matchter.stage_claim_events WHERE claim_id=$1 AND actor_account_id=$2 AND data->>'side'='mediator' LIMIT 1",[r.caseId,r.inspectorAccountId])).rows[0]
      const order={...r,partyAccountIds:[r.clientAccountId,r.providerAccountId],inspector:{accountId:r.inspectorAccountId,profileId:r.inspectorProfileId,verified:!!r.verifiedAt,eligible:r.enabled===true&&r.inspectorRole==='Profesional'&&!conflicted&&![r.clientAccountId,r.providerAccountId].includes(r.inspectorAccountId)}}
      let event;try{event=nextInspectionEvent({order,events:await eventsFor(tx,r.id),actor:a,action:body.action,input:body.input})}catch(e){if([400,403,409].includes(e.status))fail(e.status,e.message);throw e}
+     if(event.action==='report'&&award?.id!==r.id)fail(403,'Solo el inspector seleccionado puede presentar el informe')
      if(event.action==='accept')await tx.query('INSERT INTO matchter.inspection_awards(claim_id,order_id) VALUES($1,$2)',[r.caseId,r.id])
      await tx.query('INSERT INTO matchter.inspection_order_events(order_id,actor_profile_id,submission_id,data) VALUES($1,$2,$3,$4)',[r.id,a.profileId,body.submissionId,JSON.stringify({...event,fingerprint})])
     }
