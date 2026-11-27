@@ -33,30 +33,31 @@ function ExecutionProgress({stages}){
 }
 export function RealStageDemo({context,contract,onAdvance,onComplete}){
  const {client,role,requestId}=context,side=role==='Cliente'?'client':'provider'
+ const request=context.request||messagesRequest
  const [state,setState]=useState(null),[busy,setBusy]=useState(false),[error,setError]=useState(''),[accepted,setAccepted]=useState(false)
  const alive=useRef(false),saving=useRef(false),loading=useRef(false),seq=useRef(0)
  async function load(){
   if(loading.current||saving.current)return
   loading.current=true;const ticket=++seq.current
-  try{const r=await messagesRequest(client,'stages',role,undefined,{requestId})
+  try{const r=await request(client,'stages',role,undefined,{requestId})
    if(r.digest!==contract.digest)throw Error('El contrato cambió. Actualiza el documento.')
-   if(alive.current&&ticket===seq.current)setState(r)
-  }catch(e){if(alive.current&&ticket===seq.current)setError(e.message)}finally{loading.current=false}
+   if(alive.current&&ticket===seq.current){setState(r);setError('')}
+  }catch(e){if(alive.current&&ticket===seq.current){setState(null);setError(e.message)}}finally{loading.current=false}
  }
  useEffect(()=>{alive.current=true;load();const timer=setInterval(load,8000);return()=>{alive.current=false;++seq.current;clearInterval(timer)}},[client,role,requestId,contract.digest])
  useEffect(()=>setAccepted(false),[state?.currentStage])
  async function save(action,s,progressPercent){
-  if(saving.current)return
+  if(saving.current||!state||context.readOnly)return
   if(action==='fund'&&!window.confirm('¿Registrar depósito ficticio por '+clp(s.amount)+'? No se realizará ningún cargo.'))return
   saving.current=true;++seq.current;setBusy(true);setError('')
-  try{const r=await messagesRequest(client,'stages',role,{requestId,action,agreementVersion:contract.agreementVersion,contractRevision:contract.revision,digest:contract.digest,stageNo:s.stageNo,accepted:true,...(action==='progress'?{progressPercent}:{})})
+  try{const r=await request(client,'stages',role,{requestId,action,agreementVersion:contract.agreementVersion,contractRevision:contract.revision,digest:contract.digest,stageNo:s.stageNo,accepted:true,...(action==='progress'?{progressPercent}:{})})
    if(alive.current){setState(r);setAccepted(false);onAdvance?.();if(['release','accept'].includes(action)&&r.complete)onComplete?.()}
   }catch(e){if(alive.current)setError(e.message)}finally{saving.current=false;if(alive.current)setBusy(false)}
  }
  const s=state?.stages.find(x=>x.stageNo===state.currentStage)
  return <section className="card wf-execution" aria-label="Seguimiento del proyecto"><div className="row sp"><h3>Seguimiento del proyecto</h3><button type="button" className="chip" disabled={busy} onClick={load}>Actualizar</button></div>
- {state?.paymentMode!=='direct'&&<p className="mut">Pago protegido · simulación. No existe custodia ni transferencia de fondos reales. </p>}
- {!state?<p className="mut">Cargando hitos...</p>:state.paymentMode==='direct'?<DirectStagePanel state={state} side={side} busy={busy} save={save} accepted={accepted} setAccepted={setAccepted}/>:<>
+ {state&&state.paymentMode!=='direct'&&<p className="mut">Pago protegido · simulación. No existe custodia ni transferencia de fondos reales. </p>}
+ {!state?<p className="mut">Cargando hitos...</p>:state.paymentMode==='direct'?<DirectStagePanel state={state} side={side} busy={busy||!!context.readOnly} save={save} accepted={accepted} setAccepted={setAccepted}/>:<>
  <div className="wf-progress"><div><CheckCircle2 size={18} color="#16934a"/><span>Contrato formalizado · demo</span></div><ExecutionProgress stages={state.stages}/><div><CheckCircle2 size={18} color={state.complete?'#16934a':'#a5aab4'}/><span>Recepción conforme</span></div></div>
  {state.stages.map(t=><StageCard key={t.stageNo} stage={t} currentStage={state.currentStage} complete={state.complete}/>)}
  {state.serviceFee&&<div className="ct-fee-summary"><b>Tarifa del ejecutor</b><p className="mut">{state.serviceFee.providerPaidAt?'Registrada · '+clp(state.serviceFee.amount):'Descuento autorizado: '+clp(state.serviceFee.amount)+' del primer pago que permita cubrirla completa.'}</p>{s?.pendingProviderFeeDeduction>0&&<p>En esta etapa: monto contractual {clp(s.amount)} · tarifa {clp(s.pendingProviderFeeDeduction)} · neto al ejecutor {clp(s.amount-s.pendingProviderFeeDeduction)}.</p>}</div>}

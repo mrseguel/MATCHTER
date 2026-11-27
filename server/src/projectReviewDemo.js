@@ -13,8 +13,9 @@ export function reviewView(r,side,now=Date.now()){
 export function validateReview(b){
  if(!b||typeof b!=='object'||Array.isArray(b)||Object.keys(b).some(k=>!['role','requestId','agreementVersion','contractRevision','digest','score','comment','expectedRevision'].includes(k))||!Number.isInteger(b.agreementVersion)||b.agreementVersion<1||!Number.isInteger(b.contractRevision)||b.contractRevision<1||typeof b.digest!=='string'||!(/^[a-f0-9]{64}$/).test(b.digest)||!Number.isInteger(b.score)||b.score<1||b.score>5||typeof b.comment!=='string'||b.comment.length>1500||(b.expectedRevision!==undefined&&(!Number.isSafeInteger(b.expectedRevision)||b.expectedRevision<0)))fail(400,'Calificación no válida')
 }
-async function context(db,actor,id,lock=false){
- const {side,agreement,current}=await contractContext(db,actor,id,lock)
+async function context(db,actor,id,lock=false,sandboxFeeProjection){
+ const {side,agreement,current:stored}=await contractContext(db,actor,id,lock)
+ const current=sandboxFeeProjection?await sandboxFeeProjection(actor,id,stored,{query:db,lock}):stored
  if(!stageReady(current))fail(409,'Primero formaliza el contrato')
  if(isDirectContract(current)){
   const tracking=directStageView(agreement,current,await readDirectStageEvents(db,id,agreement,current))
@@ -27,16 +28,16 @@ async function context(db,actor,id,lock=false){
  return {side,agreement,current}
 }
 async function existing(db,id,a,c){return (await db.query(`SELECT COALESCE(e.score,v.score) AS score,COALESCE(e.comment,v.comment) AS comment,v.created_at AS "createdAt",COALESCE(e.created_at,v.created_at) AS "updatedAt",COALESCE(e.revision,1) AS revision FROM matchter.project_review_demos v LEFT JOIN LATERAL (SELECT score,comment,created_at,revision FROM matchter.project_review_demo_revisions WHERE request_id=v.request_id AND agreement_version=v.agreement_version AND contract_revision=v.contract_revision ORDER BY revision DESC LIMIT 1) e ON true WHERE v.request_id=$1 AND v.agreement_version=$2 AND v.contract_revision=$3`,[id,a.version,c.revision])).rows[0]||null}
-export async function readReviewDemo(db,actor,id){
- const {side,agreement,current}=await context(db,actor,id)
+export async function readReviewDemo(db,actor,id,{sandboxFeeProjection}={}){
+ const {side,agreement,current}=await context(db,actor,id,false,sandboxFeeProjection)
  return {demo:true,review:reviewView(await existing(db,id,agreement,current),side)}
 }
-export async function changeReviewDemo(db,actor,id,b){
+export async function changeReviewDemo(db,actor,id,b,{sandboxFeeProjection}={}){
  validateReview(b)
  const tx=await db.connect()
  try{
   await tx.query('BEGIN')
-  const {side,agreement,current}=await context(tx,actor,id,true)
+  const {side,agreement,current}=await context(tx,actor,id,true,sandboxFeeProjection)
   if(side!=='client')fail(403,'Solo el cliente puede calificar este proyecto')
   if(b.agreementVersion!==agreement.version||b.contractRevision!==current.revision||b.digest!==current.digest)fail(409,'El contrato cambió. Actualiza antes de calificar.')
   let review=await existing(tx,id,agreement,current)
