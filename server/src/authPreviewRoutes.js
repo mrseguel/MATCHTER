@@ -48,6 +48,8 @@ export function createAuthRouter(env=process.env, dependencies={}) {
   const mediation=s=>{if(!s.mediation)throw new AuthError(404,'Mediación aún no disponible');return s.mediation}
   router.get('/admin/mediation/access',handle((s,r)=>mediation(s).access(r.get('authorization'))))
   router.get('/admin/mediation',handle((s,r)=>mediation(s).queue(r.get('authorization'))))
+  router.get('/admin/mediation/export',handle((s,r)=>mediation(s).exportCase(r.get('authorization'),r.query,true)))
+  router.get('/messages/mediation/export',handle((s,r)=>mediation(s).exportCase(r.get('authorization'),r.query)))
   router.get('/admin/mediation/case',handle((s,r)=>mediation(s).get(r.get('authorization'),r.query,true)))
   router.post('/admin/mediation/case',handle((s,r)=>mediation(s).change(r.get('authorization'),r.body,true)))
   router.get('/messages/mediation',handle((s,r)=>mediation(s).get(r.get('authorization'),r.query)))
