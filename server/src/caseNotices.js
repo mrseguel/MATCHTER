@@ -10,7 +10,7 @@ const sql=`WITH cases AS (
  UNION ALL SELECT 'inspection:'||e.id::text,o.claim_id,o.id,e.data->>'action',e.created_at,'Inspección técnica' FROM matchter.inspection_orders o JOIN matchter.inspection_order_events e ON e.order_id=o.id WHERE $1 IN (o.requester_profile_id,o.inspector_profile_id) AND e.actor_profile_id<>$1 AND e.data->>'action' IN ('message','quote','accept','report','cancel')
  UNION ALL SELECT 'shared:'||e.id::text,c.id,NULL::uuid,e.data->>'action',e.created_at,c.title FROM cases c JOIN matchter.inspection_awards a ON a.claim_id=c.id JOIN matchter.inspection_orders o ON o.id=a.order_id JOIN matchter.inspection_order_events e ON e.order_id=o.id WHERE $1<>o.requester_profile_id AND e.data->>'action' IN ('accept','report','cancel')
 )
-SELECT n.*, (r.notice_id IS NOT NULL) AS read FROM notices n LEFT JOIN matchter.case_notice_reads r ON r.profile_id=$1 AND r.notice_id=n.id ORDER BY n.at DESC,n.id DESC LIMIT 100`
+SELECT n.*, (r.notice_id IS NOT NULL) AS read, CASE WHEN n."orderId" IS NOT NULL AND EXISTS (SELECT 1 FROM matchter.inspection_orders o WHERE o.id=n."orderId" AND o.inspector_profile_id=$1) THEN 'inbox' ELSE 'case' END AS target FROM notices n LEFT JOIN matchter.case_notice_reads r ON r.profile_id=$1 AND r.notice_id=n.id ORDER BY n.at DESC,n.id DESC LIMIT 100`
 export function createCaseNotices({db,verifyIdentity}){
  async function actor(header,role){
   const i=await verifyIdentity(header),a=(await db.query('SELECT p.id,a.id AS "accountId",p.role FROM matchter.accounts a JOIN matchter.account_active_profiles s ON s.account_id=a.id JOIN matchter.account_profiles p ON p.account_id=a.id AND p.role=s.role WHERE a.auth_issuer=$1 AND a.auth_subject=$2',[i.issuer,i.subject])).rows[0]
