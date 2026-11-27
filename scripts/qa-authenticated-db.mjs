@@ -1,6 +1,13 @@
 // End-to-end HTTP QA, exclusively on an empty local PostgreSQL service in CI.
 import assert from 'node:assert/strict'
 import {randomUUID} from 'node:crypto'
+import {request} from 'node:http'
+// Native fetch rewrites Host; use the actual HTTP client to exercise the host/origin gate.
+function fetch(url,options={}){return new Promise((resolve,reject)=>{
+ const req=request(url,{method:options.method||'GET',headers:options.headers||{}},res=>{
+  let body='';res.setEncoding('utf8');res.on('data',chunk=>body+=chunk);res.on('end',()=>resolve({status:res.statusCode,json:async()=>JSON.parse(body)}));res.on('error',reject)
+ });req.on('error',reject);req.setTimeout(15000,()=>req.destroy(Error('QA HTTP timeout')));req.end(options.body)
+})}
 import {readFile,readdir} from 'node:fs/promises'
 import express from 'express'
 import pg from 'pg'
