@@ -1,4 +1,5 @@
 import React,{useEffect,useRef,useState} from 'react'
+import {InspectionAttachments} from './InspectionAttachments.jsx'
 import {messagesRequest} from './messagesApi.js'
 const money=n=>Number(n).toLocaleString('es-CL',{style:'currency',currency:'CLP'})
 const date=v=>new Date(v).toLocaleString('es-CL',{timeZone:'America/Santiago'})
@@ -35,6 +36,7 @@ export function InspectionOrderCard({client,role,order,onUpdate}){
  <h4>Informe técnico</h4><label>Fecha efectiva de visita<input type="datetime-local" required value={visited} onChange={e=>setVisited(e.target.value)}/></label><label>Hallazgos<textarea required minLength={20} maxLength={10000} value={findings} onChange={e=>setFindings(e.target.value)}/></label><label>Limitaciones y metodología<textarea required minLength={5} maxLength={4000} value={limits} onChange={e=>setLimits(e.target.value)}/></label>
  <p className="mut">Partidas no duplicadas. Deja en blanco si no hay costos que estimar.</p>{items.map((i,n)=><div className="ct-fee-summary" key={n}><label>Tipo<select value={i.kind} onChange={e=>setItems(old=>old.map((x,j)=>j===n?{...x,kind:e.target.value}:x))}><option value="repair">Reparación</option><option value="completion">Terminación</option></select></label><label>Descripción<input maxLength={300} value={i.description} onChange={e=>setItems(old=>old.map((x,j)=>j===n?{...x,description:e.target.value}:x))}/></label><label>Estimación CLP<input type="number" min="1" step="1" value={i.amountCLP} onChange={e=>setItems(old=>old.map((x,j)=>j===n?{...x,amountCLP:e.target.value}:x))}/></label><button type="button" className="chip" onClick={()=>setItems(old=>old.filter((_,j)=>j!==n))}>Quitar partida</button></div>)}<button type="button" className="btn out" disabled={items.length>=100} onClick={()=>setItems(old=>[...old,blank()])}>Agregar partida</button><button className="btn" disabled={busy}>Registrar informe de prueba</button></form>}
  {order.report&&<div className="ct-fee-summary"><h4>Informe técnico · prueba</h4><p>{order.report.findings}</p><p>{order.report.limitations}</p><p>Visita declarada: {date(order.report.visitedAt)}</p>{order.report.items.map((i,n)=><p key={n}>{i.kind==='repair'?'Reparación':'Terminación'}: {i.description} · {money(i.amountCLP)}</p>)}<b>Estimación total: {money(order.report.estimateCLP)}</b><p className="mut">No constituye orden de descuento. Firma profesional y archivos adjuntos pendientes.</p></div>}
+ {order.awarded&&(order.assigned||order.own)&&<InspectionAttachments key={order.id} client={client} role={role} orderId={order.id} canUpload={order.assigned}/>}
  {error&&<p role="alert">{error}</p>}
  </section>
 }
