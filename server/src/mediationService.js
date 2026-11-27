@@ -1,3 +1,4 @@
+import {inspectionCaseRecord} from './inspectionService.js'
 import {signedDisputeReminder} from './signedDisputeReminder.js'
 import {AuthError} from './identityAccounts.js'
 import {mediationState,checkMediationAction} from './mediationFlow.js'
@@ -25,7 +26,7 @@ async function detail(q,claimId,actor){
  const contractReminder=signedDisputeReminder(claim,signed)
  return {id:c.id,requestId:c.requestId,claim,createdAt:c.createdAt,side,contractReminder,...mediationState(events)}
 }
-export function createMediationService({db,verifyIdentity}){
+export function createMediationService({db,verifyIdentity,inspectionsEnabled=false}){
  async function actor(header,role,mediator,q=db){
   const identity=await verifyIdentity(header)
   const query=mediator?'SELECT a.id AS "accountId" FROM matchter.accounts a JOIN matchter.mediation_administrators m ON m.account_id=a.id WHERE a.auth_issuer=$1 AND a.auth_subject=$2':'SELECT a.id AS "accountId",p.id AS "profileId",p.role FROM matchter.accounts a JOIN matchter.account_active_profiles s ON s.account_id=a.id JOIN matchter.account_profiles p ON p.account_id=a.id AND p.role=s.role WHERE a.auth_issuer=$1 AND a.auth_subject=$2'
@@ -43,7 +44,8 @@ export function createMediationService({db,verifyIdentity}){
    const signed=(await db.query('SELECT revision,agreement_version AS "agreementVersion",mode,terms,digest,created_at AS "createdAt",client_signed_at AS "clientSignedAt",provider_signed_at AS "providerSignedAt" FROM matchter.project_contract_demos WHERE request_id=$1 AND agreement_version=$2 AND revision=$3 AND digest=$4',[record.requestId,c.agreementVersion,c.contractRevision,c.digest])).rows[0]
    const agreement=(await db.query('SELECT version,data,client_confirmed_at AS "clientConfirmedAt",provider_confirmed_at AS "providerConfirmedAt" FROM matchter.project_agreement_versions WHERE request_id=$1 AND version=$2',[record.requestId,c.agreementVersion])).rows[0]
    if(!signed||!agreement)fail(409,'No se pudo verificar el documento original del expediente')
-   return {format:'matchter-mediation-record-v1',exportedAt:new Date().toISOString(),case:record,contract:signed,agreement,limitations:['Firmas de prueba, no certificación legal.','Los reclamos son alegaciones, no hechos comprobados.','No incluye archivos originales de evidencia ni conversaciones ajenas al expediente.']}
+   const inspection=inspectionsEnabled?await inspectionCaseRecord(db,record.id):null
+   return {format:'matchter-mediation-record-v1',exportedAt:new Date().toISOString(),case:record,contract:signed,agreement,inspection,limitations:['Firmas de prueba, no certificación legal.','Los reclamos son alegaciones, no hechos comprobados.','No incluye archivos originales de evidencia ni conversaciones ajenas al expediente.']}
   },
   async change(header,body,mediator=false){
    if(!body||typeof body!=='object'||Array.isArray(body)||Object.keys(body).some(k=>!['role','claimId','submissionId','action','text','reference'].includes(k))||!validId(body.claimId)||!validId(body.submissionId)||typeof body.action!=='string')fail(400,'Actuación no válida')
