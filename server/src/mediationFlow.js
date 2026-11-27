@@ -16,10 +16,11 @@ export function mediationState(events=[]){
  }
  return s
 }
-export function checkMediationAction({events=[],side,action,text,reference}){
+export function checkMediationAction({events=[],side,action,text,reference,mode}){
  const s=mediationState(events),part=participant(side),mediator=side==='mediator'
  if(!part&&!mediator)fail(403,'Acceso no autorizado')
- if(s.status.startsWith('closed'))fail(409,'Expediente cerrado')
+ const postClosureInspection=mode==='direct'&&s.status==='closed_without_agreement'&&action==='inspection'&&part
+ if(s.status.startsWith('closed')&&!postClosureInspection)fail(409,'Expediente cerrado')
  const note=typeof text==='string'?text.trim():''
  if(text!==undefined&&(typeof text!=='string'||text.length>4000))fail(400,'Texto no válido')
  if(reference!==undefined&&typeof reference!=='string')fail(400,'Referencia no válida')
