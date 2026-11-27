@@ -73,6 +73,7 @@ export async function changeContractDemo(db,a,id,b){
    if(!bilateral(current)||b.digest!==current.digest||!current.clientSignedAt||!current.providerSignedAt)throw new AuthError(409,'Confirma ambas firmas del contrato bilateral')
    const fee=current.terms.serviceFee,mode=b.action==='payProviderFeeDemo'?'upfront':'deferred'
    if(mode==='upfront'&&b.demoAmount!==fee.amount)throw new AuthError(409,'La tarifa no coincide')
+   if(mode==='deferred'&&current.terms?.paymentMode==='direct')throw new AuthError(409,'Sin resguardo de fondos, debes pagar tu tarifa directamente')
    if(mode==='deferred'&&!fee.deferAvailable)throw new AuthError(409,'Ninguna etapa tiene monto suficiente para el descuento')
    if(current.providerFeeMode&&current.providerFeeMode!==mode)throw new AuthError(409,'La modalidad de tarifa ya fue registrada')
    if(!current.providerFeeMode)saved=(await tx.query('UPDATE matchter.project_contract_demos SET provider_fee_demo_mode=$4,provider_fee_demo_paid_at=CASE WHEN $4=\'upfront\' THEN now() ELSE NULL END WHERE request_id=$1 AND agreement_version=$2 AND revision=$3 AND provider_fee_demo_mode IS NULL RETURNING '+fields,[id,agreement.version,revision,mode])).rows[0]
