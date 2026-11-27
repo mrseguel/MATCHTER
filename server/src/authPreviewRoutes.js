@@ -100,6 +100,7 @@ export function createAuthRouter(env=process.env, dependencies={}) {
   router.post('/swipe/invite',handle((s,r)=>s.swipe.invite(r.get('authorization'),r.body)))
   router.post('/swipe/respond',handle((s,r)=>s.swipe.respond(r.get('authorization'),r.body)))
   router.get('/messages',handle((s,r)=>s.messages.list(r.get('authorization'),r.query.role)))
+  router.get('/messages/wallet/receipt',handle((s,r)=>s.messages.walletReceipt(r.get('authorization'),r.query)))
   router.get('/messages/wallet',handle((s,r)=>s.messages.wallet(r.get('authorization'),r.query)))
   router.get('/messages/history',handle((s,r)=>s.messages.history(r.get('authorization'),r.query)))
   router.post('/messages/send',handle((s,r)=>s.messages.send(r.get('authorization'),r.body)))
