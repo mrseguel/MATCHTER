@@ -33,7 +33,7 @@ test('visit must be proposed and explicitly accepted by requester',()=>{
  assert.throws(()=>invoke(e,requester,'confirm_visit',{visitId:'2',accepted:true}),{status:409})
  add(e,requester,'confirm_visit',{visitId:'3',accepted:true});assert.equal(inspectionState(e).status,'visit_confirmed')
 })
-test('report requires confirmed visit, assigned inspector and no financial instruction',()=>{
+test('report requires selection, actual past visit, assigned inspector and no financial instruction',()=>{
  const e=accepted(),at='2026-11-30T12:00:00Z'
  const input={visitedAt:at,findings:'Se observaron trabajos pendientes de ejecución.',limitations:'Inspección visual',items:[{kind:'completion',description:'Terminaciones pendientes',amountCLP:150000}]}
  assert.throws(()=>invoke(e,professional,'report',input),{status:409})
@@ -44,4 +44,24 @@ test('report requires confirmed visit, assigned inspector and no financial instr
  assert.equal(inspectionState(e).report.estimateCLP,150000)
  assert.equal(inspectionState(e).report.authorizesDeduction,false)
  assert.throws(()=>invoke(e,professional,'report',input,{now:Date.parse(at)}),{status:409})
+})
+
+test('private messages do not select an inspector or change the order status',()=>{
+ const e=[];add(e,requester,'message',{text:'Hola, ¿cuál es tu disponibilidad?'})
+ add(e,professional,'message',{text:'Puedo realizar una visita esta semana.'})
+ assert.equal(e[0].author,'requester')
+ assert.equal(e[1].author,'inspector')
+ assert.equal(inspectionState(e).status,'awaiting_quote')
+ assert.throws(()=>invoke(e,outsider,'message',{text:'No autorizado'}),{status:403})
+ assert.throws(()=>invoke(e,requester,'message',{text:'  '}),{status:400})
+ assert.throws(()=>invoke(e,requester,'message',{text:'Hola',author:'inspector'}),{status:400})
+})
+test('chosen inspector may submit a report after privately coordinating the visit',()=>{
+ const e=accepted(),at='2026-11-30T12:00:00Z'
+ const input={visitedAt:at,findings:'Se observaron trabajos pendientes de ejecución.',limitations:'Inspección visual',items:[]}
+ assert.throws(()=>invoke([],professional,'report',input,{now:Date.parse(at)}),{status:409})
+ assert.throws(()=>invoke(e,requester,'report',input,{now:Date.parse(at)}),{status:409})
+ add(e,professional,'report',input,{now:Date.parse(at)})
+ assert.equal(inspectionState(e).status,'report_delivered')
+ assert.equal(inspectionState(e).report.authorizesDeduction,false)
 })
