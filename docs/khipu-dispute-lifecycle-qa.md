@@ -1,0 +1,2 @@
+# Khipu verified contract dispute QA
+Opt-in claim intake uses the same fee projection and transaction locks as stage changes. The QA test reads the actual verified synthetic contract and checks both parties' intake, then runs the existing pure mediation, inspection and post-report transitions in memory. The payment role is deliberately not granted case/inspection writes. No new persistent claims, real inspector appointments, money movement, or production integration. An independently restricted dispute QA runtime and authenticated UI E2E remain necessary.

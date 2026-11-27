@@ -66,7 +66,7 @@ export function createMessagesService({db,verifyIdentity,paymentModeForNewContra
   async changeReview(header,body){const a=await actor(header,body?.role);return changeReviewDemo(db,a,id(body.requestId),body,{sandboxFeeProjection})},
   async workflow(header,query){const a=await actor(header,query.role);const result=await readWorkflow(db,a,id(query.requestId),{sandboxFeeProjection});return claimsEnabled?{...result,claimsAvailable:true}:result},
   async claims(header,query){if(!claimsEnabled)throw new AuthError(404,'Reclamos aún no disponibles');const a=await actor(header,query.role);return listStageClaims(db,a,id(query.requestId))},
-  async submitClaim(header,body){if(!claimsEnabled)throw new AuthError(404,'Reclamos aún no disponibles');const a=await actor(header,body?.role);return submitStageClaim(db,a,id(body.requestId),body)},
+  async submitClaim(header,body){if(!claimsEnabled)throw new AuthError(404,'Reclamos aún no disponibles');const a=await actor(header,body?.role);return submitStageClaim(db,a,id(body.requestId),body,{sandboxFeeProjection})},
   async stages(header,query){const a=await actor(header,query.role);return readStageDemo(db,a,id(query.requestId),{sandboxFeeProjection})},
   async changeStage(header,body){const a=await actor(header,body?.role);return changeStageDemo(db,a,id(body.requestId),body,{sandboxFeeProjection})},
   async contract(header,query){const a=await actor(header,query.role);return readContractDemo(db,a,id(query.requestId),{paymentModeForNewContract,sandboxFeeProjection})},

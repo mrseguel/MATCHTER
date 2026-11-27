@@ -11,19 +11,20 @@ export async function listStageClaims(db,actor,id){
  const rows=(await db.query('SELECT '+columns+' FROM matchter.stage_claims WHERE request_id=$1 ORDER BY created_at DESC,id DESC LIMIT 100',[id])).rows
  return {claims:rows.map(r=>view(r,actor))}
 }
-export async function submitStageClaim(db,actor,id,input){
+export async function submitStageClaim(db,actor,id,input,{sandboxFeeProjection}={}){
  const clean=guard(()=>validateStageClaim(input))
  if(clean.requestId!==id)throw new AuthError(400,'Proyecto no válido')
  const tx=await db.connect()
  try{
   await tx.query('BEGIN')
-  const {side,agreement,current}=await contractContext(tx,actor,id,true)
+  const {side,agreement,current:stored}=await contractContext(tx,actor,id,true)
+  const current=sandboxFeeProjection?await sandboxFeeProjection(actor,id,stored,{query:tx,lock:true}):stored
   const existing=(await tx.query('SELECT '+columns+' FROM matchter.stage_claims WHERE reporter_profile_id=$1 AND submission_id=$2',[actor.id,clean.submissionId])).rows[0]
   if(existing){
    if(existing.requestId!==id||Object.entries(clean).some(([k,v])=>existing.data[k]!==v))throw new AuthError(409,'Identificador de envío ya utilizado')
    await tx.query('COMMIT');return {claim:view(existing,actor)}
   }
-  const tracking=await readStageDemo(tx,actor,id)
+  const tracking=await readStageDemo(tx,actor,id,{sandboxFeeProjection})
   const claim=guard(()=>prepareStageClaim({input,agreement,contract:current,tracking,side}))
   const row=(await tx.query('INSERT INTO matchter.stage_claims(request_id,agreement_version,contract_revision,reporter_profile_id,submission_id,stage_no,data) VALUES($1,$2,$3,$4,$5,$6,$7) ON CONFLICT(reporter_profile_id,submission_id) DO NOTHING RETURNING '+columns,[id,clean.agreementVersion,clean.contractRevision,actor.id,clean.submissionId,clean.stageNo,JSON.stringify(claim)])).rows[0]
   if(!row)throw new AuthError(409,'El envío ya existe. Actualiza tus reclamos.')
