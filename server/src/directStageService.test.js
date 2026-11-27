@@ -2,6 +2,7 @@ import test from 'node:test'
 import assert from 'node:assert/strict'
 import {recordDirectStage,readDirectStageEvents,directStageView} from './directStageService.js'
 import {serviceFeeReady} from './serviceFeeDemo.js'
+import {contractSnapshot} from './projectContractDemo.js'
 import {workflowSnapshot} from './projectWorkflow.js'
 const a={version:1,clientConfirmedAt:'2026-11-26',providerConfirmedAt:'2026-11-26',data:{title:'Obra',stages:[['Uno','2027-01-01',100000,100]]}}
 const c={agreementVersion:1,revision:1,digest:'a'.repeat(64),mode:'simple',terms:{paymentMode:'direct',serviceFee:{version:2,amount:2990}},clientSignedAt:'2026-11-26',providerSignedAt:'2026-11-26',serviceFeePaidAt:'2026-11-26',providerFeeMode:'upfront',providerFeePaidAt:'2026-11-26'}
@@ -44,4 +45,17 @@ test('chat and review follow physical acceptance, without protected payment even
  assert.equal(snapshot.complete,true);assert.equal(snapshot.next.target,'review')
  assert.ok(snapshot.events.some(e=>e.body==='Recepción conforme de etapa 1'))
  assert.ok(snapshot.events.every(e=>!e.body.includes('liberado')&&!e.body.includes('Depósito')))
+})
+
+test('direct contract signs payment mode and preserves original fee amount',()=>{
+ const fee={version:2,amount:4990,deferAvailable:true}
+ const agreement={...a,data:{...a.data,scope:'Trabajos de prueba',start:'2027-01-01',end:'2027-01-01'}}
+ const legacy=contractSnapshot('id',agreement,'simple',1,undefined,fee)
+ const direct=contractSnapshot('id',agreement,'simple',1,undefined,fee,'direct')
+ assert.equal(direct.terms.paymentMode,'direct')
+ assert.equal(direct.terms.serviceFee.amount,4990)
+ assert.equal(direct.terms.serviceFee.deferAvailable,false)
+ assert.notEqual(direct.digest,legacy.digest)
+ assert.equal(legacy.terms.paymentMode,undefined)
+ assert.throws(()=>contractSnapshot('id',agreement,'simple',1,undefined,fee,'protected'),{status:409})
 })
