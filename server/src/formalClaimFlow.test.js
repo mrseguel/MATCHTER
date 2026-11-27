@@ -1,0 +1,10 @@
+import test from 'node:test'
+import assert from 'node:assert/strict'
+import {formalState,nextFormalEvent,DAY} from './formalClaimFlow.js'
+const start=Date.parse('2026-11-27T00:00:00Z')
+const ev=(action,side,extra={})=>({id:action,action,side,recordedAt:new Date(start).toISOString(),...extra})
+const open=ev('open','client'),ack=ev('acknowledge','provider')
+const run=(events,side,action,extra={})=>nextFormalEvent({events,side,reporter:'client',action,now:start,...extra})
+test('only reporter opens; only counterparty acknowledges; no clock before receipt',()=>{assert.throws(()=>run([],'provider','open'));assert.equal(run([],'client','open').action,'open');assert.throws(()=>run([open],'client','acknowledge'));assert.equal(formalState([open],start+99*DAY).deadline,null);assert.throws(()=>run([open],'provider','respond',{message:'Mi respuesta'}))})
+test('reminders and review are computed, no presumed guilt',()=>{assert.deepEqual(formalState([open,ack],start+DAY).reminderHoursDue,[]);assert.deepEqual(formalState([open,ack],start+2*DAY).reminderHoursDue,[48]);assert.deepEqual(formalState([open,ack],start+3*DAY).reminderHoursDue,[48,72]);assert.equal(formalState([open,ack],start+5*DAY).administrativeReviewSuggested,true);assert.equal(formalState([open,ack,ev('respond','provider')],start+6*DAY).overdue,false)})
+test('proposal needs exact other-party assent; rejection is not sanction',()=>{const p=ev('propose','client',{id:'p',message:'Corregir partidas'});assert.throws(()=>run([open,ack,p],'client','accept',{reference:'p'}));assert.throws(()=>run([open,ack,p],'provider','accept',{reference:'wrong'}));assert.equal(run([open,ack,p],'provider','decline',{reference:'p'}).action,'decline');const d=ev('decline','provider',{reference:'p'});assert.equal(formalState([open,ack,p,d],start).closed,false);assert.equal(run([open,ack,p,d],'provider','propose',{message:'Otra solución'}).action,'propose');const a=ev('accept','provider',{reference:'p'});assert.equal(formalState([open,ack,p,a],start).closed,true);assert.throws(()=>run([open,ack,p,a],'client','respond',{message:'Más información'}))})
