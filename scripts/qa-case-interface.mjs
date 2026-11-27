@@ -111,7 +111,7 @@ export async function verifyCaseInterface({actors,winner,claimId,requestId,base,
  })
  await open('client','checkout',async({root,w,wait,has,click,buttons})=>{
   await wait(()=>has('Mediante Khipu')&&has('Mediante Mercado Pago'),'two approved payment choices')
-  assert.ok(has('MATCHTER no procesa directamente los pagos ni recibe tus datos bancarios.'));assert.ok(has('No se realizará ningún cobro real.'));assert.equal(root.querySelectorAll('.mw-provider-logo img').length,2)
+  assert.ok(has('MATCHTER no procesa directamente los pagos ni solicita o almacena los datos de tu tarjeta o tus claves bancarias.'));assert.ok(has('No se realizará ningún cobro real.'));assert.equal(root.querySelectorAll('.mw-provider-logo img').length,2)
   const radios=Array.from(root.querySelectorAll('input[type=radio]'));assert.equal(radios.length,2)
   const proceed=()=>buttons().find(b=>b.textContent.trim()==='Continuar al pago de prueba')
   assert.ok(proceed().disabled);radios[0].click();await wait(()=>!proceed().disabled,'bank transfer selected');radios[1].click();await wait(()=>radios[1].checked&&!radios[0].checked,'card selected exclusively');await click('Continuar al pago de prueba');await wait(()=>w.qaPaymentCount===1,'explicit demo confirmation');assert.equal(root.querySelectorAll('input:not([type=radio])').length,0)
