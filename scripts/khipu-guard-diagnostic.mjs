@@ -13,7 +13,7 @@ try{
     const body=await r.clone().json(),banks=body?.banks
     if(Array.isArray(banks)&&banks.length===1){
      const b=banks[0]
-     bankInfo={oneBank:true,nameMatchesDemo:typeof b.name==='string'&&b.name.replace(/[^a-z]/gi,'').toLowerCase()==='demobank',idFormatValid:typeof b.bank_id==='string'&&/^[A-Za-z0-9_-]{1,5}$/.test(b.bank_id),minimumType:typeof b.min_amount,minimumAllows2990:Number.isFinite(b.min_amount)&&b.min_amount>=0&&b.min_amount<=2990}
+     bankInfo={oneBank:true,nameMatchesDemo:typeof b.name==='string'&&b.name.replace(/[^a-z]/gi,'').toLowerCase()==='demobank',idFormatValid:typeof b.bank_id==='string'&&/^[A-Za-z0-9_-]{1,5}$/.test(b.bank_id),minimumType:typeof b.min_amount,minimumAllows2990:(typeof b.min_amount==='number'||typeof b.min_amount==='string'&&/^\d+(?:\.\d{1,4})?$/.test(b.min_amount))&&Number.isFinite(Number(b.min_amount))&&Number(b.min_amount)>=0&&Number(b.min_amount)<=2990}
     }else bankInfo={oneBank:false}
    }
    return r
