@@ -41,6 +41,10 @@ export function contractSnapshot(id,agreement,mode,revision,arrangement,fee,paym
  if(paymentMode==='direct'){
   if(fee?.version!==2)throw new AuthError(409,'Se requiere la tarifa bilateral vigente')
   terms.paymentMode='direct'
+  const disputeClause=terms.clauses.find(c=>c[0].startsWith('OCTAVO.'))
+  if(!disputeClause)throw new AuthError(409,'No se pudo preparar la cláusula de controversias')
+  disputeClause[1]='En caso de controversia relativa a la calidad, alcance, atraso, abandono u otro incumplimiento de los trabajos, cualquiera de las partes podrá presentar un reclamo y aportar antecedentes. MATCHTER facilitará voluntariamente una mediación y formulará una propuesta de solución no vinculante. Si ambas partes la aceptan, se registrará el acuerdo. Si no existe acuerdo, se dejará constancia del cierre sin acuerdo; las partes podrán resolver la controversia directamente o recurrir a las autoridades y tribunales competentes. Cualquiera de las partes podrá solicitar o contratar una inspección técnica independiente, previa cotización y aceptación expresa de sus honorarios y alcance; se procurará designar al profesional de común acuerdo cuando corresponda. El informe podrá incorporarse al expediente como antecedente, con acceso autorizado y posibilidad de formular observaciones. Las decisiones económicas, pagos, reparaciones y descuentos serán gestionados por las partes fuera de MATCHTER conforme a derecho. La plataforma no resguarda, retiene ni distribuye fondos de obra en esta modalidad. La negativa a contratar una inspección o a aceptar una propuesta no equivale a consentimiento, renuncia ni reconocimiento de responsabilidad. No se restringen los derechos, garantías ni acciones legales que correspondan.'
+
   terms.serviceFee={...fee,paymentMode:'direct',deferAvailable:false}
   const paymentClause=terms.clauses.find(c=>c[0].startsWith('TERCERO.'))
   if(paymentClause)paymentClause[1]+=' Los pagos de los trabajos serán gestionados directamente entre las partes. MATCHTER no recibe ni resguarda esos fondos; el registro de recepción conforme no ejecuta una transferencia.'
