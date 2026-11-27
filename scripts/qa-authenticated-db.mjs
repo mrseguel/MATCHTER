@@ -12,6 +12,7 @@ import {readFile,readdir} from 'node:fs/promises'
 import express from 'express'
 import pg from 'pg'
 import {generateKeyPair,SignJWT} from 'jose'
+import {createSandboxPaymentAttempts} from '../server/src/sandboxPaymentAttempts.js'
 import {createAuthRouter} from '../server/src/authPreviewRoutes.js'
 import {createIdentityVerifier,createAccountService} from '../server/src/identityAccounts.js'
 import {createProfilesService} from '../server/src/accountProfiles.js'
@@ -36,6 +37,7 @@ try{
  for(const file of (await readdir('server/db')).filter(n=>/^0(0[3-9]|1[0-8])_.*\.sql$/.test(n)).sort())await admin.query(await readFile('server/db/'+file,'utf8'))
  await admin.query(await readFile('docs/migrations/019-025_fresh_qa.sql','utf8'))
  await admin.query(await readFile('docs/migrations/026_case_completion.draft.sql','utf8'))
+ await admin.query(await readFile('docs/migrations/027_sandbox_payment_attempts.draft.sql','utf8'))
  db=new Pool({host:'127.0.0.1',port:5432,database:'matchter_qa',user:'matchter_auth_app',password:'qa_app_local_only'})
  const {privateKey,publicKey}=await generateKeyPair('EdDSA')
  const verifyIdentity=createIdentityVerifier({issuer,audience:issuer,jwksUrl:issuer+'/.well-known/jwks.json',algorithms:['EdDSA']},publicKey)
@@ -76,6 +78,31 @@ try{
  const signature={requestId,action:'confirm',agreementVersion:1,expectedRevision:contract.revision,digest:contract.digest,accepted:true,identityDemo:true,identityChecks:{front:true,back:true,selfie:true}}
  await call('client','/messages/contract',signature);await call('provider','/messages/contract',signature)
  const fee={requestId,agreementVersion:1,expectedRevision:contract.revision,digest:contract.digest,accepted:true,demoAmount:2990}
+ const attempts=createSandboxPaymentAttempts({db,verifyIdentity,mode:'isolated_test'})
+ const auth=who=>'Bearer '+actors[who].token
+ const baseAttempt={role:'Cliente',requestId,agreementVersion:1,contractRevision:contract.revision,digest:contract.digest,provider:'khipu',submissionId:randomUUID()}
+ await assert.rejects(attempts.reserve(auth('alternative'),{...baseAttempt,role:'Profesional'}),{status:404})
+ await assert.rejects(attempts.reserve(auth('client'),{...baseAttempt,amountCLP:1}),{status:400})
+ await assert.rejects(attempts.reserve(auth('client'),{...baseAttempt,digest:'0'.repeat(64)}),{status:409})
+ const reserved=await attempts.reserve(auth('client'),baseAttempt)
+ assert.equal(reserved.amountCLP,2990);assert.equal(reserved.realPayment,false)
+ assert.equal((await attempts.reserve(auth('client'),baseAttempt)).id,reserved.id)
+ await assert.rejects(attempts.reserve(auth('client'),{...baseAttempt,provider:'mercadopago',submissionId:randomUUID()}),{status:409})
+ await assert.rejects(attempts.read(auth('provider'),{role:actors.provider.role,attemptId:reserved.id}),{status:404})
+ assert.equal((await attempts.cancelUnsent(auth('client'),{role:'Cliente',attemptId:reserved.id})).state,'cancelled_unsent')
+ const race=await Promise.allSettled(['khipu','mercadopago'].map(provider=>attempts.reserve(auth('client'),{...baseAttempt,provider,submissionId:randomUUID()})))
+ assert.equal(race.filter(r=>r.status==='fulfilled').length,1)
+ assert.equal(race.find(r=>r.status==='rejected').reason.status,409)
+ const winnerAttempt=race.find(r=>r.status==='fulfilled').value
+ assert.equal((await attempts.markDispatchUnknown(winnerAttempt.id,actors.client.profileId)).state,'creation_unknown')
+ await assert.rejects(attempts.cancelUnsent(auth('client'),{role:'Cliente',attemptId:winnerAttempt.id}),{status:409})
+ await assert.rejects(attempts.reserve(auth('client'),{...baseAttempt,submissionId:randomUUID()}),{status:409})
+ const otherAttempt=await attempts.reserve(auth('provider'),{...baseAttempt,role:actors.provider.role,submissionId:randomUUID()})
+ assert.notEqual(otherAttempt.id,winnerAttempt.id)
+ assert.equal((await attempts.cancelUnsent(auth('provider'),{role:actors.provider.role,attemptId:otherAttempt.id})).state,'cancelled_unsent')
+ assert.equal((await db.query("SELECT count(*)::int n FROM matchter.sandbox_payment_attempts WHERE request_id=$1",[requestId])).rows[0].n,3)
+ assert.equal((await db.query("SELECT has_table_privilege(current_user,'matchter.sandbox_payment_attempts','DELETE') AS can_delete,has_table_privilege(current_user,'matchter.sandbox_payment_attempt_events','UPDATE') AS can_rewrite")).rows[0].can_delete,false)
+ console.log('SANDBOX PAYMENT RESERVATIONS QA PASSED: persistent idempotency, concurrent cross-provider exclusion, cancellation before dispatch, ambiguous outcome blocks retry, private ownership; no provider calls')
  const pendingWallet=await call('client','/messages/wallet')
  assert.equal(pendingWallet.movements.length,1)
  assert.equal(pendingWallet.movements[0].status,'pending_demo')
@@ -86,6 +113,7 @@ try{
  assert.equal(clientWallet.movements[0].status,'recorded_demo')
  assert.equal(clientWallet.movements[0].amountCLP,2990)
  assert.equal(clientWallet.realPaymentsEnabled,false)
+ await assert.rejects(attempts.reserve(auth('client'),{...baseAttempt,submissionId:randomUUID()}),{status:409})
  const receipt=await call('client','/messages/wallet/receipt',null,200,{movementId:clientWallet.movements[0].id})
  assert.equal(receipt.realPayment,false);assert.equal(receipt.taxDocument,false);assert.match(receipt.reference,/^DEMO-/)
  assert.equal(receipt.movement.amountCLP,2990)
