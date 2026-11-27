@@ -1,9 +1,10 @@
+import {sandboxMerchants} from './sandboxProviderSelection.js'
 // Internal orchestration only. No public routes, environment secrets, or scheduler.
 // All callers are trusted isolated QA workers; never take ownerId or a raw response from a browser.
-export function createSandboxPaymentWorker({mode,db,attempts,reconciliation,transport,merchants}={}){
- if(mode!=='isolated_test'||!db||!attempts||!reconciliation||!transport||!merchants||!['khipu','mercadopago'].every(p=>typeof merchants[p]==='string'&&/^[0-9]{1,20}$/.test(merchants[p])))throw Error('Isolated worker required')
- const configured=Object.freeze({khipu:merchants.khipu,mercadopago:merchants.mercadopago})
- const orderFor=a=>({provider:a.provider,environment:'sandbox',reference:a.id,amountCLP:a.amountCLP,merchantId:configured[a.provider]})
+export function createSandboxPaymentWorker({mode,db,attempts,reconciliation,transport,merchants,providers}={}){
+ if(mode!=='isolated_test'||!db||!attempts||!reconciliation||!transport)throw Error('Isolated worker required')
+ const configured=sandboxMerchants(merchants,providers)
+ const orderFor=a=>{if(!Object.hasOwn(configured,a.provider))throw Error('Proveedor de prueba no habilitado');return {provider:a.provider,environment:'sandbox',reference:a.id,amountCLP:a.amountCLP,merchantId:configured[a.provider]}}
  return Object.freeze({
   async dispatch(attemptId,ownerId){
    // Durable state MUST be committed before calling the transport. If anything fails,
