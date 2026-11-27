@@ -44,8 +44,8 @@ function InspectionResolutionPanel({state,side,busy,onAct}){
 }
 export function MediationPanel({client,role,claimId,mediator=false,onBack}){
  const [data,setData]=useState(null),[error,setError]=useState(''),[busy,setBusy]=useState(false),[note,setNote]=useState(''),[kind,setKind]=useState('comment')
- const [inspectionsEnabled,setInspectionsEnabled]=useState(false)
- useEffect(()=>{let alive=true;fetch('/api/auth-preview/config').then(r=>r.ok?r.json():null).then(r=>{if(alive)setInspectionsEnabled(r?.inspectionsEnabled===true)}).catch(()=>{});return()=>{alive=false}},[])
+ const [inspectionsEnabled,setInspectionsEnabled]=useState(false),[completionEnabled,setCompletionEnabled]=useState(false)
+ useEffect(()=>{let alive=true;fetch('/api/auth-preview/config').then(r=>r.ok?r.json():null).then(r=>{if(alive){setInspectionsEnabled(r?.inspectionsEnabled===true);setCompletionEnabled(r?.caseCompletionEnabled===true)}}).catch(()=>{});return()=>{alive=false}},[])
  const pending=useRef(null),running=useRef(false),alive=useRef(false)
  async function request(body){return mediator?adminRequest(client,'/case'+(body?'':'?'+new URLSearchParams({claimId})),body):messagesRequest(client,'mediation',role,body,{claimId})}
  async function load(){if(running.current)return;running.current=true;setBusy(true);setError('');try{const r=await request();if(alive.current)setData(r)}catch(e){if(alive.current)setError(e.message)}finally{running.current=false;if(alive.current)setBusy(false)}}
@@ -58,10 +58,17 @@ export function MediationPanel({client,role,claimId,mediator=false,onBack}){
   try{if(pending.current?.key!==key)pending.current={key,id:crypto.randomUUID()};const r=await request({...payload,submissionId:pending.current.id});pending.current=null;if(alive.current){setData(r);setNote('')}}
   catch(e){if(alive.current)setError(e.message)}finally{running.current=false;if(alive.current)setBusy(false)}
  }
- async function exportRecord(){
+ async function exportRecord(format='json'){
   if(running.current)return
   running.current=true;setBusy(true);setError('')
-  try{const result=mediator?await adminRequest(client,'/export?'+new URLSearchParams({claimId})):await messagesRequest(client,'mediation/export',role,undefined,{claimId});downloadCase(result)}
+  try{const result=mediator?await adminRequest(client,'/export?'+new URLSearchParams({claimId})):await messagesRequest(client,'mediation/export',role,undefined,{claimId});if(format==='json'){downloadCase(result);return}
+   const {buildCasePdf,buildCaseArchive}=await import('./caseDossier.js')
+   const bytes=format==='pdf'?buildCasePdf(result):await buildCaseArchive(result,async(kind,fileId)=>{
+    const query=kind==='reclamo'?{claimId,fileId}:{orderId:result.inspection.id,fileId}
+    return mediator?adminRequest(client,(kind==='reclamo'?'/evidence-file':'/inspection-attachment')+'?'+new URLSearchParams(query)):messagesRequest(client,kind==='reclamo'?'mediation/evidence-file':'inspections/attachment',role,undefined,query)
+   },async bytes=>Array.from(new Uint8Array(await crypto.subtle.digest('SHA-256',bytes)),b=>b.toString(16).padStart(2,'0')).join(''))
+   const url=URL.createObjectURL(new Blob([bytes],{type:format==='pdf'?'application/pdf':'application/zip'})),a=document.createElement('a')
+   a.href=url;a.download='expediente-matchter-'+claimId+'.'+format;a.click();setTimeout(()=>URL.revokeObjectURL(url),1000)}
   catch(e){if(alive.current)setError(e.message)}finally{running.current=false;if(alive.current)setBusy(false)}
  }
  const closed=data?.status.startsWith('closed'),side=data?.side,canRespond=data?.status==='mediation'&&data.proposal&&!data.accepted.includes(side)&&!data.rejected?.includes(side)
@@ -82,7 +89,7 @@ export function MediationPanel({client,role,claimId,mediator=false,onBack}){
 
  {data.inspectionResolution&&<InspectionResolutionPanel state={data.inspectionResolution} side={side} busy={busy} onAct={act}/>}
  <InspectionAttachments key={'claim:'+claimId} client={client} role={role} claimId={claimId} mediator={mediator} canUpload={!mediator&&data.status!=='closed_with_agreement'&&!data.inspectionResolution?.status.startsWith('closed')}/>
- <h4>Historial</h4>{data.events.map(e=><div className="ct-fee-summary" key={e.id}><b>{actions[e.action]} · {roles[e.side]}</b><small style={{display:'block'}}>{new Date(e.recordedAt).toLocaleString('es-CL')}</small>{e.text&&<p>{e.text}</p>}</div>)}<button className="btn out" disabled={busy} onClick={exportRecord}>Descargar expediente</button><p className="mut">Incluye el registro, acuerdo, contrato original de prueba y, si existe, el registro e informe textual de inspección en JSON. Los archivos adjuntos se descargan individualmente desde el expediente; no se incluyen en el JSON.</p></>}
+ <h4>Historial</h4>{data.events.map(e=><div className="ct-fee-summary" key={e.id}><b>{actions[e.action]} · {roles[e.side]}</b><small style={{display:'block'}}>{new Date(e.recordedAt).toLocaleString('es-CL')}</small>{e.text&&<p>{e.text}</p>}</div>)}<button className="btn out" disabled={busy} onClick={()=>exportRecord('json')}>Descargar expediente JSON</button>{completionEnabled&&<><button className="btn out" disabled={busy} onClick={()=>exportRecord('pdf')}>Descargar expediente PDF</button><button className="btn out" disabled={busy} onClick={()=>exportRecord('zip')}>Descargar PDF y evidencias originales (ZIP)</button></>}<p className="mut">Incluye el registro, acuerdo, contrato original de prueba y, si existe, el registro e informe textual de inspección en JSON. El PDF incluye el índice de archivos. La descarga ZIP reúne el PDF, el registro y los originales verificados; no incluye chats ni honorarios privados.</p></>}
  </section>
 }
 export function MediationAdminCenter({client,onBack}){
