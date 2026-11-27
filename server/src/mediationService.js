@@ -48,14 +48,14 @@ export function createMediationService({db,verifyIdentity}){
    try{
     await tx.query('BEGIN')
     const a=await actor(header,body.role,mediator,tx)
-    const {side}=await context(tx,body.claimId,a,true)
+    const {side,c}=await context(tx,body.claimId,a,true)
     const previous=(await tx.query('SELECT data FROM matchter.stage_claim_events WHERE claim_id=$1 AND actor_account_id=$2 AND submission_id=$3',[body.claimId,a.accountId,body.submissionId])).rows[0]
     const fingerprint=JSON.stringify([side,body.action,body.text??null,body.reference??null])
     if(previous){if(previous.data.fingerprint!==fingerprint)fail(409,'Identificador ya utilizado')}
     else{
      const events=await eventsFor(tx,body.claimId)
      let event
-     try{event=checkMediationAction({events,side,action:body.action,text:body.text,reference:body.reference})}catch(e){if([400,403,409].includes(e.status))fail(e.status,e.message);throw e}
+     try{event=checkMediationAction({events,side,action:body.action,text:body.text,reference:body.reference,mode:c.data.mode})}catch(e){if([400,403,409].includes(e.status))fail(e.status,e.message);throw e}
      await tx.query('INSERT INTO matchter.stage_claim_events(claim_id,actor_account_id,actor_profile_id,submission_id,data) VALUES($1,$2,$3,$4,$5)',[body.claimId,a.accountId,a.profileId??null,body.submissionId,JSON.stringify({...event,fingerprint})])
     }
     const result=await detail(tx,body.claimId,a)
