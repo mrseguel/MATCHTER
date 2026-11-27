@@ -23,21 +23,22 @@ export function validateAdminPaymentModeChange({ isAdmin = false, currentMode = 
     appliesTo: 'new-contracts-only' };
 }
 
-export function paymentPlan({ mode = PAYMENT_MODE.DIRECT, stageAmounts, clientFeeConfirmed = false,
+export function paymentPlan({ mode = PAYMENT_MODE.DIRECT, stageAmounts, feeAmount = BASE_FEE_CLP, clientFeeConfirmed = false,
   providerFeePaid = false, providerDeductionAuthorized = false, verifiedCustody = false } = {}) {
   if (!Object.values(PAYMENT_MODE).includes(mode)) throw new Error('Unknown payment mode');
   if (!Array.isArray(stageAmounts) || !stageAmounts.length || stageAmounts.some(n => !Number.isSafeInteger(n) || n <= 0)) throw new Error('Invalid stage amounts');
+  if (!Number.isSafeInteger(feeAmount) || feeAmount <= 0) throw new Error('Invalid fee amount');
   const total = stageAmounts.reduce((a, b) => a + b, 0);
-  if (!Number.isSafeInteger(total + BASE_FEE_CLP)) throw new Error('Invalid total');
+  if (!Number.isSafeInteger(total + feeAmount)) throw new Error('Invalid total');
   const protectedMode = mode === PAYMENT_MODE.PROTECTED;
   // Fail closed: a protected contract cannot silently switch to direct settlement.
   if (protectedMode && verifiedCustody !== true) throw new Error('Verified custody unavailable');
-  const clientFeeDue = clientFeeConfirmed ? 0 : BASE_FEE_CLP;
-  const providerFeeDue = providerFeePaid ? 0 : BASE_FEE_CLP;
-  const canDeduct = protectedMode && stageAmounts.some(n => n >= BASE_FEE_CLP);
+  const clientFeeDue = clientFeeConfirmed ? 0 : feeAmount;
+  const providerFeeDue = providerFeePaid ? 0 : feeAmount;
+  const canDeduct = protectedMode && stageAmounts.some(n => n >= feeAmount);
   const providerReady = providerFeePaid || (canDeduct && providerDeductionAuthorized === true);
   return {
-    mode, currency: 'CLP', contractTotal: total, baseFee: BASE_FEE_CLP,
+    mode, currency: 'CLP', contractTotal: total, baseFee: feeAmount,
     workPaymentsInformational: !protectedMode,
     // Physical execution and contractual milestones are independent of fund custody.
     stageTracking: {
