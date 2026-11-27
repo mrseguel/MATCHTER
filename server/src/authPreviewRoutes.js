@@ -30,7 +30,7 @@ export function createAuthRouter(env=process.env, dependencies={}) {
     const mediation=env.MATCHTER_STAGE_CLAIMS_ENABLED==='true'&&env.MATCHTER_MEDIATION_ENABLED==='true'?createMediationService({db:pool,verifyIdentity,inspectionsEnabled:env.MATCHTER_INSPECTIONS_ENABLED==='true',evidenceEnabled:env.MATCHTER_CASE_COMPLETION_ENABLED==='true'}):null
     const inspections=mediation&&env.MATCHTER_INSPECTIONS_ENABLED==='true'?createInspectionService({db:pool,verifyIdentity,attachmentsEnabled:env.MATCHTER_INSPECTION_ATTACHMENTS_ENABLED==='true'}):null
     const caseCompletion=!!mediation&&!!inspections&&env.MATCHTER_CASE_COMPLETION_ENABLED==='true'
-    service={caseNotices:caseCompletion?createCaseNotices({db:pool,verifyIdentity}):null,inspectorAdmin:caseCompletion?createInspectorAdministration({db:pool,verifyIdentity}):null,mediation,inspections,...createAccountService({db:pool,verifyIdentity}),profiles:createProfilesService({db:pool,verifyIdentity}),details:createProfileDetailsService({db:pool,verifyIdentity}),swipe:createSwipeService({db:pool,verifyIdentity}),paymentAvailability,messages:createMessagesService({db:pool,verifyIdentity,paymentModeForNewContract:paymentAvailability?.modeForNewContract,claimsEnabled:env.MATCHTER_STAGE_CLAIMS_ENABLED==='true'})}
+    service={caseNotices:caseCompletion?createCaseNotices({db:pool,verifyIdentity}):null,inspectorAdmin:caseCompletion?createInspectorAdministration({db:pool,verifyIdentity}):null,mediation,inspections,...createAccountService({db:pool,verifyIdentity}),profiles:createProfilesService({db:pool,verifyIdentity}),details:createProfileDetailsService({db:pool,verifyIdentity}),swipe:createSwipeService({db:pool,verifyIdentity}),paymentAvailability,messages:createMessagesService({db:pool,verifyIdentity,paymentModeForNewContract:paymentAvailability?.modeForNewContract,claimsEnabled:env.MATCHTER_STAGE_CLAIMS_ENABLED==='true',walletEnabled:env.MATCHTER_WALLET_HISTORY_ENABLED==='true'})}
     return service
   }
   router.use((req,res,next)=>{
@@ -42,7 +42,7 @@ export function createAuthRouter(env=process.env, dependencies={}) {
   })
   router.get('/config',(_req,res)=>{
     if(!env.MATCHTER_NEON_AUTH_URL)return res.status(503).json({message:'Autenticación no configurada'})
-    return res.json({authUrl:env.MATCHTER_NEON_AUTH_URL,stageClaimsEnabled:env.MATCHTER_STAGE_CLAIMS_ENABLED==='true',mediationEnabled:env.MATCHTER_STAGE_CLAIMS_ENABLED==='true'&&env.MATCHTER_MEDIATION_ENABLED==='true',inspectionsEnabled:env.MATCHTER_STAGE_CLAIMS_ENABLED==='true'&&env.MATCHTER_MEDIATION_ENABLED==='true'&&env.MATCHTER_INSPECTIONS_ENABLED==='true',caseCompletionEnabled:env.MATCHTER_STAGE_CLAIMS_ENABLED==='true'&&env.MATCHTER_MEDIATION_ENABLED==='true'&&env.MATCHTER_INSPECTIONS_ENABLED==='true'&&env.MATCHTER_CASE_COMPLETION_ENABLED==='true',inspectionAttachmentsEnabled:env.MATCHTER_STAGE_CLAIMS_ENABLED==='true'&&env.MATCHTER_MEDIATION_ENABLED==='true'&&env.MATCHTER_INSPECTIONS_ENABLED==='true'&&env.MATCHTER_INSPECTION_ATTACHMENTS_ENABLED==='true'})
+    return res.json({authUrl:env.MATCHTER_NEON_AUTH_URL,walletHistoryEnabled:env.MATCHTER_WALLET_HISTORY_ENABLED==='true',stageClaimsEnabled:env.MATCHTER_STAGE_CLAIMS_ENABLED==='true',mediationEnabled:env.MATCHTER_STAGE_CLAIMS_ENABLED==='true'&&env.MATCHTER_MEDIATION_ENABLED==='true',inspectionsEnabled:env.MATCHTER_STAGE_CLAIMS_ENABLED==='true'&&env.MATCHTER_MEDIATION_ENABLED==='true'&&env.MATCHTER_INSPECTIONS_ENABLED==='true',caseCompletionEnabled:env.MATCHTER_STAGE_CLAIMS_ENABLED==='true'&&env.MATCHTER_MEDIATION_ENABLED==='true'&&env.MATCHTER_INSPECTIONS_ENABLED==='true'&&env.MATCHTER_CASE_COMPLETION_ENABLED==='true',inspectionAttachmentsEnabled:env.MATCHTER_STAGE_CLAIMS_ENABLED==='true'&&env.MATCHTER_MEDIATION_ENABLED==='true'&&env.MATCHTER_INSPECTIONS_ENABLED==='true'&&env.MATCHTER_INSPECTION_ATTACHMENTS_ENABLED==='true'})
   })
   const handle=fn=>async(req,res)=>{
     if(!/^Bearer [A-Za-z0-9._-]{20,8192}$/.test(req.get('authorization')||''))return res.status(401).json({message:'Identidad no autenticada'})
@@ -100,6 +100,7 @@ export function createAuthRouter(env=process.env, dependencies={}) {
   router.post('/swipe/invite',handle((s,r)=>s.swipe.invite(r.get('authorization'),r.body)))
   router.post('/swipe/respond',handle((s,r)=>s.swipe.respond(r.get('authorization'),r.body)))
   router.get('/messages',handle((s,r)=>s.messages.list(r.get('authorization'),r.query.role)))
+  router.get('/messages/wallet',handle((s,r)=>s.messages.wallet(r.get('authorization'),r.query)))
   router.get('/messages/history',handle((s,r)=>s.messages.history(r.get('authorization'),r.query)))
   router.post('/messages/send',handle((s,r)=>s.messages.send(r.get('authorization'),r.body)))
   router.get('/messages/agreement',handle((s,r)=>s.messages.agreement(r.get('authorization'),r.query)))
