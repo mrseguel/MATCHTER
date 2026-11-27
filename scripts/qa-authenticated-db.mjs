@@ -1,6 +1,6 @@
 // End-to-end HTTP QA, exclusively on an empty local PostgreSQL service in CI.
 import assert from 'node:assert/strict'
-import {randomUUID} from 'node:crypto'
+import {randomUUID,createHash} from 'node:crypto'
 import {request} from 'node:http'
 // Native fetch rewrites Host; use the actual HTTP client to exercise the host/origin gate.
 function fetch(url,options={}){return new Promise((resolve,reject)=>{
@@ -18,6 +18,8 @@ import {createProfilesService} from '../server/src/accountProfiles.js'
 import {createMessagesService} from '../server/src/messagesService.js'
 import {createPaymentAvailabilityService} from '../server/src/paymentAvailabilityService.js'
 import {createMediationService} from '../server/src/mediationService.js'
+import {createCaseNotices} from '../server/src/caseNotices.js'
+import {createInspectorAdministration} from '../server/src/caseAdministration.js'
 import {createInspectionService} from '../server/src/inspectionService.js'
 const {Pool}=pg
 if(process.env.MATCHTER_EPHEMERAL_QA!=='true'||process.env.CI!=='true')throw Error('Only isolated CI database allowed')
@@ -33,12 +35,13 @@ try{
  await admin.query("CREATE ROLE matchter_auth_app LOGIN PASSWORD 'qa_app_local_only'; CREATE SCHEMA matchter; GRANT USAGE ON SCHEMA matchter TO matchter_auth_app; CREATE TABLE matchter.accounts(id uuid PRIMARY KEY DEFAULT gen_random_uuid(),auth_issuer text NOT NULL,auth_subject text NOT NULL,role text NOT NULL CHECK(role IN ('Cliente','Maestro o contratista','Profesional','Empresa')),UNIQUE(auth_issuer,auth_subject)); GRANT SELECT(id,auth_issuer,auth_subject,role),INSERT(auth_issuer,auth_subject,role) ON matchter.accounts TO matchter_auth_app")
  for(const file of (await readdir('server/db')).filter(n=>/^0(0[3-9]|1[0-8])_.*\.sql$/.test(n)).sort())await admin.query(await readFile('server/db/'+file,'utf8'))
  await admin.query(await readFile('docs/migrations/019-025_fresh_qa.sql','utf8'))
+ await admin.query(await readFile('docs/migrations/026_case_completion.draft.sql','utf8'))
  db=new Pool({host:'127.0.0.1',port:5432,database:'matchter_qa',user:'matchter_auth_app',password:'qa_app_local_only'})
  const {privateKey,publicKey}=await generateKeyPair('EdDSA')
  const verifyIdentity=createIdentityVerifier({issuer,audience:issuer,jwksUrl:issuer+'/.well-known/jwks.json',algorithms:['EdDSA']},publicKey)
  const paymentAvailability=createPaymentAvailabilityService({db,verifyIdentity})
- const service={...createAccountService({db,verifyIdentity}),profiles:createProfilesService({db,verifyIdentity}),paymentAvailability,messages:createMessagesService({db,verifyIdentity,paymentModeForNewContract:paymentAvailability.modeForNewContract,claimsEnabled:true}),mediation:createMediationService({db,verifyIdentity,inspectionsEnabled:true}),inspections:createInspectionService({db,verifyIdentity,attachmentsEnabled:true})}
- const app=express();app.use(express.json({limit:'1mb'}));app.use('/api/auth-preview',createAuthRouter({MATCHTER_AUTH_TEST_ORIGIN:origin,MATCHTER_NEON_AUTH_URL:'https://qa.neon.tech/auth',MATCHTER_STAGE_CLAIMS_ENABLED:'true',MATCHTER_MEDIATION_ENABLED:'true',MATCHTER_INSPECTIONS_ENABLED:'true',MATCHTER_INSPECTION_ATTACHMENTS_ENABLED:'true'},{service}))
+ const service={caseNotices:createCaseNotices({db,verifyIdentity}),inspectorAdmin:createInspectorAdministration({db,verifyIdentity}),...createAccountService({db,verifyIdentity}),profiles:createProfilesService({db,verifyIdentity}),paymentAvailability,messages:createMessagesService({db,verifyIdentity,paymentModeForNewContract:paymentAvailability.modeForNewContract,claimsEnabled:true}),mediation:createMediationService({db,verifyIdentity,inspectionsEnabled:true,evidenceEnabled:true}),inspections:createInspectionService({db,verifyIdentity,attachmentsEnabled:true})}
+ const app=express();app.use(express.json({limit:'1mb'}));app.use('/api/auth-preview',createAuthRouter({MATCHTER_AUTH_TEST_ORIGIN:origin,MATCHTER_NEON_AUTH_URL:'https://qa.neon.tech/auth',MATCHTER_STAGE_CLAIMS_ENABLED:'true',MATCHTER_MEDIATION_ENABLED:'true',MATCHTER_INSPECTIONS_ENABLED:'true',MATCHTER_INSPECTION_ATTACHMENTS_ENABLED:'true',MATCHTER_CASE_COMPLETION_ENABLED:'true'},{service}))
  server=app.listen(0,'127.0.0.1');await new Promise(resolve=>server.once('listening',resolve))
  const base='http://127.0.0.1:'+server.address().port+'/api/auth-preview'
  const actors={}
@@ -56,6 +59,7 @@ try{
   a.accountId=account.id;a.profileId=profiles.profiles.find(p=>p.role===a.role).id
  }
  await admin.query('INSERT INTO matchter.mediation_administrators(account_id) VALUES($1)',[actors.mediator.accountId])
+ await admin.query('INSERT INTO matchter.inspector_administrators(account_id) VALUES($1)',[actors.mediator.accountId])
  await admin.query('INSERT INTO matchter.payment_administrators(account_id) VALUES($1)',[actors.mediator.accountId])
  for(const n of ['inspector','alternative'])await admin.query('INSERT INTO matchter.inspector_registry(profile_id,display_name,specialty,service_area,enabled,verified_at) VALUES($1,$2,$3,$4,true,now())',[actors[n].profileId,'QA '+n,'Inspección','Temuco prueba'])
  await call('client','/admin/payments',null,403)
@@ -84,6 +88,18 @@ try{
  const {claim}=await call('client','/messages/claims',claimBody)
  assert.equal((await call('client','/messages/claims',claimBody)).claim.id,claim.id)
  const claimId=claim.id
+ const claimFile={claimId,submissionId:randomUUID(),filename:'reclamo-qa.pdf',mediaType:'application/pdf',base64:Buffer.from('%PDF-1.7 QA claim fixture').toString('base64')}
+ await call('alternative','/messages/mediation/evidence',claimFile,404)
+ const evidence=await call('client','/messages/mediation/evidence',claimFile)
+ assert.equal(evidence.files.length,1)
+ assert.equal((await call('client','/messages/mediation/evidence',claimFile)).files.length,1)
+ assert.equal((await call('provider','/messages/mediation/evidence-file',null,200,{claimId,fileId:evidence.files[0].id})).base64,claimFile.base64)
+ await call('provider','/messages/mediation/evidence',{...claimFile,submissionId:randomUUID(),base64:'wrong'},400)
+ await call('alternative','/messages/mediation/evidence-file',null,404,{claimId,fileId:evidence.files[0].id})
+ const notices=await call('provider','/messages/case-notices')
+ const newClaim=notices.notices.find(n=>n.claimId===claimId&&n.kind==='claim');assert.ok(newClaim&&!newClaim.read)
+ const read=await call('provider','/messages/case-notices/read',{ids:[newClaim.id]});assert.equal(read.notices.find(n=>n.id===newClaim.id).read,true)
+ await call('alternative','/messages/case-notices/read',{ids:[newClaim.id]},404)
  const med=(who,action,text,reference,expected=200)=>call(who,who==='mediator'?'/admin/mediation/case':'/messages/mediation',{claimId,submissionId:randomUUID(),action,text,reference},expected)
  await call('alternative','/messages/mediation',null,404,{claimId})
  await med('mediator','review')
@@ -151,4 +167,48 @@ try{
  console.log('AUTHENTICATED HTTP QA PASSED:',checks,'requests; real isolated PostgreSQL; no financial transfers')
  const {verifyCaseInterface}=await import('./qa-case-interface.mjs')
  await verifyCaseInterface({actors,winner,claimId,requestId,base,http:fetch})
+ const {buildCasePdf,buildCaseArchive}=await import('../client/src/features/auth/caseDossier.js')
+ const {unzipSync}=await import('fflate')
+ assert.equal(exported.evidence.length,1);assert.equal(exported.inspectionFiles.length,1)
+ const pdf=buildCasePdf(exported);assert.equal(Buffer.from(pdf.subarray(0,5)).toString(),'%PDF-')
+ const archive=await buildCaseArchive(exported,async(kind,fileId)=>kind==='reclamo'?call('provider','/messages/mediation/evidence-file',null,200,{claimId,fileId}):call('provider','/messages/inspections/attachment',null,200,{orderId,fileId}),bytes=>createHash('sha256').update(bytes).digest('hex'))
+ const originals=unzipSync(archive);assert.equal(Object.keys(originals).length,4)
+ assert.ok(Object.keys(originals).some(k=>k.startsWith('reclamo/')&&k.endsWith('reclamo-qa.pdf')))
+ assert.ok(Object.keys(originals).some(k=>k.startsWith('inspeccion/')&&k.endsWith('informe-qa.pdf')))
+ assert.equal(JSON.stringify(exported).includes('PRIVATE_QA_TEXT'),false)
+ await call('provider','/messages/mediation/evidence',{...claimFile,submissionId:randomUUID()},409)
+ await change(winner.who,orderId,'cancel',{reason:'Informe ya entregado'},409)
+ // Separate case for a cancellation and replacement; do not modify closed report.
+ const replacementClaim=(await call('client','/messages/claims',{...claimBody,submissionId:randomUUID(),description:'Segunda controversia ficticia para validar reemplazo.'})).claim
+ const rid=replacementClaim.id
+ const m2=(who,action,text,reference)=>call(who,who==='mediator'?'/admin/mediation/case':'/messages/mediation',{claimId:rid,submissionId:randomUUID(),action,text,reference})
+ await m2('mediator','review');const inv=await m2('mediator','invite')
+ await m2('client','join',undefined,inv.invitation);await m2('provider','join',undefined,inv.invitation)
+ const p2=await m2('mediator','propose','Propuesta de prueba para reemplazo.')
+ await m2('client','decision_decline',undefined,p2.proposal.id);await m2('provider','decision_decline',undefined,p2.proposal.id)
+ await m2('client','inspection','Solicitud de inspección de reemplazo.')
+ const open2=async n=>(await call('client','/messages/inspections/select',{claimId:rid,inspectorProfileId:actors[n].profileId,scope:'Consulta ficticia de inspección de reemplazo.'})).order
+ const original=await open2('inspector'),replacement=await open2('alternative')
+ const oq=(await change('inspector',original.id,'quote',quote)).order,rq=(await change('alternative',replacement.id,'quote',quote)).order
+ await change('client',original.id,'accept',{quoteId:oq.quote.id,feeCLP:50000,accepted:true})
+ const cancelled=(await change('inspector',original.id,'cancel',{reason:'No puedo asistir a la visita.'})).order
+ assert.equal(cancelled.status,'cancelled');assert.equal(cancelled.caseAwarded,false)
+ await change('client',original.id,'accept',{quoteId:oq.quote.id,feeCLP:50000,accepted:true},409)
+ const replacementAward=(await change('client',replacement.id,'accept',{quoteId:rq.quote.id,feeCLP:50000,accepted:true})).order
+ assert.equal(replacementAward.awarded,true)
+ const archived=await call('client','/messages/mediation/export',null,200,{claimId:rid})
+ assert.equal(archived.cancellations.length,1);assert.equal(archived.inspection.id,replacement.id)
+ await call('client','/admin/inspectors',null,403)
+ const registry=await call('mediator','/admin/inspectors')
+ assert.equal(registry.profiles.length,2)
+ const verification={role:undefined,profileId:actors.inspector.profileId,displayName:'Inspector QA revisado',specialty:'ITO de prueba',serviceArea:'Temuco prueba',enabled:true,reason:'Verificación manual de antecedentes de prueba.',credentialsReviewed:true}
+ await call('mediator','/admin/inspectors',{...verification,credentialsReviewed:false},400)
+ await call('mediator','/admin/inspectors',{...verification,profileId:actors.mediator.profileId},403)
+ await call('mediator','/admin/inspectors',verification)
+ assert.equal((await admin.query('SELECT count(*)::int AS n FROM matchter.inspector_registry_events')).rows[0].n,1)
+ const inspectorNotices=await call('inspector','/messages/case-notices')
+ assert.ok(inspectorNotices.notices.some(n=>n.kind==='inspection_request'))
+ assert.equal(JSON.stringify(inspectorNotices).includes('PRIVATE_QA_TEXT'),false)
+ console.log('CASE COMPLETION QA PASSED:',checks,'total HTTP requests; evidence, notice reads, cancellation, admin and PDF/ZIP')
+
 }finally{if(server)await new Promise(resolve=>server.close(resolve));if(db)await db.end();await admin.end()}
