@@ -25,7 +25,7 @@ export function createAuthRouter(env=process.env, dependencies={}) {
     pool.on('error',()=>console.error('Matchter auth pool error'))
     const verifyIdentity=createIdentityVerifier({issuer:auth.origin,audience:auth.origin,jwksUrl:jwks.href,algorithms:['EdDSA']})
     const paymentAvailability=env.MATCHTER_PAYMENT_POLICY_ENABLED==='true'?createPaymentAvailabilityService({db:pool,verifyIdentity}):null
-    const mediation=env.MATCHTER_STAGE_CLAIMS_ENABLED==='true'&&env.MATCHTER_MEDIATION_ENABLED==='true'?createMediationService({db:pool,verifyIdentity}):null
+    const mediation=env.MATCHTER_STAGE_CLAIMS_ENABLED==='true'&&env.MATCHTER_MEDIATION_ENABLED==='true'?createMediationService({db:pool,verifyIdentity,inspectionsEnabled:env.MATCHTER_INSPECTIONS_ENABLED==='true'}):null
     const inspections=mediation&&env.MATCHTER_INSPECTIONS_ENABLED==='true'?createInspectionService({db:pool,verifyIdentity}):null
     service={mediation,inspections,...createAccountService({db:pool,verifyIdentity}),profiles:createProfilesService({db:pool,verifyIdentity}),details:createProfileDetailsService({db:pool,verifyIdentity}),swipe:createSwipeService({db:pool,verifyIdentity}),paymentAvailability,messages:createMessagesService({db:pool,verifyIdentity,paymentModeForNewContract:paymentAvailability?.modeForNewContract,claimsEnabled:env.MATCHTER_STAGE_CLAIMS_ENABLED==='true'})}
     return service
