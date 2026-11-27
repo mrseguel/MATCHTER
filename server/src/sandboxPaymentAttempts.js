@@ -71,8 +71,14 @@ export function createSandboxPaymentAttempts({db,verifyIdentity,mode}){
    return transaction(async q=>{
     const initial=await byId(q,attemptId,ownerId)
     if(!initial)fail(404,'Intento no disponible')
+    // Preserve lock order used by reserve: contract request first, then payment slot.
+    const owner=(await q.query('SELECT id,role FROM matchter.account_profiles WHERE id=$1',[ownerId])).rows[0]
+    if(!owner)fail(404,'Perfil no disponible')
+    const {side,agreement,current}=await contractContext(q,owner,initial.requestId,true)
     await lock(q,initial.requestId,ownerId)
     const r=await byId(q,attemptId,ownerId)
+    if(!current||!current.clientSignedAt||!current.providerSignedAt||current.terms?.paymentMode!=='direct'||current.terms?.serviceFee?.version!==2||agreement.version!==r.agreementVersion||current.revision!==r.contractRevision||current.digest!==r.digest||current.terms.serviceFee.amount!==r.amountCLP)fail(409,'El contrato cambió antes de iniciar el pago')
+    if(side==='client'?current.serviceFeePaidAt:current.providerFeePaidAt||current.providerFeeMode)fail(409,'La tarifa ya tiene un registro de prueba')
     if(r.state!=='reserved'||(await slot(q,r.requestId,ownerId))?.id!==r.id)fail(409,'El intento ya fue iniciado o cancelado')
     await append(q,r.id,r.sequence+1,'creation_unknown');return view(await byId(q,r.id,ownerId))
    })
