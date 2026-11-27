@@ -58,7 +58,7 @@ export async function readContractDemo(db,a,id,{paymentModeForNewContract,sandbo
  let fee=current&&!needsFeeUpgrade(current)?current.terms?.serviceFee||null:quoteServiceFee(providerRole,agreement.data.stages)
  if(!current&&paymentModeForNewContract){const mode=await paymentModeForNewContract(db);if(mode!=='direct')throw new AuthError(409,'La modalidad financiera aún no está disponible');fee={...fee,paymentMode:mode,deferAvailable:false}}
  const projected=sandboxFeeProjection?await sandboxFeeProjection(a,id,current):current
-  return {agreementVersion:agreement.version,serviceFee:fee,feeUpgradeRequired:needsFeeUpgrade(current),contract:view(projected),...(sandboxFeeProjection?{sandboxFeeVerification:projected?.sandboxFeeVerification||null}:{})}
+  return {agreementVersion:agreement.version,serviceFee:fee,feeUpgradeRequired:needsFeeUpgrade(current),contract:view(projected),...(sandboxFeeProjection?{sandboxFeeVerification:projected?.sandboxFeeVerification||null,sandboxFeeCheckout:projected?.sandboxFeeCheckout||null}:{})}
 }
 export async function changeContractDemo(db,a,id,b,{paymentModeForNewContract}={}){
  validateContractAction(b)

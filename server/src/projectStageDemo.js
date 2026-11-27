@@ -16,13 +16,13 @@ function state(a,c,rows){
  const stageViews=stages.map(s=>{const deduction=c.providerFeeStageNo===s.stageNo?fee?.amount||0:0;return {...s,providerFeeDeduction:deduction,providerNetReleased:s.releasedAt?s.amount-deduction:null,pendingProviderFeeDeduction:!s.releasedAt&&s.stageNo===currentStage?deferredDeduction(c,s):0}})
  return {demo:true,serviceFee:fee?{amount:fee.amount,clientPaidAt:c.serviceFeePaidAt||null,providerMode:c.providerFeeMode,providerPaidAt:c.providerFeePaidAt||null,providerStageNo:c.providerFeeStageNo||null}:null,agreementVersion:a.version,contractRevision:c.revision,digest:c.digest,stages:stageViews,currentStage,complete:currentStage===null}
 }
-async function readyContext(db,actor,id,lock){const {side,agreement,current}=await contractContext(db,actor,id,lock);if(!stageReady(current))fail(409,'Primero formaliza el contrato de prueba');return {side,agreement,current}}
-export async function readStageDemo(db,actor,id){const {agreement,current}=await readyContext(db,actor,id,false);return isDirectContract(current)?directStageView(agreement,current,await readDirectStageEvents(db,id,agreement,current)):state(agreement,current,await rowsFor(db,id,agreement,current))}
-export async function changeStageDemo(db,actor,id,b){
+async function readyContext(db,actor,id,lock,sandboxFeeProjection){const {side,agreement,current:stored}=await contractContext(db,actor,id,lock);const current=sandboxFeeProjection?await sandboxFeeProjection(actor,id,stored,{query:db,lock}):stored;if(!stageReady(current))fail(409,'Primero formaliza el contrato de prueba');return {side,agreement,current}}
+export async function readStageDemo(db,actor,id,{sandboxFeeProjection}={}){const {agreement,current}=await readyContext(db,actor,id,false,sandboxFeeProjection);return isDirectContract(current)?directStageView(agreement,current,await readDirectStageEvents(db,id,agreement,current)):state(agreement,current,await rowsFor(db,id,agreement,current))}
+export async function changeStageDemo(db,actor,id,b,{sandboxFeeProjection}={}){
  const tx=await db.connect()
  try{
   await tx.query('BEGIN')
-  const {side,agreement,current}=await readyContext(tx,actor,id,true)
+  const {side,agreement,current}=await readyContext(tx,actor,id,true,sandboxFeeProjection)
   if(isDirectContract(current)){const result=await recordDirectStage(tx,actor,id,agreement,current,side,b);await tx.query('COMMIT');return result}
   validateStageAction(b)
   if(b.agreementVersion!==agreement.version||b.contractRevision!==current.revision||b.digest!==current.digest)fail(409,'El contrato no coincide')

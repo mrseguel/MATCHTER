@@ -42,7 +42,7 @@ export function validateMessage(body){
  return {...ids,body:message}
 }
 const cols='m.id,m.body,m.created_at AS "createdAt",(m.sender_profile_id=$2) AS me'
-export function createMessagesService({db,verifyIdentity,paymentModeForNewContract,claimsEnabled=false,walletEnabled=false}){
+export function createMessagesService({db,verifyIdentity,paymentModeForNewContract,claimsEnabled=false,walletEnabled=false,sandboxFeeProjection}){
  async function actor(header,expected){
   const identity=await verifyIdentity(header)
   if(!PROFILE_ROLES.includes(expected))throw new AuthError(400,'Perfil no válido')
@@ -64,13 +64,13 @@ export function createMessagesService({db,verifyIdentity,paymentModeForNewContra
   async changeCoordination(header,body){const a=await actor(header,body?.role);id(body.messageId);return changeCoordination(db,a,id(body.requestId),body)},
   async review(header,query){const a=await actor(header,query.role);return readReviewDemo(db,a,id(query.requestId))},
   async changeReview(header,body){const a=await actor(header,body?.role);return changeReviewDemo(db,a,id(body.requestId),body)},
-  async workflow(header,query){const a=await actor(header,query.role);const result=await readWorkflow(db,a,id(query.requestId));return claimsEnabled?{...result,claimsAvailable:true}:result},
+  async workflow(header,query){const a=await actor(header,query.role);const result=await readWorkflow(db,a,id(query.requestId),{sandboxFeeProjection});return claimsEnabled?{...result,claimsAvailable:true}:result},
   async claims(header,query){if(!claimsEnabled)throw new AuthError(404,'Reclamos aún no disponibles');const a=await actor(header,query.role);return listStageClaims(db,a,id(query.requestId))},
   async submitClaim(header,body){if(!claimsEnabled)throw new AuthError(404,'Reclamos aún no disponibles');const a=await actor(header,body?.role);return submitStageClaim(db,a,id(body.requestId),body)},
-  async stages(header,query){const a=await actor(header,query.role);return readStageDemo(db,a,id(query.requestId))},
-  async changeStage(header,body){const a=await actor(header,body?.role);return changeStageDemo(db,a,id(body.requestId),body)},
-  async contract(header,query){const a=await actor(header,query.role);return readContractDemo(db,a,id(query.requestId),{paymentModeForNewContract})},
-  async changeContract(header,body){const a=await actor(header,body?.role);return changeContractDemo(db,a,id(body.requestId),body,{paymentModeForNewContract})},
+  async stages(header,query){const a=await actor(header,query.role);return readStageDemo(db,a,id(query.requestId),{sandboxFeeProjection})},
+  async changeStage(header,body){const a=await actor(header,body?.role);return changeStageDemo(db,a,id(body.requestId),body,{sandboxFeeProjection})},
+  async contract(header,query){const a=await actor(header,query.role);return readContractDemo(db,a,id(query.requestId),{paymentModeForNewContract,sandboxFeeProjection})},
+  async changeContract(header,body){const a=await actor(header,body?.role);if(sandboxFeeProjection)throw new AuthError(409,'El contrato QA está fijado. Las tarifas se confirman exclusivamente por Khipu.');return changeContractDemo(db,a,id(body.requestId),body,{paymentModeForNewContract})},
   async agreement(header,query){const a=await actor(header,query.role);return readProjectAgreement(db,a,id(query.requestId))},
   async changeAgreement(header,body){const a=await actor(header,body?.role);return changeProjectAgreement(db,a,id(body.requestId),body)},
   async list(header,role){const a=await actor(header,role)
