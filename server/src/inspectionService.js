@@ -6,7 +6,7 @@ const uuid=/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
 const id=v=>{if(typeof v!=='string'||!uuid.test(v))throw new AuthError(400,'Identificador no válido');return v}
 const fail=(status,message)=>{throw new AuthError(status,message)}
 const shape=(v,keys)=>{if(!v||typeof v!=='object'||Array.isArray(v)||Object.keys(v).some(k=>!keys.includes(k)))fail(400,'Datos de inspección no válidos')}
-const registryFields='i.profile_id AS "profileId",i.display_name AS "displayName",i.specialty,i.service_area AS "serviceArea"'
+const registryFields='i.profile_id AS "profileId",i.display_name AS "displayName",i.specialty,i.service_area AS "serviceArea",COALESCE(public_card.bio,\'\') AS bio,COALESCE(public_card.city,\'\') AS city'
 const rowFields='o.id,o.claim_id AS "caseId",o.requester_profile_id AS "requesterProfileId",o.inspector_profile_id AS "inspectorProfileId",o.scope,o.created_at AS "createdAt",rp.account_id AS "requesterAccountId",ip.account_id AS "inspectorAccountId",ip.role AS "inspectorRole",i.enabled,i.verified_at AS "verifiedAt",i.display_name AS "displayName",i.specialty,i.service_area AS "serviceArea",cp.account_id AS "clientAccountId",pp.account_id AS "providerAccountId",r.sender_profile_id AS "clientProfileId",r.recipient_profile_id AS "providerProfileId"'
 const joins=' FROM matchter.inspection_orders o JOIN matchter.stage_claims c ON c.id=o.claim_id JOIN matchter.swipe_requests r ON r.id=c.request_id JOIN matchter.account_profiles cp ON cp.id=r.sender_profile_id JOIN matchter.account_profiles pp ON pp.id=r.recipient_profile_id JOIN matchter.account_profiles rp ON rp.id=o.requester_profile_id JOIN matchter.account_profiles ip ON ip.id=o.inspector_profile_id JOIN matchter.inspector_registry i ON i.profile_id=ip.id'
 async function actor(q,verifyIdentity,header,role){
@@ -24,7 +24,7 @@ async function caseFor(q,claimId,a,lock=false){
  return {...c,side,requested:s.inspectionRequested.includes(side)}
 }
 async function directory(q,c){
- return (await q.query('SELECT '+registryFields+' FROM matchter.inspector_registry i JOIN matchter.account_profiles p ON p.id=i.profile_id WHERE i.enabled AND i.verified_at IS NOT NULL AND p.role=\'Profesional\' AND p.account_id NOT IN ($1,$2) AND NOT EXISTS (SELECT 1 FROM matchter.stage_claim_events e WHERE e.claim_id=$3 AND e.actor_account_id=p.account_id AND e.data->>\'side\'=\'mediator\') ORDER BY i.display_name,i.profile_id LIMIT 100',[c.clientAccountId,c.providerAccountId,c.id])).rows
+ return (await q.query('SELECT '+registryFields+' FROM matchter.inspector_registry i JOIN matchter.account_profiles p ON p.id=i.profile_id LEFT JOIN matchter.swipe_cards public_card ON public_card.profile_id=i.profile_id AND public_card.published=true WHERE i.enabled AND i.verified_at IS NOT NULL AND p.role=\'Profesional\' AND p.account_id NOT IN ($1,$2) AND NOT EXISTS (SELECT 1 FROM matchter.stage_claim_events e WHERE e.claim_id=$3 AND e.actor_account_id=p.account_id AND e.data->>\'side\'=\'mediator\') ORDER BY i.display_name,i.profile_id LIMIT 100',[c.clientAccountId,c.providerAccountId,c.id])).rows
 }
 async function orderRow(q,orderId,a,lock=false){
  const r=(await q.query('SELECT '+rowFields+joins+' WHERE o.id=$1 AND ($2=o.inspector_profile_id OR $2=r.sender_profile_id OR $2=r.recipient_profile_id)'+(lock?' FOR UPDATE OF o':''),[id(orderId),a.profileId])).rows[0]
