@@ -81,6 +81,7 @@ export function MediationPanel({client,role,claimId,mediator=false,onBack}){
  </section>}
 
  {data.inspectionResolution&&<InspectionResolutionPanel state={data.inspectionResolution} side={side} busy={busy} onAct={act}/>}
+ <InspectionAttachments key={'claim:'+claimId} client={client} role={role} claimId={claimId} mediator={mediator} canUpload={!mediator&&data.status!=='closed_with_agreement'&&!data.inspectionResolution?.status.startsWith('closed')}/>
  <h4>Historial</h4>{data.events.map(e=><div className="ct-fee-summary" key={e.id}><b>{actions[e.action]} · {roles[e.side]}</b><small style={{display:'block'}}>{new Date(e.recordedAt).toLocaleString('es-CL')}</small>{e.text&&<p>{e.text}</p>}</div>)}<button className="btn out" disabled={busy} onClick={exportRecord}>Descargar expediente</button><p className="mut">Incluye el registro, acuerdo, contrato original de prueba y, si existe, el registro e informe textual de inspección en JSON. Los archivos adjuntos se descargan individualmente desde el expediente; no se incluyen en el JSON.</p></>}
  </section>
 }
