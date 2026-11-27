@@ -11,20 +11,20 @@ let pool,q,committed=false,phase='configuration'
 const log=(event,extra={})=>console.log('MATCHTER_DISPUTE_PERSISTENT_QA '+JSON.stringify({event,...extra,realPayment:false}))
 const issuer='https://payment-qa.invalid'
 try{
- assert.equal(process.env.VERCEL_ENV,'preview')
- const url=new URL(process.env.MATCHTER_DISPUTE_QA_DATABASE_URL)
+ phase='environment';assert.equal(process.env.VERCEL_ENV,'preview')
+ phase='connection_config'; const url=new URL(process.env.MATCHTER_DISPUTE_QA_DATABASE_URL)
  assert.equal(url.protocol,'postgresql:');assert.equal(decodeURIComponent(url.username),'matchter_dispute_qa_app');assert.equal(url.pathname,'/matchter_payment_qa');assert.ok(url.hostname.endsWith('.neon.tech'));url.searchParams.set('sslmode','verify-full')
  pool=new pg.Pool({connectionString:url.href,max:2,connectionTimeoutMillis:10000,statement_timeout:10000})
- q=await pool.connect()
- const s=(await q.query("SELECT current_database() AS db,current_user AS role,current_setting('neon.branch_id',true) AS branch,rolcreatedb OR rolcreaterole OR rolsuper OR rolbypassrls AS elevated,has_table_privilege(current_user,'matchter.sandbox_payment_observations','INSERT') AS payment_write FROM pg_roles WHERE rolname=current_user")).rows[0]
+ phase='connect'; q=await pool.connect()
+ phase='database_scope'; const s=(await q.query("SELECT current_database() AS db,current_user AS role,current_setting('neon.branch_id',true) AS branch,rolcreatedb OR rolcreaterole OR rolsuper OR rolbypassrls AS elevated,has_table_privilege(current_user,'matchter.sandbox_payment_observations','INSERT') AS payment_write FROM pg_roles WHERE rolname=current_user")).rows[0]
  assert.deepEqual(s,{db:'matchter_payment_qa',role:'matchter_dispute_qa_app',branch:'br-lively-frog-b691adhk',elevated:false,payment_write:false})
- const ids=(await q.query("SELECT a.auth_subject AS subject,p.id AS id,p.role FROM matchter.accounts a JOIN matchter.account_profiles p ON p.account_id=a.id WHERE a.auth_issuer=$1 AND a.auth_subject=ANY($2::text[])",[issuer,['khipu-qa-v1-client','khipu-qa-v1-provider','dispute-qa-mediator','dispute-qa-inspector','dispute-qa-outsider']])).rows
+ phase='identities'; const ids=(await q.query("SELECT a.auth_subject AS subject,p.id AS id,p.role FROM matchter.accounts a JOIN matchter.account_active_profiles ap ON ap.account_id=a.id JOIN matchter.account_profiles p ON p.account_id=a.id AND p.role=ap.role WHERE a.auth_issuer=$1 AND a.auth_subject=ANY($2::text[])",[issuer,['khipu-qa-v1-client','khipu-qa-v1-provider','dispute-qa-mediator','dispute-qa-inspector','dispute-qa-outsider']])).rows
  assert.equal(ids.length,5)
  const actor=name=>{const row=ids.find(x=>x.subject===name);assert.ok(row);return row}
  const c=actor('khipu-qa-v1-client'),p=actor('khipu-qa-v1-provider'),m=actor('dispute-qa-mediator'),i=actor('dispute-qa-inspector'),o=actor('dispute-qa-outsider')
- const r=(await q.query("SELECT r.id,r.sender_profile_id,r.recipient_profile_id FROM matchter.sandbox_payment_attempts a JOIN matchter.swipe_requests r ON r.id=a.request_id WHERE a.id=$1 AND r.details->>'projectTitle'='MATCHTER Khipu external QA webhook 3'",['404caf87-a133-4901-ae61-e6393bda0657'])).rows[0]
+ phase='fixture'; const r=(await q.query("SELECT r.id,r.sender_profile_id,r.recipient_profile_id FROM matchter.sandbox_payment_attempts a JOIN matchter.swipe_requests r ON r.id=a.request_id WHERE a.id=$1 AND r.details->>'projectTitle'='MATCHTER Khipu external QA webhook 3'",['404caf87-a133-4901-ae61-e6393bda0657'])).rows[0]
  assert.equal(r.sender_profile_id,c.id);assert.equal(r.recipient_profile_id,p.id)
- await q.query('BEGIN')
+ phase='empty_fixture'; await q.query('BEGIN')
  await q.query("SELECT pg_advisory_xact_lock(hashtextextended('dispute-qa-persist-v1',0))")
  assert.equal((await q.query('SELECT count(*)::int AS n FROM matchter.stage_claims WHERE request_id=$1',[r.id])).rows[0].n,0)
  let nested=false
