@@ -1,0 +1,1 @@
+Visual refresh of mediator and inspector panels, aligned with approved claims style. Existing authenticated handlers retained. QA displays a disabled attachment action where uploads are not enabled; no new storage or permissions. Report, conversation, quotation, history and downloads use progressive disclosure. No new financial operations.
