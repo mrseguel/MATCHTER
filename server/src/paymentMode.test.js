@@ -61,3 +61,16 @@ test('administrator can choose either mode after verification; existing contract
   assert.equal(disabled.selectedMode,'direct');
   assert.equal(disabled.appliesTo,'new-contracts-only');
 });
+
+test('physical progress, evidence, delivery and acceptance remain enabled in both modes', () => {
+  const direct=paymentPlan({stageAmounts:[40000,60000]});
+  const protectedPlan=paymentPlan({mode:PAYMENT_MODE.PROTECTED,verifiedCustody:true,stageAmounts:[40000,60000]});
+  for (const plan of [direct,protectedPlan]) {
+    for (const key of ['enabled','progressReporting','evidence','deliveryReporting','acceptanceAndCloseout']) assert.equal(plan.stageTracking[key],true);
+    assert.deepEqual(plan.stages.map(s=>[s.stageNo,s.contractAmount]),[[1,40000],[2,60000]]);
+  }
+  assert.equal(direct.stageTracking.financialCustody,false);
+  assert.equal(direct.stageTracking.financialRelease,false);
+  assert.equal(protectedPlan.stageTracking.financialCustody,true);
+  assert.equal(protectedPlan.stageTracking.financialRelease,true);
+});
