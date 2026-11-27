@@ -101,7 +101,7 @@ try{
  assert.notEqual(otherAttempt.id,winnerAttempt.id)
  assert.equal((await attempts.cancelUnsent(auth('provider'),{role:actors.provider.role,attemptId:otherAttempt.id})).state,'cancelled_unsent')
  assert.equal((await db.query("SELECT count(*)::int n FROM matchter.sandbox_payment_attempts WHERE request_id=$1",[requestId])).rows[0].n,3)
- assert.equal((await db.query("SELECT has_table_privilege(current_user,'matchter.sandbox_payment_attempts','DELETE') AS can_delete,has_table_privilege(current_user,'matchter.sandbox_payment_attempt_events','UPDATE') AS can_rewrite")).rows[0].can_delete,false)
+ assert.deepEqual((await db.query("SELECT has_table_privilege(current_user,'matchter.sandbox_payment_attempts','DELETE') AS can_delete,has_table_privilege(current_user,'matchter.sandbox_payment_attempt_events','UPDATE') AS can_rewrite")).rows[0],{can_delete:false,can_rewrite:false})
  console.log('SANDBOX PAYMENT RESERVATIONS QA PASSED: persistent idempotency, concurrent cross-provider exclusion, cancellation before dispatch, ambiguous outcome blocks retry, private ownership; no provider calls')
  const pendingWallet=await call('client','/messages/wallet')
  assert.equal(pendingWallet.movements.length,1)
