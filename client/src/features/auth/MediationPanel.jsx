@@ -13,10 +13,9 @@ async function adminRequest(client,path='',body){
  return data
 }
 export const mediationAccess=client=>adminRequest(client,'/access')
-function downloadCase(c){
- const data={expediente:c.id,fechaExportacion:new Date().toISOString(),proyecto:c.claim.projectTitle,contrato:{version:c.claim.agreementVersion,revision:c.claim.contractRevision,digest:c.claim.digest},etapa:c.claim.stageSnapshot,alegaciones:{motivo:c.claim.reason,descripcion:c.claim.description,solucionSolicitada:c.claim.requestedResolution,referencia:c.claim.contractReference},estado:statuses[c.status],actuaciones:c.events,nota:'Registro de prueba. Las alegaciones no son hechos certificados; no incluye los documentos ni archivos originales.'}
+function downloadCase(data){
  const url=URL.createObjectURL(new Blob([JSON.stringify(data,null,2)],{type:'application/json;charset=utf-8'}))
- const a=document.createElement('a');a.href=url;a.download='expediente-matchter-'+c.id+'.json';a.click();setTimeout(()=>URL.revokeObjectURL(url),1000)
+ const a=document.createElement('a');a.href=url;a.download='expediente-matchter-'+data.case.id+'.json';a.click();setTimeout(()=>URL.revokeObjectURL(url),1000)
 }
 export function MediationPanel({client,role,claimId,mediator=false,onBack}){
  const [data,setData]=useState(null),[error,setError]=useState(''),[busy,setBusy]=useState(false),[note,setNote]=useState(''),[kind,setKind]=useState('comment')
@@ -32,6 +31,12 @@ export function MediationPanel({client,role,claimId,mediator=false,onBack}){
   try{if(pending.current?.key!==key)pending.current={key,id:crypto.randomUUID()};const r=await request({...payload,submissionId:pending.current.id});pending.current=null;if(alive.current){setData(r);setNote('')}}
   catch(e){if(alive.current)setError(e.message)}finally{running.current=false;if(alive.current)setBusy(false)}
  }
+ async function exportRecord(){
+  if(running.current)return
+  running.current=true;setBusy(true);setError('')
+  try{const result=mediator?await adminRequest(client,'/export?'+new URLSearchParams({claimId})):await messagesRequest(client,'mediation/export',role,undefined,{claimId});downloadCase(result)}
+  catch(e){if(alive.current)setError(e.message)}finally{running.current=false;if(alive.current)setBusy(false)}
+ }
  const closed=data?.status.startsWith('closed'),side=data?.side,canRespond=data?.status==='mediation'&&data.proposal&&!data.accepted.includes(side)
  const options=[['comment','Agregar antecedentes'],...(mediator&&data?.status==='mediation'?[['propose','Proponer solución']]:[]),...(mediator&&data?.status!=='received'?[['close','Cerrar sin acuerdo (motivo)']]:[]),...(!mediator&&!data?.inspectionRequested.includes(side)?[['inspection','Solicitar inspección técnica']]:[])]
  return <section className="card ct-form"><div className="row sp"><h3>Expediente de mediación</h3><button type="button" className="chip" disabled={busy} onClick={onBack}>Volver</button></div>{error&&<p role="alert">{error}</p>}<button type="button" className="chip" disabled={busy} onClick={load}>Actualizar</button>
@@ -40,7 +45,7 @@ export function MediationPanel({client,role,claimId,mediator=false,onBack}){
  {data.status==='invited'&&<><p>Participación confirmada: {data.joined.length} de 2</p>{!mediator&&!data.joined.includes(side)&&<><button className="btn" disabled={busy} onClick={()=>act('join',undefined,data.invitation)}>Aceptar mediación voluntaria</button><button className="btn out" disabled={busy} onClick={()=>act('decline',undefined,data.invitation)}>No participar</button></>}</>}
  {data.proposal&&<div className="ct-fee-summary"><b>Propuesta vigente</b><p>{data.proposal.text}</p><p>Confirmaciones: {data.accepted.length} de 2</p>{!mediator&&canRespond&&<><button className="btn gr" disabled={busy} onClick={()=>act('accept',undefined,data.proposal.id)}>Aceptar esta propuesta</button><button className="btn out" disabled={busy} onClick={()=>act('reject',undefined,data.proposal.id)}>Rechazar propuesta</button></>}</div>}
  <form className="ct-form" onSubmit={e=>{e.preventDefault();if(note.trim().length>=5&&options.some(o=>o[0]===kind))act(kind,note)}}><label>Actuación<select value={kind} onChange={e=>setKind(e.target.value)}>{options.map(([k,v])=><option key={k} value={k}>{v}</option>)}</select></label><label>Descripción<textarea required minLength={5} maxLength={4000} value={note} onChange={e=>setNote(e.target.value)}/></label><button className="btn out" disabled={busy||note.trim().length<5||!options.some(o=>o[0]===kind)}>Registrar actuación</button></form></>}
- <h4>Historial</h4>{data.events.map(e=><div className="ct-fee-summary" key={e.id}><b>{actions[e.action]} · {roles[e.side]}</b><small style={{display:'block'}}>{new Date(e.recordedAt).toLocaleString('es-CL')}</small>{e.text&&<p>{e.text}</p>}</div>)}<button className="btn out" onClick={()=>downloadCase(data)}>Descargar registro del expediente</button><p className="mut">Descarga JSON del registro; contrato original, fotografías e informe técnico adjunto pendientes de integración.</p></>}
+ <h4>Historial</h4>{data.events.map(e=><div className="ct-fee-summary" key={e.id}><b>{actions[e.action]} · {roles[e.side]}</b><small style={{display:'block'}}>{new Date(e.recordedAt).toLocaleString('es-CL')}</small>{e.text&&<p>{e.text}</p>}</div>)}<button className="btn out" disabled={busy} onClick={exportRecord}>Descargar expediente</button><p className="mut">Incluye el registro, acuerdo y contrato de prueba originales en JSON. Fotografías e informe técnico adjunto pendientes de integración.</p></>}
  </section>
 }
 export function MediationAdminCenter({client,onBack}){
