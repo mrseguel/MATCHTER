@@ -52,6 +52,13 @@ export function createSandboxProviderTransport({mode,credentials,fetchImpl,origi
    if(order.provider==='khipu')verifyProviderPayment(order,parsed.checkoutId,await getKhipu(parsed.checkoutId))
    return {response,checkout:parsed}
   },
+  // Resolve a notification with an authenticated GET; the reference is only a
+  // candidate for lookup. A second verified GET must validate the saved checkout.
+  async locateMercadoPagoPayment(paymentId){
+   const response=await getMP(paymentId)
+   if(String(response.id)!==paymentId||response.live_mode!==false||String(response.collector_id)!==config.mercadopago.merchantId||response.currency_id!=='CLP'||typeof response.external_reference!=='string'||!uuid.test(response.external_reference))throw safeError()
+   return {reference:response.external_reference}
+  },
   async readPayment(input,checkoutId,paymentId){
    const order=orderFor(input)
    if(order.provider==='khipu'){
