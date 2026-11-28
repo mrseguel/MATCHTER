@@ -11,14 +11,12 @@ function animateWordmark(ban){
  const reduced=window.matchMedia('(prefers-reduced-motion: reduce)');
  if(reduced.matches||!Element.prototype.animate)return;
  const original=mark.textContent,upper=original===original.toUpperCase(),spell=s=>upper?s.toUpperCase():s;
- const letters={ma:spell('Ma'),s:spell('s'),t:spell('t'),er:spell('er'),ch:spell('ch'),ter:spell('ter')};
- const words=[['ma','s','t','er'],['ma','t','ch'],['ma','t','ch','ter']];
- let repeatTimer=null,stop=null,disposed=false;
+ const letters={m:spell('M'),a:spell('a'),s:spell('s'),t:spell('t'),e:spell('e'),r:spell('r'),c:spell('c'),h:spell('h'),t2:spell('t'),e2:spell('e'),r2:spell('r')};
+ const words=[['m'],['m','a','s','t','e','r'],['m','a','t','c','h'],['m','a','t','c','h','t2','e2','r2']];
+ let repeatTimer=null,stop=null,disposed=false,firstCycle=true;
  function run(){
  repeatTimer=null;
  if(disposed||document.hidden||reduced.matches||!mark.isConnected||wordmarkCycle!==mark)return;
- // Measure each word with the logo's own font, tracking and responsive size.
- // Shared segments stay on the same visual layer; only the changing letters dissolve.
  const center=mark.getBoundingClientRect().left+mark.getBoundingClientRect().width/2;
  mark.classList.add('mw-wordmark-animated');
  mark.setAttribute('aria-label',original);mark.setAttribute('role','img');
@@ -29,26 +27,30 @@ function animateWordmark(ban){
   const positions=Object.fromEntries(spans.map(([k,e])=>[k,e.getBoundingClientRect().left-center]));
   measure.remove();return positions;
  });
- const [master,match,final]=poses;
+ const [initial,master,match,final]=poses;
  const sizer=document.createElement('span');sizer.className='mw-wordmark-sizer';sizer.textContent=original;sizer.setAttribute('aria-hidden','true');
  mark.replaceChildren(sizer);
- const duration=4000,holdMaster=1200,firstEnd=2000,holdMatch=3100,secondEnd=3850;
- const curve='cubic-bezier(.42,0,.22,1)';
+ // Collapse the original mark into M, then expand each word from the same M.
+ const duration=5450,curve='cubic-bezier(.42,0,.22,1)';
  const frame=(ms,x,opacity=1,y=0,blur=0)=>({offset:ms/duration,transform:'translate('+x+'px,'+y+'px)',opacity,filter:'blur('+blur+'px)',easing:curve});
- const track=(k,frames)=>{
+ const hidden=(ms,k)=>frame(ms,initial.m+4,0,0,2);
+ const track=(k)=>{
   const el=document.createElement('span');el.className='mw-wordmark-letter';el.setAttribute('aria-hidden','true');el.textContent=letters[k];mark.appendChild(el);
+  const frames=[];
+  // Start at the original Matchter on repeat; contract smoothly toward M.
+  const pose=(ms,p)=>p[k]===undefined?hidden(ms,k):frame(ms,p[k]);
+  frames.push(pose(0,firstCycle?initial:final),pose(450,initial),pose(650,initial));
+  for(const [p,start,end,hold,collapse] of [[master,650,1250,2150,2550],[match,2650,3250,4150,4550],[final,4650,5300,5450,null]]){
+   if(start>650)frames.push(pose(start,initial));
+   frames.push(pose(end,p),pose(hold,p));
+   if(collapse!==null)frames.push(pose(collapse,initial));
+  }
   return el.animate(frames,{duration,fill:'both'});
  };
- const animations=[
-  ...['ma','t'].map(k=>track(k,[frame(0,master[k]),frame(holdMaster,master[k]),frame(firstEnd,match[k]),frame(holdMatch,match[k]),frame(secondEnd,final[k]),frame(duration,final[k])])),
-  track('s',[frame(0,master.s),frame(holdMaster,master.s),frame(1600,match.t,0.38,-1,1.6),frame(firstEnd,match.t,0,-3,2),frame(duration,match.t,0,-3,2)]),
-  track('er',[frame(0,master.er),frame(holdMaster,master.er),frame(1600,match.ch,0.38,0,1.6),frame(firstEnd,match.ch,0,-3,2),frame(duration,match.ch,0,-3,2)]),
-  track('ch',[frame(0,master.er,0,2,2),frame(holdMaster,master.er,0,2,2),frame(1600,match.ch,0.62,0,1.2),frame(firstEnd,match.ch),frame(holdMatch,match.ch),frame(secondEnd,final.ch),frame(duration,final.ch)]),
-  track('ter',[frame(0,final.ter-6,0,2,2),frame(holdMatch,final.ter-6,0,2,2),frame(3500,final.ter-2,0.6,0,1),frame(secondEnd,final.ter),frame(duration,final.ter)])
- ];
+ const animations=Object.keys(letters).map(track);firstCycle=false;
  // Restore the literal original mark after the morph. No layout or style changes remain.
  let timer;
- const finish=(repeat=true)=>{if(!mark.classList.contains('mw-wordmark-animated'))return;clearTimeout(timer);for(const a of animations)a.cancel();mark.textContent=original;mark.classList.remove('mw-wordmark-animated');mark.removeAttribute('aria-label');mark.removeAttribute('role');window.removeEventListener('resize',resize);stop=null;if(repeat&&!disposed&&!document.hidden&&!reduced.matches&&mark.isConnected&&wordmarkCycle===mark)repeatTimer=setTimeout(run,2000)};
+ const finish=(repeat=true)=>{if(!mark.classList.contains('mw-wordmark-animated'))return;clearTimeout(timer);for(const a of animations)a.cancel();mark.textContent=original;mark.classList.remove('mw-wordmark-animated');mark.removeAttribute('aria-label');mark.removeAttribute('role');window.removeEventListener('resize',resize);stop=null;if(repeat&&!disposed&&!document.hidden&&!reduced.matches&&mark.isConnected&&wordmarkCycle===mark)repeatTimer=setTimeout(run,3000)};
  const resize=()=>finish(true);
  stop=()=>finish(false);
  animations[0].finished.then(()=>finish(true),()=>{});
@@ -56,7 +58,7 @@ function animateWordmark(ban){
  // Re-measure on the next cycle after an orientation change.
  window.addEventListener('resize',resize,{once:true});
  }
- const visibility=()=>{if(document.hidden||reduced.matches){clearTimeout(repeatTimer);repeatTimer=null;stop?.()}else if(!disposed&&!stop&&repeatTimer===null&&mark.isConnected){repeatTimer=setTimeout(run,2000)}};
+ const visibility=()=>{if(document.hidden||reduced.matches){clearTimeout(repeatTimer);repeatTimer=null;stop?.()}else if(!disposed&&!stop&&repeatTimer===null&&mark.isConnected){repeatTimer=setTimeout(run,3000)}};
  document.addEventListener('visibilitychange',visibility);reduced.addEventListener?.('change',visibility);
  wordmarkDispose=()=>{disposed=true;clearTimeout(repeatTimer);stop?.();document.removeEventListener('visibilitychange',visibility);reduced.removeEventListener?.('change',visibility);wordmarkCycle=null;wordmarkDispose=null};
  run();
