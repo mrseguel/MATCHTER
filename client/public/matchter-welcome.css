@@ -28,3 +28,14 @@
 #root .mw-footer{display:flex;align-items:center;justify-content:center;gap:13px;color:#c0c3cb;font-size:clamp(11px,2.8cqw,13px);font-weight:400;margin:clamp(25px,4.5dvh,38px) auto 0;line-height:1.4}
 #root .mw-footer i{height:13px;width:1px;background:#b9bec7;opacity:.7}
 @media(max-height:670px){#root .mw-header{padding-top:22px}#root .mw-features{margin-bottom:20px}#root .mw-footer{margin-top:22px}}
+
+/* One-time landing wordmark animation. Same dimensions, colors and backdrop. */
+#root .mw-wordmark.mw-wordmark-animated{display:grid;grid-template-columns:minmax(0,1fr);grid-template-rows:1fr;isolation:isolate}
+#root .mw-wordmark-phase{grid-area:1/1;display:block;font:inherit;letter-spacing:inherit;color:inherit;text-align:center;transform-origin:center;animation-duration:2.35s;animation-timing-function:cubic-bezier(.35,0,.25,1);animation-fill-mode:both;animation-iteration-count:1}
+#root .mw-wordmark-master{animation-name:mw-brand-master}
+#root .mw-wordmark-match{animation-name:mw-brand-match}
+#root .mw-wordmark-final{animation-name:mw-brand-final}
+@keyframes mw-brand-master{0%,23%{opacity:1;transform:translateY(0);filter:blur(0)}34%,100%{opacity:0;transform:translateY(-3px);filter:blur(2px)}}
+@keyframes mw-brand-match{0%,24%{opacity:0;transform:translateY(3px);filter:blur(2px)}35%,54%{opacity:1;transform:translateY(0);filter:blur(0)}65%,100%{opacity:0;transform:translateY(-3px);filter:blur(2px)}}
+@keyframes mw-brand-final{0%,55%{opacity:0;transform:translateY(3px);filter:blur(2px)}68%,100%{opacity:1;transform:translateY(0);filter:blur(0)}}
+@media(prefers-reduced-motion:reduce){#root .mw-wordmark-phase{animation:none!important}#root .mw-wordmark-master,#root .mw-wordmark-match{display:none}#root .mw-wordmark-final{opacity:1;transform:none;filter:none}}
