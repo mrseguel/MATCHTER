@@ -27,7 +27,7 @@ function animateWordmark(ban){
  const [master,match,final]=poses;
  const sizer=document.createElement('span');sizer.className='mw-wordmark-sizer';sizer.textContent=original;sizer.setAttribute('aria-hidden','true');
  mark.replaceChildren(sizer);
- const duration=5500,holdMaster=1650,firstEnd=2750,holdMatch=4250,secondEnd=5300;
+ const duration=4000,holdMaster=1200,firstEnd=2000,holdMatch=3100,secondEnd=3850;
  const curve='cubic-bezier(.42,0,.22,1)';
  const frame=(ms,x,opacity=1,y=0,blur=0)=>({offset:ms/duration,transform:'translate('+x+'px,'+y+'px)',opacity,filter:'blur('+blur+'px)',easing:curve});
  const track=(k,frames)=>{
@@ -36,10 +36,10 @@ function animateWordmark(ban){
  };
  const animations=[
   ...['ma','t'].map(k=>track(k,[frame(0,master[k]),frame(holdMaster,master[k]),frame(firstEnd,match[k]),frame(holdMatch,match[k]),frame(secondEnd,final[k]),frame(duration,final[k])])),
-  track('s',[frame(0,master.s),frame(holdMaster,master.s),frame(2200,match.t,0.38,-1,1.6),frame(firstEnd,match.t,0,-3,2),frame(duration,match.t,0,-3,2)]),
-  track('er',[frame(0,master.er),frame(holdMaster,master.er),frame(2200,match.ch,0.38,0,1.6),frame(firstEnd,match.ch,0,-3,2),frame(duration,match.ch,0,-3,2)]),
-  track('ch',[frame(0,master.er,0,2,2),frame(holdMaster,master.er,0,2,2),frame(2200,match.ch,0.62,0,1.2),frame(firstEnd,match.ch),frame(holdMatch,match.ch),frame(secondEnd,final.ch),frame(duration,final.ch)]),
-  track('ter',[frame(0,final.ter-6,0,2,2),frame(holdMatch,final.ter-6,0,2,2),frame(4800,final.ter-2,0.6,0,1),frame(secondEnd,final.ter),frame(duration,final.ter)])
+  track('s',[frame(0,master.s),frame(holdMaster,master.s),frame(1600,match.t,0.38,-1,1.6),frame(firstEnd,match.t,0,-3,2),frame(duration,match.t,0,-3,2)]),
+  track('er',[frame(0,master.er),frame(holdMaster,master.er),frame(1600,match.ch,0.38,0,1.6),frame(firstEnd,match.ch,0,-3,2),frame(duration,match.ch,0,-3,2)]),
+  track('ch',[frame(0,master.er,0,2,2),frame(holdMaster,master.er,0,2,2),frame(1600,match.ch,0.62,0,1.2),frame(firstEnd,match.ch),frame(holdMatch,match.ch),frame(secondEnd,final.ch),frame(duration,final.ch)]),
+  track('ter',[frame(0,final.ter-6,0,2,2),frame(holdMatch,final.ter-6,0,2,2),frame(3500,final.ter-2,0.6,0,1),frame(secondEnd,final.ter),frame(duration,final.ter)])
  ];
  // Restore the literal original mark after the morph. No layout or style changes remain.
  let timer;
